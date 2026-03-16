@@ -8,25 +8,43 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// request interceptor — inject token from cookies
 api.interceptors.request.use((config) => {
   const token = Cookies.get('access_token');
-  if (token) {
-    config.headers['Authorization'] = `Bearer ${token}`;
-  }
+  if (token) config.headers['Authorization'] = `Bearer ${token}`;
   return config;
 });
 
-// response interceptor — handle 401
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
-    if (err?.response?.status === 401 && typeof window !== 'undefined') {
-      Cookies.remove('access_token');
-      Cookies.remove('refresh_token');
-      localStorage.removeItem('crm_user');
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login';
+  async (err) => {
+    const status    = err?.response?.status;
+    const url       = err?.config?.url ?? '';
+    const isLogin   = url.includes('/auth/login');
+    const isRefresh = url.includes('/auth/refresh');
+
+    if (status === 401 && !isLogin && !isRefresh) {
+      const refreshToken = Cookies.get('refresh_token');
+      if (refreshToken) {
+        try {
+          const res = await axios.post(`${API_URL}/api/auth/refresh/`, {
+            refresh: refreshToken,
+          });
+          const newToken = res.data.access;
+          Cookies.set('access_token', newToken, { expires: 1 });
+          err.config.headers['Authorization'] = `Bearer ${newToken}`;
+          return api.request(err.config);
+        } catch {
+          Cookies.remove('access_token');
+          Cookies.remove('refresh_token');
+          localStorage.removeItem('crm_user');
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+        }
+      } else {
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(err);

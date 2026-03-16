@@ -1,52 +1,77 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import Cookies               from 'js-cookie';
-import type { WSEvent }      from '@/types';
+import { useEffect, useRef, useCallback } from 'react';
+import Cookies from 'js-cookie';
+import type { WSEvent } from '@/types';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000';
+const WS_URL    = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000';
+const MAX_RETRY = 5;
+const DELAY_MS  = 4000;
 
 export function useWebSocket(onEvent: (event: WSEvent) => void) {
   const wsRef      = useRef<WebSocket | null>(null);
   const onEventRef = useRef(onEvent);
+  const retryRef   = useRef(0);
+  const deadRef    = useRef(false);
 
   useEffect(() => { onEventRef.current = onEvent; }, [onEvent]);
 
-  useEffect(() => {
-    const token = Cookies.get('access_token');
-    if (!token) return;
+  const connect = useCallback(() => {
+    if (deadRef.current) return;
 
-    const url = `${WS_URL}/ws/calls/?token=${token}`;
-    const ws  = new WebSocket(url);
+    const token = Cookies.get('access_token');
+    if (!token) {
+      console.log('[WS] No token — skip');
+      return;
+    }
+    if (retryRef.current >= MAX_RETRY) {
+      console.warn('[WS] Max retries reached — giving up');
+      return;
+    }
+
+    const ws = new WebSocket(`${WS_URL}/ws/calls/?token=${token}`);
     wsRef.current = ws;
 
-    ws.onopen = () => console.log('[WS] Connected');
+    ws.onopen = () => {
+      console.log('[WS] Connected ✅');
+      retryRef.current = 0;
+    };
 
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data) as WSEvent;
         onEventRef.current(data);
       } catch {
-        console.warn('[WS] Failed to parse message', e.data);
+        console.warn('[WS] Parse error', e.data);
       }
     };
 
-    ws.onerror = (e) => console.error('[WS] Error', e);
+    ws.onerror = () => console.warn('[WS] Connection error');
 
-    ws.onclose = (e) => console.log('[WS] Disconnected', e.code);
+    ws.onclose = (e) => {
+      console.log(`[WS] Disconnected — code: ${e.code}`);
+      if (deadRef.current || e.code === 1000) return;
+      if (e.code === 4001) { console.warn('[WS] Auth failed'); return; }
+      retryRef.current += 1;
+      console.log(`[WS] Retry ${retryRef.current}/${MAX_RETRY} in ${DELAY_MS / 1000}s`);
+      setTimeout(connect, DELAY_MS);
+    };
 
-    // ping every 30s
     const ping = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'ping' }));
-      }
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'ping' }));
     }, 30_000);
 
-    return () => {
-      clearInterval(ping);
-      ws.close(1000, 'unmounted');
-    };
+    ws.addEventListener('close', () => clearInterval(ping));
   }, []);
+
+  useEffect(() => {
+    deadRef.current = false;
+    connect();
+    return () => {
+      deadRef.current = true;
+      wsRef.current?.close(1000, 'unmounted');
+    };
+  }, [connect]);
 
   const sendEvent = (data: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
