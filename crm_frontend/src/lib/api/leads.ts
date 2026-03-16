@@ -1,10 +1,9 @@
 import api from './axios';
 import type { Lead, LeadStatus, LeadPriority, PaginatedResponse } from '@/types';
 
-// helper — بيضمن إن الـ response دايماً array
-const toArray = <T>(data: T[] | { results: T[] } | any): T[] => {
-  if (Array.isArray(data))           return data;
-  if (Array.isArray(data?.results))  return data.results;
+const toArray = <T>(data: any): T[] => {
+  if (Array.isArray(data))          return data;
+  if (Array.isArray(data?.results)) return data.results;
   return [];
 };
 
@@ -15,10 +14,10 @@ export const leadsApi = {
   get: (id: string) =>
     api.get<Lead>(`/leads/${id}/`),
 
-  create: (data: Partial<Lead>) =>
+  create: (data: Record<string, unknown>) =>
     api.post<Lead>('/leads/', data),
 
-  update: (id: string, data: Partial<Lead>) =>
+  update: (id: string, data: Record<string, unknown>) =>
     api.patch<Lead>(`/leads/${id}/`, data),
 
   delete: (id: string) =>

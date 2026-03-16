@@ -4,6 +4,8 @@ export type Role = 'admin' | 'supervisor' | 'agent' | 'qa';
 export interface AuthUser {
   id:         string;
   email:      string;
+  first_name: string;
+  last_name:  string;
   full_name:  string;
   role:       Role;
   extension:  string | null;
@@ -75,7 +77,13 @@ export interface Customer {
   first_name:    string;
   last_name:     string;
   email:         string;
+  gender:        string;
+  date_of_birth: string | null;
+  address:       string;
+  city:          string;
+  country:       string;
   company:       string;
+  notes:         string;
   primary_phone: string | null;
   phones:        CustomerPhone[];
   tags:          CustomerTag[];
@@ -94,6 +102,7 @@ export interface LeadStatus {
   order:      number;
   is_closed:  boolean;
   is_won:     boolean;
+  is_default: boolean;
 }
 
 export interface LeadPriority {
@@ -104,52 +113,61 @@ export interface LeadPriority {
 }
 
 export interface Lead {
-  id:            string;
-  title:         string;
-  customer:      string | Customer;
-  customer_name: string;
-  status:        string | LeadStatus;
-  status_name:   string;
-  priority:      string | LeadPriority;
-  priority_name: string;
-  source:        string;
-  assigned_to:   string | null;
-  assigned_name: string;
-  value:         number | null;
-  followup_date: string | null;
-  created_at:    string;
-  updated_at:    string;
+  id:             string;
+  title:          string;
+  customer:       string | Customer;
+  customer_name:  string;
+  customer_detail?: Customer;
+  status:         string | LeadStatus;
+  status_name:    string;
+  status_detail?: LeadStatus;
+  priority:       string | LeadPriority | null;
+  priority_name:  string;
+  priority_detail?: LeadPriority;
+  source:         string;
+  assigned_to:    string | null;
+  assigned_name:  string;
+  campaign:       string | null;
+  description:    string;
+  value:          number | null;
+  followup_date:  string | null;
+  closed_at:      string | null;
+  is_active:      boolean;
+  created_at:     string;
+  updated_at:     string;
 }
 
 // ── Calls ─────────────────────────────────────────────────────────────────
 export type CallDirection = 'inbound' | 'outbound' | 'internal';
-export type CallStatus    = 'ringing' | 'answered' | 'no_answer' | 'busy' | 'failed' | 'voicemail' | 'transferred';
+export type CallStatus    =
+  | 'ringing' | 'answered' | 'no_answer'
+  | 'busy' | 'failed' | 'voicemail' | 'transferred';
 
 export interface Call {
-  id:             string;
-  uniqueid:       string;
-  direction:      CallDirection;
-  status:         CallStatus;
-  caller_number:  string;
-  callee_number:  string;
-  agent:          string | null;
-  agent_name:     string | null;
-  customer:       string | null;
-  customer_name:  string | null;
-  duration:       number;
-  started_at:     string | null;
-  ended_at:       string | null;
-  has_recording:  boolean;
-  recording_url:  string;
-  created_at:     string;
+  id:            string;
+  uniqueid:      string;
+  direction:     CallDirection;
+  status:        CallStatus;
+  caller_number: string;
+  callee_number: string;
+  agent:         string | null;
+  agent_name:    string | null;
+  customer:      string | null;
+  customer_name: string | null;
+  duration:      number;
+  started_at:    string | null;
+  ended_at:      string | null;
+  has_recording: boolean;
+  recording_url: string;
+  created_at:    string;
 }
 
 export interface Disposition {
-  id:               string;
-  name:             string;
-  color:            string;
+  id:                string;
+  name:              string;
+  color:             string;
   requires_followup: boolean;
-  is_active:        boolean;
+  is_active:         boolean;
 }
 
 // ── Followups ─────────────────────────────────────────────────────────────
@@ -188,34 +206,34 @@ export interface Campaign {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 export interface AgentDashboard {
-  role:                'agent';
-  calls_today:         number;
-  answered_today:      number;
-  avg_duration_today:  number;
-  open_leads:          number;
-  pending_followups:   number;
-  due_followups:       number;
+  role:               'agent';
+  calls_today:        number;
+  answered_today:     number;
+  avg_duration_today: number;
+  open_leads:         number;
+  pending_followups:  number;
+  due_followups:      number;
 }
 
 export interface SupervisorDashboard {
-  role:                'supervisor';
-  team_size:           number;
-  agents_available:    number;
-  agents_on_call:      number;
-  calls_today:         number;
-  answered_today:      number;
-  avg_duration_today:  number;
-  active_calls:        number;
+  role:               'supervisor';
+  team_size:          number;
+  agents_available:   number;
+  agents_on_call:     number;
+  calls_today:        number;
+  answered_today:     number;
+  avg_duration_today: number;
+  active_calls:       number;
 }
 
 export interface AdminDashboard {
-  role:             'admin';
-  total_customers:  number;
-  total_leads:      number;
-  calls_today:      number;
-  active_agents:    number;
-  total_agents:     number;
-  calls_this_week:  number;
+  role:            'admin';
+  total_customers: number;
+  total_leads:     number;
+  calls_today:     number;
+  active_agents:   number;
+  total_agents:    number;
+  calls_this_week: number;
 }
 
 export type DashboardData = AgentDashboard | SupervisorDashboard | AdminDashboard;
@@ -232,7 +250,7 @@ export interface IncomingCallEvent {
 }
 
 export interface CallEndedEvent {
-  type:    'call_ended';
+  type:     'call_ended';
   uniqueid: string;
   status:   CallStatus;
 }
@@ -263,4 +281,12 @@ export interface PaginatedResponse<T> {
   next:     string | null;
   previous: string | null;
   results:  T[];
+}
+
+// ── Generic Table Column ──────────────────────────────────────────────────
+export interface Column<T> {
+  key:     keyof T | string;
+  header:  string;
+  render?: (row: T) => React.ReactNode;
+  width?:  string;
 }
