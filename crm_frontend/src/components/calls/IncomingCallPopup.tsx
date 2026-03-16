@@ -1,117 +1,96 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useRouter }         from 'next/navigation';
-import { PhoneCall, PhoneOff, UserCircle, X } from 'lucide-react';
-import { useCallStore }      from '@/store';
+import { useEffect, useState } from 'react';
+import { Phone, PhoneOff, User } from 'lucide-react';
+import { useCallStore }  from '@/store';
+import { useAuthStore }  from '@/store';
+import { callsApi }      from '@/lib/api/calls';
+import toast             from 'react-hot-toast';
 
 export function IncomingCallPopup() {
   const { incomingCall, clearIncoming } = useCallStore();
-  const router   = useRouter();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const user = useAuthStore((s) => s.user);
+  const [visible, setVisible] = useState(false);
 
-  /* Play ringtone while popup is visible */
   useEffect(() => {
     if (incomingCall) {
-      audioRef.current = new Audio('/sounds/ring.mp3');
-      audioRef.current.loop = true;
-      audioRef.current.play().catch(() => {});
+      setVisible(true);
+      const t = setTimeout(() => {
+        setVisible(false);
+        clearIncoming();
+      }, 30_000);
+      return () => clearTimeout(t);
     }
-    return () => {
-      audioRef.current?.pause();
-      audioRef.current = null;
-    };
-  }, [incomingCall]);
+  }, [incomingCall, clearIncoming]);
 
-  if (!incomingCall) return null;
+  if (!visible || !incomingCall) return null;
 
-  const handleAccept = () => {
-    audioRef.current?.pause();
-    clearIncoming();
-    if (incomingCall.customer_id) {
-      router.push(`/customers/${incomingCall.customer_id}`);
+  const handleAnswer = async () => {
+    try {
+      if (user?.extension) {
+        await callsApi.originate({
+          phone_number: incomingCall.caller,
+          customer_id:  incomingCall.customer_id ?? undefined,
+        });
+        toast.success(`Answering call from ${incomingCall.caller}`);
+      }
+    } catch {
+      toast.error('Failed to connect call');
+    } finally {
+      setVisible(false);
+      clearIncoming();
     }
   };
 
   const handleReject = () => {
-    audioRef.current?.pause();
+    setVisible(false);
     clearIncoming();
+    toast('Call dismissed', { icon: '📵' });
   };
 
   return (
-    <div
-      className="fixed bottom-6 right-6 z-50 w-80
-                 bg-white rounded-2xl shadow-2xl border border-gray-200
-                 overflow-hidden animate-slide-in"
-      role="alertdialog"
-      aria-label="Incoming call"
-    >
-      {/* Header stripe */}
-      <div className="bg-green-500 px-4 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-2 text-white">
-          <PhoneCall size={16} className="animate-bounce" />
-          <span className="text-sm font-semibold">Incoming Call</span>
+    <div className="fixed bottom-6 right-6 z-50 bg-white rounded-2xl
+                    shadow-2xl border border-gray-200 w-80 p-5 animate-slide-up">
+      <div className="flex items-center gap-3 mb-4">
+        <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+          <Phone size={18} className="text-green-600 animate-pulse" />
         </div>
-        <button
-          onClick={handleReject}
-          className="text-green-100 hover:text-white transition-colors"
-          aria-label="Dismiss"
-        >
-          <X size={16} />
-        </button>
+        <div>
+          <p className="text-xs text-gray-400 uppercase tracking-wide">Incoming Call</p>
+          <p className="font-semibold text-gray-900">{incomingCall.caller}</p>
+        </div>
       </div>
 
-      {/* Body */}
-      <div className="p-4 space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center
-                          justify-center shrink-0">
-            <UserCircle size={28} className="text-gray-400" />
-          </div>
-          <div className="min-w-0">
-            {incomingCall.customer_name ? (
-              <p className="text-sm font-semibold text-gray-900 truncate">
-                {incomingCall.customer_name}
-              </p>
-            ) : (
-              <p className="text-sm font-semibold text-gray-500 italic">
-                Unknown Caller
-              </p>
-            )}
-            <p className="text-sm text-gray-600 font-mono">
-              {incomingCall.caller}
-            </p>
-            {incomingCall.queue && (
-              <p className="text-xs text-gray-400 mt-0.5">
-                Queue: <span className="font-medium">{incomingCall.queue}</span>
-              </p>
-            )}
-          </div>
+      {incomingCall.customer_name && (
+        <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-gray-50 rounded-lg">
+          <User size={14} className="text-gray-400" />
+          <span className="text-sm text-gray-700">{incomingCall.customer_name}</span>
         </div>
+      )}
 
-        {/* Action buttons */}
-        <div className="flex gap-2 pt-1">
-          <button
-            onClick={handleAccept}
-            className="flex-1 flex items-center justify-center gap-2
-                       bg-green-500 hover:bg-green-600 text-white
-                       rounded-xl py-2.5 text-sm font-medium
-                       transition-colors duration-150"
-          >
-            <PhoneCall size={16} />
-            Answer
-          </button>
-          <button
-            onClick={handleReject}
-            className="flex-1 flex items-center justify-center gap-2
-                       bg-red-500 hover:bg-red-600 text-white
-                       rounded-xl py-2.5 text-sm font-medium
-                       transition-colors duration-150"
-          >
-            <PhoneOff size={16} />
-            Decline
-          </button>
-        </div>
+      {incomingCall.queue && (
+        <p className="text-xs text-gray-400 mb-4">
+          Queue: <span className="text-gray-600 font-medium">{incomingCall.queue}</span>
+        </p>
+      )}
+
+      <div className="flex gap-3">
+        <button
+          onClick={handleAnswer}
+          className="flex-1 flex items-center justify-center gap-2
+                     bg-green-500 hover:bg-green-600 text-white
+                     rounded-xl py-2.5 text-sm font-medium transition-colors"
+        >
+          <Phone size={15} /> Answer
+        </button>
+        <button
+          onClick={handleReject}
+          className="flex-1 flex items-center justify-center gap-2
+                     bg-red-500 hover:bg-red-600 text-white
+                     rounded-xl py-2.5 text-sm font-medium transition-colors"
+        >
+          <PhoneOff size={15} /> Dismiss
+        </button>
       </div>
     </div>
   );

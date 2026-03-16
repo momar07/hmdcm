@@ -8,14 +8,16 @@ export const callsApi = {
   get: (id: string) =>
     api.get<Call>(`/calls/${id}/`),
 
-  originate: (phone_number: string, customer_id?: string) =>
-    api.post('/calls/originate/', { phone_number, customer_id }),
+  originate: (data: { phone_number: string; customer_id?: string; lead_id?: string }) =>
+    api.post('/calls/originate/', data),
 
   screenPop: (phone: string) =>
     api.get('/calls/screen-pop/', { params: { phone } }),
 
-  submitDisposition: (callId: string, disposition_id: string, notes = '') =>
-    api.post(`/calls/${callId}/disposition/`, { disposition_id, notes }),
+  addDisposition: (callId: string, data: {
+    disposition_id: string;
+    notes?: string;
+  }) => api.post(`/calls/${callId}/add_disposition/`, data),
 
   dispositions: () =>
     api.get<Disposition[]>('/calls/dispositions/'),
