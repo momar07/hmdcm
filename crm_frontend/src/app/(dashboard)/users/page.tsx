@@ -50,9 +50,7 @@ export default function UsersPage() {
   });
 
   const confirmDelete = (u: User) => {
-    if (confirm(`Delete user "${u.full_name}"? This cannot be undone.`)) {
-      deleteUser(u.id);
-    }
+    if (confirm(`Delete user "${u.full_name}"?`)) deleteUser(u.id);
   };
 
   const columns: Column<User>[] = [
@@ -60,9 +58,7 @@ export default function UsersPage() {
       key: 'name', header: 'User',
       render: (u) => (
         <div className="flex items-center gap-3">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center
-                           text-white text-sm font-bold shrink-0
-                           ${AVATAR_BG[u.role] ?? 'bg-gray-400'}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${AVATAR_BG[u.role] ?? 'bg-gray-400'}`}>
             {u.full_name?.charAt(0).toUpperCase() ?? '?'}
           </div>
           <div>
@@ -75,13 +71,20 @@ export default function UsersPage() {
     {
       key: 'role', header: 'Role',
       render: (u) => (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full
-                          text-xs font-medium capitalize
-                          ${ROLE_COLORS[u.role] ?? 'bg-gray-100 text-gray-700'}`}>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${ROLE_COLORS[u.role] ?? 'bg-gray-100 text-gray-700'}`}>
           {u.role}
         </span>
       ),
       width: '110px',
+    },
+    {
+      key: 'team', header: 'Team',
+      render: (u) => (
+        <span className="text-sm text-gray-600">
+          {(u as unknown as Record<string, unknown>).team_name as string ?? '—'}
+        </span>
+      ),
+      width: '130px',
     },
     {
       key: 'status', header: 'Status',
@@ -89,32 +92,22 @@ export default function UsersPage() {
       width: '110px',
     },
     {
-      key: 'extension', header: 'Extension',
+      key: 'extension', header: 'Ext',
       render: (u) => (
-        <span className="font-mono text-sm text-gray-700">
-          {u.extension?.number ?? '—'}
-        </span>
+        <span className="font-mono text-sm text-gray-700">{u.extension?.number ?? '—'}</span>
       ),
-      width: '100px',
+      width: '70px',
     },
     {
       key: 'actions', header: '',
       render: (u) => (
         <div className="flex items-center gap-1">
-          <button
-            onClick={(e) => { e.stopPropagation(); setEditUser(u); }}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600
-                       hover:bg-blue-50 transition-colors"
-            title="Edit"
-          >
+          <button onClick={(e) => { e.stopPropagation(); setEditUser(u); }}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
             <Pencil size={15} />
           </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); confirmDelete(u); }}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600
-                       hover:bg-red-50 transition-colors"
-            title="Delete"
-          >
+          <button onClick={(e) => { e.stopPropagation(); confirmDelete(u); }}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete">
             <Trash2 size={15} />
           </button>
         </div>
@@ -129,8 +122,7 @@ export default function UsersPage() {
         title="Users"
         subtitle={`${data?.count ?? 0} team members`}
         actions={
-          <Button variant="primary" icon={<Plus size={16} />}
-                  onClick={() => setCreateOpen(true)}>
+          <Button variant="primary" icon={<Plus size={16} />} onClick={() => setCreateOpen(true)}>
             Add User
           </Button>
         }
@@ -161,30 +153,20 @@ export default function UsersPage() {
 
       {data && data.count > 25 && (
         <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
-          <span>
-            Showing {(page - 1) * 25 + 1}–{Math.min(page * 25, data.count)} of {data.count}
-          </span>
+          <span>Showing {(page-1)*25+1}–{Math.min(page*25, data.count)} of {data.count}</span>
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm" disabled={!data.previous}
-                    onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <Button variant="secondary" size="sm" disabled={!data.next}
-                    onClick={() => setPage((p) => p + 1)}>Next</Button>
+            <Button variant="secondary" size="sm" disabled={!data.previous} onClick={() => setPage((p) => p-1)}>Previous</Button>
+            <Button variant="secondary" size="sm" disabled={!data.next} onClick={() => setPage((p) => p+1)}>Next</Button>
           </div>
         </div>
       )}
 
-      {/* Create Modal */}
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)}
-             title="Add New User" size="md">
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Add New User" size="md">
         <UserForm onClose={() => setCreateOpen(false)} />
       </Modal>
 
-      {/* Edit Modal */}
-      <Modal open={!!editUser} onClose={() => setEditUser(null)}
-             title="Edit User" size="md">
-        {editUser && (
-          <UserForm user={editUser} onClose={() => setEditUser(null)} />
-        )}
+      <Modal open={!!editUser} onClose={() => setEditUser(null)} title="Edit User" size="md">
+        {editUser && <UserForm user={editUser} onClose={() => setEditUser(null)} />}
       </Modal>
     </div>
   );
@@ -194,6 +176,16 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
   const queryClient = useQueryClient();
   const isEdit = !!user;
 
+  const { data: teamsData } = useQuery({
+    queryKey: ['teams-all'],
+    queryFn:  () => usersApi.teams.list().then((r) => r.data),
+  });
+
+  const teamOptions = [
+    { value: '', label: '— No Team —' },
+    ...(teamsData?.results ?? []).map((t) => ({ value: t.id, label: t.name })),
+  ];
+
   const [form, setForm] = useState({
     first_name: user?.first_name ?? '',
     last_name:  user?.last_name  ?? '',
@@ -201,6 +193,7 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
     password:   '',
     role:       user?.role       ?? 'agent',
     phone:      user?.phone      ?? '',
+    team:       (user?.team as unknown as string) ?? '',
     is_active:  user?.is_active  ?? true,
   });
 
@@ -212,17 +205,25 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
             last_name:  form.last_name,
             role:       form.role as User['role'],
             phone:      form.phone,
+            team:       (form.team || null) as unknown as User['team'],
             is_active:  form.is_active,
           })
-        : usersApi.create({ ...form, password: form.password }),
+        : usersApi.create({
+            first_name: form.first_name,
+            last_name:  form.last_name,
+            email:      form.email,
+            password:   form.password,
+            role:       form.role as User['role'],
+            phone:      form.phone,
+            team:       (form.team || null) as unknown as User['team'],
+          }),
     onSuccess: () => {
       toast.success(isEdit ? 'User updated!' : 'User created!');
       queryClient.invalidateQueries({ queryKey: ['users'] });
       onClose();
     },
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail ?? 'Operation failed.';
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Operation failed.';
       toast.error(msg);
     },
   });
@@ -234,10 +235,8 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        <Input label="First Name *" placeholder="Ahmed"
-               value={form.first_name} onChange={set('first_name')} />
-        <Input label="Last Name *"  placeholder="Hassan"
-               value={form.last_name}  onChange={set('last_name')} />
+        <Input label="First Name *" placeholder="Ahmed" value={form.first_name} onChange={set('first_name')} />
+        <Input label="Last Name *"  placeholder="Hassan" value={form.last_name} onChange={set('last_name')} />
       </div>
       <Input label="Email *" type="email" placeholder="agent@company.com"
              value={form.email} onChange={set('email')} disabled={isEdit} />
@@ -245,19 +244,26 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
         <Input label="Password *" type="password" placeholder="Min 8 characters"
                value={form.password} onChange={set('password')} />
       )}
-      <Select
-        label="Role"
-        options={[
-          { value: 'agent',      label: 'Agent' },
-          { value: 'supervisor', label: 'Supervisor' },
-          { value: 'admin',      label: 'Admin' },
-          { value: 'qa',         label: 'QA' },
-        ]}
-        value={form.role}
-        onChange={set('role')}
-      />
-      <Input label="Phone" placeholder="+20100000000"
-             value={form.phone} onChange={set('phone')} />
+      <div className="grid grid-cols-2 gap-4">
+        <Select
+          label="Role"
+          options={[
+            { value: 'agent',      label: 'Agent' },
+            { value: 'supervisor', label: 'Supervisor' },
+            { value: 'admin',      label: 'Admin' },
+            { value: 'qa',         label: 'QA' },
+          ]}
+          value={form.role}
+          onChange={set('role')}
+        />
+        <Select
+          label="Team"
+          options={teamOptions}
+          value={form.team}
+          onChange={set('team')}
+        />
+      </div>
+      <Input label="Phone" placeholder="+20100000000" value={form.phone} onChange={set('phone')} />
       {isEdit && (
         <Select
           label="Active"
@@ -271,8 +277,7 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
       )}
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" isLoading={isLoading}
-                onClick={() => mutate()}>
+        <Button variant="primary" isLoading={isLoading} onClick={() => mutate()}>
           {isEdit ? 'Save Changes' : 'Create User'}
         </Button>
       </div>
