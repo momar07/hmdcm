@@ -28,13 +28,12 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
         ('agent',      'Agent'),
         ('qa',         'QA'),
     ]
-
     STATUS_CHOICES = [
-        ('available',   'Available'),
-        ('busy',        'Busy'),
-        ('away',        'Away'),
-        ('offline',     'Offline'),
-        ('on_call',     'On Call'),
+        ('available', 'Available'),
+        ('busy',      'Busy'),
+        ('away',      'Away'),
+        ('offline',   'Offline'),
+        ('on_call',   'On Call'),
     ]
 
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -67,6 +66,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
 
 class Extension(TimeStampedModel):
     """SIP/IAX extension assigned to an agent."""
+    id        = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user      = models.OneToOneField(User, on_delete=models.CASCADE, related_name='extension')
     number    = models.CharField(max_length=20, unique=True, db_index=True)
     peer_name = models.CharField(max_length=100, blank=True, help_text='Asterisk peer name')
@@ -82,6 +82,7 @@ class Extension(TimeStampedModel):
 
 class Queue(TimeStampedModel):
     """Asterisk call queue."""
+    id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name         = models.CharField(max_length=100, unique=True)
     display_name = models.CharField(max_length=200, blank=True)
     strategy     = models.CharField(max_length=50, default='ringall')
