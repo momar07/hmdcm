@@ -16,17 +16,22 @@ export default function TeamsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const queryClient = useQueryClient();
 
-  const { data: teams, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['teams'],
     queryFn:  () => usersApi.teams.list().then((r) => r.data),
   });
 
-  const { mutate: deleteTeam } = useMutation({
-    mutationFn: (id: string) => usersApi.teams.update(id, { is_active: false } as Partial<Team>),
+  // الـ API بيرجع paginated response
+  const teams: Team[] = data?.results ?? [];
+
+  const { mutate: deactivateTeam } = useMutation({
+    mutationFn: (id: string) =>
+      usersApi.teams.update(id, { is_active: false } as Partial<Team>),
     onSuccess: () => {
       toast.success('Team deactivated.');
       queryClient.invalidateQueries({ queryKey: ['teams'] });
     },
+    onError: () => toast.error('Failed to deactivate team.'),
   });
 
   const columns: Column<Team>[] = [
@@ -34,8 +39,8 @@ export default function TeamsPage() {
       key: 'name', header: 'Team Name',
       render: (t) => (
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-brand-100 flex items-center justify-center">
-            <Users size={14} className="text-brand-600" />
+          <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
+            <Users size={14} className="text-blue-600" />
           </div>
           <span className="font-medium text-gray-900">{t.name}</span>
         </div>
@@ -44,22 +49,23 @@ export default function TeamsPage() {
     {
       key: 'description', header: 'Description',
       render: (t) => (
-        <span className="text-sm text-gray-500">{t.description ?? '—'}</span>
+        <span className="text-sm text-gray-500">{t.description || '—'}</span>
       ),
     },
     {
-      key: 'supervisor', header: 'Supervisor',
+      key: 'member_count', header: 'Members',
       render: (t) => (
-        <span className="text-sm text-gray-700">
-          {(t as unknown as Record<string, unknown>).supervisor_name as string ?? '—'}
+        <span className="font-mono text-sm text-gray-700">
+          {(t as unknown as Record<string, unknown>).member_count as number ?? 0}
         </span>
       ),
-      width: '160px',
+      width: '90px',
     },
     {
       key: 'is_active', header: 'Status',
       render: (t) => (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full
+                          text-xs font-medium
                           ${t.is_active
                             ? 'bg-green-100 text-green-800'
                             : 'bg-gray-100  text-gray-500'}`}>
@@ -71,10 +77,12 @@ export default function TeamsPage() {
     {
       key: 'actions', header: '',
       render: (t) => (
-        <Button variant="ghost" size="sm"
-                onClick={(e) => { e.stopPropagation(); deleteTeam(t.id); }}>
-          Deactivate
-        </Button>
+        t.is_active ? (
+          <Button variant="ghost" size="sm"
+                  onClick={(e) => { e.stopPropagation(); deactivateTeam(t.id); }}>
+            Deactivate
+          </Button>
+        ) : null
       ),
       width: '110px',
     },
@@ -84,7 +92,7 @@ export default function TeamsPage() {
     <div>
       <PageHeader
         title="Teams"
-        subtitle={`${Array.isArray(teams) ? teams.length : 0} teams`}
+        subtitle={`${data?.count ?? 0} teams`}
         actions={
           <Button variant="primary" icon={<Plus size={16} />}
                   onClick={() => setCreateOpen(true)}>
@@ -95,7 +103,7 @@ export default function TeamsPage() {
 
       <DataTable
         columns={columns}
-        data={Array.isArray(teams) ? teams : []}
+        data={teams}
         keyField="id"
         isLoading={isLoading}
         emptyText="No teams found."
@@ -116,7 +124,7 @@ function CreateTeamForm({ onClose }: { onClose: () => void }) {
   const { mutate, isLoading } = useMutation({
     mutationFn: () => usersApi.teams.create(form),
     onSuccess: () => {
-      toast.success('Team created!');
+      toast.success('Team created successfully!');
       queryClient.invalidateQueries({ queryKey: ['teams'] });
       onClose();
     },
@@ -135,7 +143,10 @@ function CreateTeamForm({ onClose }: { onClose: () => void }) {
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button variant="primary" isLoading={isLoading}
-                onClick={() => mutate()}>Create Team</Button>
+                disabled={!form.name.trim()}
+                onClick={() => mutate()}>
+          Create Team
+        </Button>
       </div>
     </div>
   );

@@ -18,7 +18,7 @@ export const usersApi = {
     api.patch(`/users/${id}/status/`, { status }),
 
   teams: {
-    list: () => api.get<Team[]>('/teams/'),
+    list: () => api.get<{count:number;results:Team[]}>('/teams/'),
     create: (data: Partial<Team>) => api.post<Team>('/teams/', data),
     update: (id: string, data: Partial<Team>) =>
       api.patch<Team>(`/teams/${id}/`, data),
