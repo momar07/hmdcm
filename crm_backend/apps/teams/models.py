@@ -8,9 +8,11 @@ class Team(TimeStampedModel):
     name        = models.CharField(max_length=200, unique=True)
     description = models.TextField(blank=True)
     supervisor  = models.ForeignKey(
-        'users.User', null=True, blank=True,
-        on_delete=models.SET_NULL, related_name='supervised_teams',
-        limit_choices_to={'role': 'supervisor'}
+        'users.User',
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='supervised_teams',
+        limit_choices_to={'role': 'supervisor'},
     )
     is_active   = models.BooleanField(default=True)
 

@@ -5,16 +5,11 @@ from apps.common.models import BaseModel
 
 class Campaign(BaseModel):
     STATUS_CHOICES = [
-        ('draft',     'Draft'),
-        ('active',    'Active'),
-        ('paused',    'Paused'),
-        ('completed', 'Completed'),
-        ('cancelled', 'Cancelled'),
+        ('draft','Draft'), ('active','Active'), ('paused','Paused'),
+        ('completed','Completed'), ('cancelled','Cancelled'),
     ]
     TYPE_CHOICES = [
-        ('outbound', 'Outbound Calling'),
-        ('inbound',  'Inbound Queue'),
-        ('blended',  'Blended'),
+        ('outbound','Outbound Calling'), ('inbound','Inbound Queue'), ('blended','Blended'),
     ]
 
     name          = models.CharField(max_length=300)
@@ -43,24 +38,17 @@ class Campaign(BaseModel):
 
 class CampaignMember(BaseModel):
     STATUS_CHOICES = [
-        ('pending',      'Pending'),
-        ('called',       'Called'),
-        ('answered',     'Answered'),
-        ('do_not_call',  'Do Not Call'),
-        ('completed',    'Completed'),
+        ('pending','Pending'), ('called','Called'), ('answered','Answered'),
+        ('do_not_call','Do Not Call'), ('completed','Completed'),
     ]
-
     campaign  = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name='members')
     customer  = models.ForeignKey('customers.Customer', on_delete=models.CASCADE)
     status    = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
     attempts  = models.PositiveIntegerField(default=0)
-    last_call = models.ForeignKey(
-        'calls.Call', null=True, blank=True,
-        on_delete=models.SET_NULL, related_name='campaign_member_calls'
-    )
+    # last_call FK added in campaigns/0002 (after calls table exists)
 
     class Meta:
-        db_table    = 'campaign_members'
+        db_table = 'campaign_members'
         unique_together = [('campaign', 'customer')]
 
     def __str__(self):
