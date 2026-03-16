@@ -1,6 +1,7 @@
 'use client';
 
 import { useState }      from 'react';
+import { useRouter }     from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, CheckCircle }  from 'lucide-react';
 import toast             from 'react-hot-toast';
@@ -13,6 +14,7 @@ import { Select }        from '@/components/ui/Select';
 import type { Followup, Column } from '@/types';
 
 export default function FollowupsPage() {
+  const router                          = useRouter();
   const [statusFilter, setStatusFilter] = useState('pending');
   const [page, setPage]                 = useState(1);
   const qc                              = useQueryClient();
@@ -108,7 +110,11 @@ export default function FollowupsPage() {
         title="Follow-ups"
         subtitle={`${data?.count ?? 0} total follow-ups`}
         actions={
-          <Button variant="primary" icon={<Plus size={16} />}>
+          <Button
+            variant="primary"
+            icon={<Plus size={16} />}
+            onClick={() => router.push('/followups/new')}
+          >
             New Follow-up
           </Button>
         }
@@ -135,6 +141,7 @@ export default function FollowupsPage() {
         keyField="id"
         isLoading={isLoading}
         emptyText="No follow-ups found."
+        onRowClick={(f) => router.push(`/followups/${f.id}`)}
       />
 
       {data && data.count > 25 && (
