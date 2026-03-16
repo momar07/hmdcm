@@ -29,10 +29,10 @@ const STYLES: Record<string, string> = {
 };
 
 interface Props {
-  status:    string;
-  label?:    string;
-  size?:     'xs' | 'sm' | 'md';
-  dot?:      boolean;
+  status:  string;
+  label?:  string;
+  size?:   'xs' | 'sm' | 'md';
+  dot?:    boolean;
 }
 
 export function StatusBadge({ status, label, size = 'sm', dot = false }: Props) {
@@ -52,7 +52,7 @@ export function StatusBadge({ status, label, size = 'sm', dot = false }: Props) 
         <span
           className={clsx(
             'rounded-full',
-            size === 'xs' ? 'w-1   h-1'   : 'w-1.5 h-1.5',
+            size === 'xs' ? 'w-1 h-1' : 'w-1.5 h-1.5',
             status === 'available' || status === 'answered' || status === 'completed'
               ? 'bg-green-500'
               : status === 'offline' || status === 'cancelled' || status === 'failed'
@@ -61,11 +61,9 @@ export function StatusBadge({ status, label, size = 'sm', dot = false }: Props) 
           )}
         />
       )}
-      {(label ?? status.replace(/_/g, ' '))}
+      {label ?? status.replace(/_/g, ' ')}
     </span>
   );
 }
 
-function clsx(...args: (string | boolean | undefined | null)[]): string {
-  return args.filter(Boolean).join(' ');
-}
+export default StatusBadge;
