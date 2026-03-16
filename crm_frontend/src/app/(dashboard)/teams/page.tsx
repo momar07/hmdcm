@@ -10,6 +10,7 @@ import { DataTable }       from '@/components/ui/DataTable';
 import { Button }          from '@/components/ui/Button';
 import { Modal }           from '@/components/ui/Modal';
 import { Input }           from '@/components/ui/Input';
+import { Select }          from '@/components/ui/Select';
 import type { Team, Column } from '@/types';
 
 export default function TeamsPage() {
