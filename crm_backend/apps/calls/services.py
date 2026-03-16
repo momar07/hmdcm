@@ -1,200 +1,153 @@
-import logging
 from django.utils import timezone
-from django.db    import transaction
-from .models import Call, CallEvent, CallDisposition, CallRecording
-
-logger = logging.getLogger(__name__)
+from django.core.exceptions import ValidationError
+from .models import Call, CallCompletion, Disposition
 
 
-# ── Create ───────────────────────────────────────────────────────────────────
-
-def create_call_from_ami(event_data: dict) -> Call:
+def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
     """
-    Create or retrieve a Call record from an AMI event payload.
-    Expected keys: uniqueid, linkedid, calleridnum, exten, direction
-    """
-    call, created = Call.objects.get_or_create(
-        uniqueid=event_data['uniqueid'],
-        defaults={
-            'linkedid':      event_data.get('linkedid', ''),
-            'caller_number': event_data.get('calleridnum', ''),
-            'callee_number': event_data.get('exten', ''),
-            'direction':     event_data.get('direction', 'inbound'),
-            'status':        'ringing',
-            'started_at':    timezone.now(),
-        }
-    )
-    if created:
-        logger.info(f'[calls.services] New call created: {call.uniqueid}')
-    return call
-
-
-# ── Status Updates ───────────────────────────────────────────────────────────
-
-def update_call_status(uniqueid: str, new_status: str, **kwargs) -> int:
-    """
-    Update a call's status by uniqueid.
-    Automatically sets answered_at / ended_at timestamps.
-    Returns number of rows updated.
-    """
-    updates = {'status': new_status, **kwargs}
-
-    if new_status == 'answered' and 'answered_at' not in updates:
-        updates['answered_at'] = timezone.now()
-
-    if new_status in ('no_answer', 'busy', 'failed', 'voicemail', 'transferred') \
-            and 'ended_at' not in updates:
-        updates['ended_at'] = timezone.now()
-
-    rows = Call.objects.filter(uniqueid=uniqueid).update(**updates)
-    logger.info(f'[calls.services] Status → {new_status} for uniqueid={uniqueid} ({rows} rows)')
-    return rows
-
-
-def close_call(uniqueid: str, duration: int = 0, status: str = 'answered') -> Call | None:
-    """
-    Finalise a call — set status, duration, ended_at.
-    Returns the updated Call instance or None if not found.
+    الـ service الرئيسي للـ enforcement.
+    بيتأكد من كل الـ validation rules قبل الحفظ.
     """
     try:
-        call = Call.objects.get(uniqueid=uniqueid)
+        call = Call.objects.select_related('customer', 'lead', 'agent').get(pk=call_id)
     except Call.DoesNotExist:
-        logger.warning(f'[calls.services] close_call: uniqueid={uniqueid} not found')
-        return None
+        raise ValidationError('Call not found.')
 
-    call.status   = status
-    call.duration = duration
-    call.ended_at = timezone.now()
-    if status == 'answered' and not call.answered_at:
-        call.answered_at = timezone.now()
-    call.save(update_fields=['status', 'duration', 'ended_at', 'answered_at'])
-    logger.info(f'[calls.services] Closed call {uniqueid} status={status} duration={duration}s')
-    return call
+    # Rule 1: المكالمة لازم تكون answered
+    if call.status != 'answered':
+        raise ValidationError('Only answered calls can be completed.')
 
+    # Rule 2: مينفعش تكمل نفس المكالمة مرتين
+    if call.is_completed:
+        raise ValidationError('Call is already completed.')
 
-# ── Agent ────────────────────────────────────────────────────────────────────
+    # Rule 3: لازم يكون فيه disposition
+    disposition_id = data.get('disposition_id')
+    if not disposition_id:
+        raise ValidationError('Disposition is required.')
 
-def attach_agent_to_call(uniqueid: str, agent_id: str) -> int:
-    """
-    Link an agent (by UUID) to a call identified by uniqueid.
-    Also tries to resolve the agent's Extension and attach it.
-    """
-    from apps.users.models import User
     try:
-        agent = User.objects.select_related('extension').get(pk=agent_id)
-    except User.DoesNotExist:
-        logger.warning(f'[calls.services] attach_agent: agent {agent_id} not found')
-        return 0
+        disposition = Disposition.objects.get(pk=disposition_id, is_active=True)
+    except Disposition.DoesNotExist:
+        raise ValidationError('Invalid disposition.')
 
-    updates: dict = {'agent': agent}
-    if hasattr(agent, 'extension') and agent.extension:
-        updates['extension'] = agent.extension
+    # Rule 4: لازم يكون فيه note
+    note = data.get('note', '').strip()
+    if not note:
+        raise ValidationError('Note is required.')
+    if len(note) < 10:
+        raise ValidationError('Note must be at least 10 characters.')
 
-    rows = Call.objects.filter(uniqueid=uniqueid).update(**updates)
-    logger.info(f'[calls.services] Agent {agent.email} attached to call {uniqueid}')
-    return rows
+    # Rule 5: لازم يكون فيه next_action
+    next_action = data.get('next_action', '').strip()
+    if not next_action:
+        raise ValidationError('Next action is required.')
 
+    valid_actions = [c[0] for c in CallCompletion.NEXT_ACTION_CHOICES]
+    if next_action not in valid_actions:
+        raise ValidationError(f'Invalid next action. Choose from: {valid_actions}')
 
-# ── Events ───────────────────────────────────────────────────────────────────
+    # Rule 6: لو disposition بتطلب followup — لازم followup data
+    followup_required = disposition.requires_followup
+    followup_due_at   = data.get('followup_due_at')
+    followup_assigned = data.get('followup_assigned_id')
+    followup_type     = data.get('followup_type', '').strip()
 
-def record_call_event(call_id, event_type: str, data: dict = None) -> CallEvent | None:
-    """
-    Append a CallEvent to a call.
-    call_id can be a UUID or a Call instance.
-    """
-    try:
-        if isinstance(call_id, Call):
-            call = call_id
-        else:
-            call = Call.objects.get(pk=call_id)
-    except Call.DoesNotExist:
-        logger.warning(f'[calls.services] record_call_event: call {call_id} not found')
-        return None
+    if followup_required:
+        if not followup_due_at:
+            raise ValidationError('Follow-up due date is required for this disposition.')
+        if not followup_assigned:
+            raise ValidationError('Follow-up assigned user is required.')
+        if not followup_type:
+            raise ValidationError('Follow-up type is required.')
 
-    allowed = {c[0] for c in CallEvent.EVENT_CHOICES}
-    if event_type not in allowed:
-        logger.warning(f'[calls.services] Unknown event type: {event_type}')
-        return None
+    # Rule 7: لو next_action = close_lead — لازم lead مرتبط
+    if next_action == 'close_lead' and not call.lead:
+        raise ValidationError('Cannot close lead: no lead is linked to this call.')
 
-    event = CallEvent.objects.create(
-        call=call,
-        event=event_type,
-        data=data or {},
-    )
-    return event
-
-
-# ── Disposition ──────────────────────────────────────────────────────────────
-
-@transaction.atomic
-def submit_disposition(
-    call_id,
-    disposition_id,
-    agent_id,
-    notes: str = '',
-    auto_followup: bool = False,
-) -> CallDisposition:
-    """
-    Submit a disposition for a completed call.
-    If auto_followup=True and the disposition requires_followup,
-    a Followup record is created automatically.
-    """
-    # prevent duplicate dispositions
-    existing = CallDisposition.objects.filter(call_id=call_id).first()
-    if existing:
-        logger.info(f'[calls.services] Disposition already exists for call {call_id}')
-        return existing
-
-    disp_obj = CallDisposition.objects.create(
-        call_id=call_id,
-        disposition_id=disposition_id,
-        agent_id=agent_id,
-        notes=notes,
-    )
-
-    # auto follow-up if the disposition requires it
-    if auto_followup:
+    # Rule 8: لو Lead stage = Won — لازم won_amount
+    new_stage_id = data.get('new_lead_stage_id')
+    if new_stage_id and call.lead:
+        from apps.leads.models import LeadStage
         try:
-            from apps.followups.services import create_followup_from_disposition
-            create_followup_from_disposition(disp_obj)
-        except Exception as exc:
-            logger.error(f'[calls.services] Auto-followup failed: {exc}')
+            stage = LeadStage.objects.get(pk=new_stage_id)
+            if stage.is_won and not data.get('won_amount'):
+                raise ValidationError('Won amount is required when marking lead as Won.')
+            if stage.slug == 'lost' and not data.get('lost_reason', '').strip():
+                raise ValidationError('Lost reason is required when marking lead as Lost.')
+        except LeadStage.DoesNotExist:
+            raise ValidationError('Invalid lead stage.')
 
-    logger.info(
-        f'[calls.services] Disposition submitted: call={call_id} '
-        f'disposition={disposition_id}'
+    # ── كل الـ validation passed — ابدأ الحفظ ──────────────────
+    from apps.users.models import User
+
+    assigned_user = None
+    if followup_assigned:
+        try:
+            assigned_user = User.objects.get(pk=followup_assigned)
+        except User.DoesNotExist:
+            raise ValidationError('Assigned user not found.')
+
+    # إنشاء الـ CallCompletion
+    completion = CallCompletion.objects.create(
+        call               = call,
+        disposition        = disposition,
+        note               = note,
+        next_action        = next_action,
+        followup_required  = followup_required,
+        followup_due_at    = followup_due_at if followup_required else None,
+        followup_assigned  = assigned_user,
+        followup_type      = followup_type,
+        lead_stage_updated = bool(new_stage_id),
+        new_lead_stage_id  = new_stage_id or None,
+        submitted_by       = agent,
     )
-    return disp_obj
+
+    # تحديث الـ Call
+    call.is_completed = True
+    call.completed_at = timezone.now()
+    call.save(update_fields=['is_completed', 'completed_at'])
+
+    # تحديث الـ Lead stage لو موجود
+    if new_stage_id and call.lead:
+        from apps.leads.models import LeadStage
+        from django.utils import timezone as tz
+        stage = LeadStage.objects.get(pk=new_stage_id)
+        call.lead.stage_id = new_stage_id
+
+        if stage.is_won:
+            call.lead.won_amount = data.get('won_amount')
+            call.lead.won_at     = tz.now()
+        elif stage.slug == 'lost':
+            call.lead.lost_reason = data.get('lost_reason', '')
+            call.lead.lost_at     = tz.now()
+
+        call.lead.save()
+
+    # إنشاء الـ Followup تلقائياً لو مطلوب
+    if followup_required and assigned_user:
+        from apps.followups.models import Followup
+        followup = Followup.objects.create(
+            customer     = call.customer,
+            lead         = call.lead,
+            call         = call,
+            assigned_to  = assigned_user,
+            title        = f'Follow-up: {disposition.name}',
+            description  = note,
+            followup_type = followup_type,
+            scheduled_at = followup_due_at,
+            status       = 'pending',
+        )
+        completion.followup_created = followup
+        completion.save(update_fields=['followup_created'])
+
+    return completion
 
 
-# ── Recording ────────────────────────────────────────────────────────────────
-
-def attach_recording(
-    call_id,
-    file_path: str,
-    file_url:  str = '',
-    file_size: int = 0,
-    fmt:       str = 'wav',
-    duration:  int = 0,
-) -> CallRecording:
-    """
-    Attach a recording file to a call.
-    Also updates Call.recording_file and Call.recording_url for quick access.
-    """
-    recording, _ = CallRecording.objects.update_or_create(
-        call_id=call_id,
-        defaults={
-            'file_path': file_path,
-            'file_url':  file_url,
-            'file_size': file_size,
-            'format':    fmt,
-            'duration':  duration,
-        }
-    )
-    # mirror on the Call row for easy filtering
-    Call.objects.filter(pk=call_id).update(
-        recording_file=file_path,
-        recording_url=file_url,
-    )
-    logger.info(f'[calls.services] Recording attached to call {call_id}: {file_path}')
-    return recording
+def get_pending_completions(agent=None):
+    """المكالمات المجاوبة اللي لسه ما اتكملتش"""
+    qs = Call.objects.filter(status='answered', is_completed=False)\
+                     .select_related('customer', 'agent', 'lead')
+    if agent:
+        qs = qs.filter(agent=agent)
+    return qs

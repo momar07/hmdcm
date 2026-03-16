@@ -1,9 +1,10 @@
 from rest_framework import viewsets, permissions, status as http_status
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
-from .models import Lead, LeadStatus, LeadPriority
-from .serializers import LeadListSerializer, LeadDetailSerializer, LeadStatusSerializer, LeadPrioritySerializer
+from .models import Lead, LeadStatus, LeadPriority, LeadStage
+from .serializers import LeadListSerializer, LeadDetailSerializer, LeadStatusSerializer, LeadPrioritySerializer, LeadStageSerializer
 from .selectors import get_all_leads
 from .services import create_lead, assign_lead, update_lead_status
 
@@ -39,6 +40,13 @@ class LeadStatusViewSet(viewsets.ModelViewSet):
 
 
 class LeadPriorityViewSet(viewsets.ModelViewSet):
-    queryset = LeadPriority.objects.all().order_by('level')
+    queryset = LeadPriority.objects.all().order_by('order')
     serializer_class = LeadPrioritySerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+class LeadStageViewSet(viewsets.ModelViewSet):
+    serializer_class   = LeadStageSerializer
+    permission_classes = [IsAuthenticated]
+    queryset           = LeadStage.objects.filter(is_active=True).order_by('order')
+    http_method_names  = ['get', 'post', 'patch', 'delete']
