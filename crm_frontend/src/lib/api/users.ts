@@ -14,13 +14,18 @@ export const usersApi = {
   update: (id: string, data: Partial<User>) =>
     api.patch<User>(`/users/${id}/`, data),
 
+  delete: (id: string) =>
+    api.delete(`/users/${id}/`),
+
   setStatus: (id: string, status: string) =>
     api.patch(`/users/${id}/status/`, { status }),
 
   teams: {
-    list: () => api.get<{count:number;results:Team[]}>('/teams/'),
+    list: () => api.get<{ count: number; results: Team[] }>('/teams/'),
+    get:  (id: string) => api.get<Team>(`/teams/${id}/`),
     create: (data: Partial<Team>) => api.post<Team>('/teams/', data),
     update: (id: string, data: Partial<Team>) =>
       api.patch<Team>(`/teams/${id}/`, data),
+    delete: (id: string) => api.delete(`/teams/${id}/`),
   },
 };

@@ -2,7 +2,7 @@
 
 import { useState }        from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Users }     from 'lucide-react';
+import { Plus, Users, Pencil, Trash2 } from 'lucide-react';
 import toast               from 'react-hot-toast';
 import { usersApi }        from '@/lib/api/users';
 import { PageHeader }      from '@/components/ui/PageHeader';
@@ -14,6 +14,7 @@ import type { Team, Column } from '@/types';
 
 export default function TeamsPage() {
   const [createOpen, setCreateOpen] = useState(false);
+  const [editTeam, setEditTeam]     = useState<Team | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -21,18 +22,22 @@ export default function TeamsPage() {
     queryFn:  () => usersApi.teams.list().then((r) => r.data),
   });
 
-  // الـ API بيرجع paginated response
   const teams: Team[] = data?.results ?? [];
 
-  const { mutate: deactivateTeam } = useMutation({
-    mutationFn: (id: string) =>
-      usersApi.teams.update(id, { is_active: false } as Partial<Team>),
+  const { mutate: deleteTeam } = useMutation({
+    mutationFn: (id: string) => usersApi.teams.delete(id),
     onSuccess: () => {
-      toast.success('Team deactivated.');
+      toast.success('Team deleted.');
       queryClient.invalidateQueries({ queryKey: ['teams'] });
     },
-    onError: () => toast.error('Failed to deactivate team.'),
+    onError: () => toast.error('Failed to delete team.'),
   });
+
+  const confirmDelete = (t: Team) => {
+    if (confirm(`Delete team "${t.name}"? This cannot be undone.`)) {
+      deleteTeam(t.id);
+    }
+  };
 
   const columns: Column<Team>[] = [
     {
@@ -77,14 +82,26 @@ export default function TeamsPage() {
     {
       key: 'actions', header: '',
       render: (t) => (
-        t.is_active ? (
-          <Button variant="ghost" size="sm"
-                  onClick={(e) => { e.stopPropagation(); deactivateTeam(t.id); }}>
-            Deactivate
-          </Button>
-        ) : null
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditTeam(t); }}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600
+                       hover:bg-blue-50 transition-colors"
+            title="Edit"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); confirmDelete(t); }}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600
+                       hover:bg-red-50 transition-colors"
+            title="Delete"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
       ),
-      width: '110px',
+      width: '80px',
     },
   ];
 
@@ -109,29 +126,47 @@ export default function TeamsPage() {
         emptyText="No teams found."
       />
 
+      {/* Create Modal */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)}
              title="Create New Team" size="md">
-        <CreateTeamForm onClose={() => setCreateOpen(false)} />
+        <TeamForm onClose={() => setCreateOpen(false)} />
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal open={!!editTeam} onClose={() => setEditTeam(null)}
+             title="Edit Team" size="md">
+        {editTeam && (
+          <TeamForm team={editTeam} onClose={() => setEditTeam(null)} />
+        )}
       </Modal>
     </div>
   );
 }
 
-function CreateTeamForm({ onClose }: { onClose: () => void }) {
+function TeamForm({ team, onClose }: { team?: Team; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [form, setForm] = useState({ name: '', description: '' });
+  const isEdit = !!team;
+
+  const [form, setForm] = useState({
+    name:        team?.name        ?? '',
+    description: team?.description ?? '',
+    is_active:   team?.is_active   ?? true,
+  });
 
   const { mutate, isLoading } = useMutation({
-    mutationFn: () => usersApi.teams.create(form),
+    mutationFn: () =>
+      isEdit
+        ? usersApi.teams.update(team!.id, form)
+        : usersApi.teams.create(form),
     onSuccess: () => {
-      toast.success('Team created successfully!');
+      toast.success(isEdit ? 'Team updated!' : 'Team created!');
       queryClient.invalidateQueries({ queryKey: ['teams'] });
       onClose();
     },
-    onError: () => toast.error('Failed to create team.'),
+    onError: () => toast.error('Operation failed.'),
   });
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   return (
@@ -140,12 +175,23 @@ function CreateTeamForm({ onClose }: { onClose: () => void }) {
              value={form.name} onChange={set('name')} />
       <Input label="Description"  placeholder="Handles inbound sales calls"
              value={form.description} onChange={set('description')} />
+      {isEdit && (
+        <Select
+          label="Status"
+          options={[
+            { value: 'true',  label: 'Active' },
+            { value: 'false', label: 'Inactive' },
+          ]}
+          value={String(form.is_active)}
+          onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === 'true' }))}
+        />
+      )}
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button variant="primary" isLoading={isLoading}
                 disabled={!form.name.trim()}
                 onClick={() => mutate()}>
-          Create Team
+          {isEdit ? 'Save Changes' : 'Create Team'}
         </Button>
       </div>
     </div>

@@ -2,7 +2,7 @@
 
 import { useState }        from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus }            from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import toast               from 'react-hot-toast';
 import { usersApi }        from '@/lib/api/users';
 import { PageHeader }      from '@/components/ui/PageHeader';
@@ -20,7 +20,6 @@ const ROLE_COLORS: Record<string, string> = {
   agent:      'bg-green-100  text-green-800',
   qa:         'bg-yellow-100 text-yellow-800',
 };
-
 const AVATAR_BG: Record<string, string> = {
   admin:      'bg-purple-500',
   supervisor: 'bg-blue-500',
@@ -31,13 +30,30 @@ const AVATAR_BG: Record<string, string> = {
 export default function UsersPage() {
   const [roleFilter, setRoleFilter] = useState('');
   const [page, setPage]             = useState(1);
-  const [inviteOpen, setInviteOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editUser, setEditUser]     = useState<User | null>(null);
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', page, roleFilter],
     queryFn:  () => usersApi.list({ page, role: roleFilter || undefined, page_size: 25 }).then((r) => r.data),
     keepPreviousData: true,
   });
+
+  const { mutate: deleteUser } = useMutation({
+    mutationFn: (id: string) => usersApi.delete(id),
+    onSuccess: () => {
+      toast.success('User deleted.');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: () => toast.error('Failed to delete user.'),
+  });
+
+  const confirmDelete = (u: User) => {
+    if (confirm(`Delete user "${u.full_name}"? This cannot be undone.`)) {
+      deleteUser(u.id);
+    }
+  };
 
   const columns: Column<User>[] = [
     {
@@ -82,12 +98,26 @@ export default function UsersPage() {
       width: '100px',
     },
     {
-      key: 'is_active', header: 'Active',
+      key: 'actions', header: '',
       render: (u) => (
-        <StatusBadge
-          status={u.is_active ? 'active' : 'offline'}
-          label={u.is_active ? 'Yes' : 'No'}
-        />
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditUser(u); }}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600
+                       hover:bg-blue-50 transition-colors"
+            title="Edit"
+          >
+            <Pencil size={15} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); confirmDelete(u); }}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600
+                       hover:bg-red-50 transition-colors"
+            title="Delete"
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
       ),
       width: '80px',
     },
@@ -100,7 +130,7 @@ export default function UsersPage() {
         subtitle={`${data?.count ?? 0} team members`}
         actions={
           <Button variant="primary" icon={<Plus size={16} />}
-                  onClick={() => setInviteOpen(true)}>
+                  onClick={() => setCreateOpen(true)}>
             Add User
           </Button>
         }
@@ -135,47 +165,71 @@ export default function UsersPage() {
             Showing {(page - 1) * 25 + 1}–{Math.min(page * 25, data.count)} of {data.count}
           </span>
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm"
-                    disabled={!data.previous}
+            <Button variant="secondary" size="sm" disabled={!data.previous}
                     onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <Button variant="secondary" size="sm"
-                    disabled={!data.next}
+            <Button variant="secondary" size="sm" disabled={!data.next}
                     onClick={() => setPage((p) => p + 1)}>Next</Button>
           </div>
         </div>
       )}
 
-      <Modal open={inviteOpen} onClose={() => setInviteOpen(false)}
+      {/* Create Modal */}
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)}
              title="Add New User" size="md">
-        <AddUserForm onClose={() => setInviteOpen(false)} />
+        <UserForm onClose={() => setCreateOpen(false)} />
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal open={!!editUser} onClose={() => setEditUser(null)}
+             title="Edit User" size="md">
+        {editUser && (
+          <UserForm user={editUser} onClose={() => setEditUser(null)} />
+        )}
       </Modal>
     </div>
   );
 }
 
-function AddUserForm({ onClose }: { onClose: () => void }) {
+function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const isEdit = !!user;
+
   const [form, setForm] = useState({
-    first_name: '', last_name: '', email: '',
-    password: '', role: 'agent', phone: '',
+    first_name: user?.first_name ?? '',
+    last_name:  user?.last_name  ?? '',
+    email:      user?.email      ?? '',
+    password:   '',
+    role:       user?.role       ?? 'agent',
+    phone:      user?.phone      ?? '',
+    is_active:  user?.is_active  ?? true,
   });
 
   const { mutate, isLoading } = useMutation({
-    mutationFn: () => usersApi.create({ ...form }),
+    mutationFn: () =>
+      isEdit
+        ? usersApi.update(user!.id, {
+            first_name: form.first_name,
+            last_name:  form.last_name,
+            role:       form.role as User['role'],
+            phone:      form.phone,
+            is_active:  form.is_active,
+          })
+        : usersApi.create({ ...form, password: form.password }),
     onSuccess: () => {
-      toast.success('User created successfully!');
+      toast.success(isEdit ? 'User updated!' : 'User created!');
       queryClient.invalidateQueries({ queryKey: ['users'] });
       onClose();
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail ?? 'Failed to create user.';
+        ?.response?.data?.detail ?? 'Operation failed.';
       toast.error(msg);
     },
   });
 
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  const set = (k: string) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [k]: e.target.value }));
 
   return (
     <div className="space-y-4">
@@ -186,9 +240,11 @@ function AddUserForm({ onClose }: { onClose: () => void }) {
                value={form.last_name}  onChange={set('last_name')} />
       </div>
       <Input label="Email *" type="email" placeholder="agent@company.com"
-             value={form.email} onChange={set('email')} />
-      <Input label="Password *" type="password" placeholder="Min 8 characters"
-             value={form.password} onChange={set('password')} />
+             value={form.email} onChange={set('email')} disabled={isEdit} />
+      {!isEdit && (
+        <Input label="Password *" type="password" placeholder="Min 8 characters"
+               value={form.password} onChange={set('password')} />
+      )}
       <Select
         label="Role"
         options={[
@@ -202,10 +258,23 @@ function AddUserForm({ onClose }: { onClose: () => void }) {
       />
       <Input label="Phone" placeholder="+20100000000"
              value={form.phone} onChange={set('phone')} />
+      {isEdit && (
+        <Select
+          label="Active"
+          options={[
+            { value: 'true',  label: 'Active' },
+            { value: 'false', label: 'Inactive' },
+          ]}
+          value={String(form.is_active)}
+          onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === 'true' }))}
+        />
+      )}
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
         <Button variant="primary" isLoading={isLoading}
-                onClick={() => mutate()}>Create User</Button>
+                onClick={() => mutate()}>
+          {isEdit ? 'Save Changes' : 'Create User'}
+        </Button>
       </div>
     </div>
   );
