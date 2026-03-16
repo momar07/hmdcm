@@ -2,7 +2,10 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery }              from '@tanstack/react-query';
-import { ArrowLeft, Phone, Mail, Building2, MapPin } from 'lucide-react';
+import {
+  ArrowLeft, Phone, Mail, Building2, MapPin,
+  PhoneIncoming, PhoneOutgoing, PhoneMissed,
+} from 'lucide-react';
 import { customersApi }  from '@/lib/api/customers';
 import { leadsApi }      from '@/lib/api/leads';
 import { callsApi }      from '@/lib/api/calls';
@@ -11,9 +14,37 @@ import { Button }        from '@/components/ui/Button';
 import { StatusBadge }   from '@/components/ui/StatusBadge';
 import { Spinner }       from '@/components/ui/Spinner';
 
+function formatDuration(seconds: number): string {
+  if (!seconds) return '';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function DirectionBadge({ direction }: { direction: string }) {
+  if (direction === 'inbound') return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium
+                     text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full">
+      <PhoneIncoming size={11} /> Inbound
+    </span>
+  );
+  if (direction === 'outbound') return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium
+                     text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+      <PhoneOutgoing size={11} /> Outbound
+    </span>
+  );
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-medium
+                     text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+      <Phone size={11} /> Internal
+    </span>
+  );
+}
+
 export default function CustomerDetailPage() {
-  const { id }   = useParams<{ id: string }>();
-  const router   = useRouter();
+  const { id }  = useParams<{ id: string }>();
+  const router  = useRouter();
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ['customer', id],
@@ -83,7 +114,9 @@ export default function CustomerDetailPage() {
         {/* Phones */}
         {customer.phones?.length > 0 && (
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Phone Numbers</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
+              Phone Numbers
+            </p>
             <div className="flex flex-wrap gap-2">
               {customer.phones.map((ph) => (
                 <div key={ph.id}
@@ -125,22 +158,20 @@ export default function CustomerDetailPage() {
                  onClick={() => router.push(`/leads/${lead.id}`)}>
               <div>
                 <p className="text-sm font-medium text-gray-900">{lead.title}</p>
-                <p className="text-xs text-gray-400">{lead.source}</p>
+                <p className="text-xs text-gray-400 capitalize">{lead.source}</p>
               </div>
-              <div className="flex items-center gap-2">
-                {lead.status_name && (
-                  <span className="text-xs bg-blue-50 text-blue-700
-                                   rounded-full px-2 py-0.5 font-medium">
-                    {lead.status_name}
-                  </span>
-                )}
-              </div>
+              {lead.status_name && (
+                <span className="text-xs bg-blue-50 text-blue-700
+                                 rounded-full px-2 py-0.5 font-medium">
+                  {lead.status_name}
+                </span>
+              )}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Calls */}
+      {/* Recent Calls */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100">
           <h3 className="text-sm font-semibold text-gray-700">
@@ -152,20 +183,51 @@ export default function CustomerDetailPage() {
             <p className="px-5 py-8 text-center text-sm text-gray-400">No calls yet.</p>
           )}
           {callsData?.results?.map((call) => (
-            <div key={call.id} className="px-5 py-3 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-mono text-gray-900">{call.caller_number}</p>
-                <p className="text-xs text-gray-400">
-                  {call.started_at
-                    ? new Date(call.started_at).toLocaleString()
-                    : '—'}
-                </p>
+            <div
+              key={call.id}
+              className="px-5 py-3 flex items-center justify-between
+                         hover:bg-gray-50 cursor-pointer"
+              onClick={() => router.push(`/calls/${call.id}`)}
+            >
+              {/* Left — direction + number + time */}
+              <div className="flex items-center gap-3">
+                {/* Direction icon */}
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0
+                  ${call.direction === 'inbound'
+                    ? 'bg-blue-50'
+                    : call.direction === 'outbound'
+                    ? 'bg-green-50'
+                    : 'bg-gray-100'}`}>
+                  {call.direction === 'inbound'
+                    ? <PhoneIncoming  size={14} className="text-blue-600" />
+                    : call.direction === 'outbound'
+                    ? <PhoneOutgoing  size={14} className="text-green-600" />
+                    : <Phone          size={14} className="text-gray-500" />
+                  }
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-sm text-gray-900">
+                      {call.caller_number}
+                    </span>
+                    <DirectionBadge direction={call.direction} />
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {call.started_at
+                      ? new Date(call.started_at).toLocaleString()
+                      : '—'}
+                  </p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+
+              {/* Right — status + duration */}
+              <div className="flex items-center gap-2 shrink-0">
                 <StatusBadge status={call.status} size="xs" />
-                <span className="text-xs text-gray-500 font-mono">
-                  {call.duration ? `${Math.floor(call.duration/60)}:${String(call.duration%60).padStart(2,'0')}` : '—'}
-                </span>
+                {call.duration > 0 && (
+                  <span className="text-xs text-gray-500 font-mono">
+                    {formatDuration(call.duration)}
+                  </span>
+                )}
               </div>
             </div>
           ))}
