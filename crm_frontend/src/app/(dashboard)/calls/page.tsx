@@ -1,17 +1,18 @@
 'use client';
 
-import { useState }     from 'react';
-import { useQuery }     from '@tanstack/react-query';
+import { useState }      from 'react';
+import { useRouter }     from 'next/navigation';
+import { useQuery }      from '@tanstack/react-query';
 import { PhoneOutgoing } from 'lucide-react';
-import toast            from 'react-hot-toast';
-import { callsApi }     from '@/lib/api/calls';
-import { PageHeader }   from '@/components/ui/PageHeader';
-import { DataTable }    from '@/components/ui/DataTable';
-import { Button }       from '@/components/ui/Button';
-import { StatusBadge }  from '@/components/ui/StatusBadge';
-import { Modal }        from '@/components/ui/Modal';
-import { Input }        from '@/components/ui/Input';
-import { Select }       from '@/components/ui/Select';
+import toast             from 'react-hot-toast';
+import { callsApi }      from '@/lib/api/calls';
+import { PageHeader }    from '@/components/ui/PageHeader';
+import { DataTable }     from '@/components/ui/DataTable';
+import { Button }        from '@/components/ui/Button';
+import { StatusBadge }   from '@/components/ui/StatusBadge';
+import { Modal }         from '@/components/ui/Modal';
+import { Input }         from '@/components/ui/Input';
+import { Select }        from '@/components/ui/Select';
 import type { Call, Column } from '@/types';
 
 function formatDuration(seconds: number): string {
@@ -22,19 +23,20 @@ function formatDuration(seconds: number): string {
 }
 
 export default function CallsPage() {
-  const [page, setPage]              = useState(1);
-  const [dirFilter, setDirFilter]    = useState('');
+  const router                          = useRouter();
+  const [page, setPage]                 = useState(1);
+  const [dirFilter, setDirFilter]       = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [dialOpen, setDialOpen]      = useState(false);
-  const [dialNumber, setDialNumber]  = useState('');
-  const [dialing, setDialing]        = useState(false);
+  const [dialOpen, setDialOpen]         = useState(false);
+  const [dialNumber, setDialNumber]     = useState('');
+  const [dialing, setDialing]           = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['calls', page, dirFilter, statusFilter],
     queryFn:  () =>
       callsApi.list({
         page,
-        direction: dirFilter || undefined,
+        direction: dirFilter   || undefined,
         status:    statusFilter || undefined,
         page_size: 25,
       }).then((r) => r.data),
@@ -46,7 +48,7 @@ export default function CallsPage() {
     if (!dialNumber.trim()) return;
     setDialing(true);
     try {
-      await callsApi.originate(dialNumber.trim());
+      await callsApi.originate({ phone_number: dialNumber.trim() });
       toast.success(`Dialing ${dialNumber}...`);
       setDialOpen(false);
       setDialNumber('');
@@ -64,11 +66,11 @@ export default function CallsPage() {
       render: (c) => (
         <StatusBadge
           status={c.direction === 'inbound' ? 'available' : 'on_call'}
-          label={c.direction === 'inbound' ? 'Inbound' : 'Outbound'}
+          label={c.direction === 'inbound' ? '↙ Inbound' : '↗ Outbound'}
           dot
         />
       ),
-      width: '110px',
+      width: '120px',
     },
     {
       key:    'caller_number',
@@ -112,7 +114,7 @@ export default function CallsPage() {
     },
     {
       key:    'started_at',
-      header: 'Date/Time',
+      header: 'Date / Time',
       render: (c) =>
         c.started_at ? (
           <span className="text-xs text-gray-500">
@@ -155,9 +157,10 @@ export default function CallsPage() {
       <div className="mb-4 flex flex-wrap gap-3">
         <Select
           options={[
-            { value: '', label: 'All Directions' },
-            { value: 'inbound',  label: 'Inbound' },
-            { value: 'outbound', label: 'Outbound' },
+            { value: '',          label: 'All Directions' },
+            { value: 'inbound',   label: '↙ Inbound' },
+            { value: 'outbound',  label: '↗ Outbound' },
+            { value: 'internal',  label: '↔ Internal' },
           ]}
           value={dirFilter}
           onChange={(e) => { setDirFilter(e.target.value); setPage(1); }}
@@ -165,11 +168,13 @@ export default function CallsPage() {
         />
         <Select
           options={[
-            { value: '', label: 'All Statuses' },
-            { value: 'answered',  label: 'Answered' },
-            { value: 'no_answer', label: 'No Answer' },
-            { value: 'busy',      label: 'Busy' },
-            { value: 'failed',    label: 'Failed' },
+            { value: '',           label: 'All Statuses' },
+            { value: 'answered',   label: 'Answered' },
+            { value: 'no_answer',  label: 'No Answer' },
+            { value: 'busy',       label: 'Busy' },
+            { value: 'failed',     label: 'Failed' },
+            { value: 'ringing',    label: 'Ringing' },
+            { value: 'voicemail',  label: 'Voicemail' },
           ]}
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
@@ -183,8 +188,10 @@ export default function CallsPage() {
         keyField="id"
         isLoading={isLoading}
         emptyText="No call records found."
+        onRowClick={(c) => router.push(`/calls/${c.id}`)}
       />
 
+      {/* Pagination */}
       {data && data.count > 25 && (
         <div className="mt-4 flex items-center justify-between text-sm text-gray-500">
           <span>
@@ -194,16 +201,25 @@ export default function CallsPage() {
           <div className="flex gap-2">
             <Button variant="secondary" size="sm"
                     disabled={!data.previous}
-                    onClick={() => setPage((p) => p - 1)}>Previous</Button>
+                    onClick={() => setPage((p) => p - 1)}>
+              Previous
+            </Button>
             <Button variant="secondary" size="sm"
                     disabled={!data.next}
-                    onClick={() => setPage((p) => p + 1)}>Next</Button>
+                    onClick={() => setPage((p) => p + 1)}>
+              Next
+            </Button>
           </div>
         </div>
       )}
 
       {/* Click-to-call Modal */}
-      <Modal open={dialOpen} onClose={() => setDialOpen(false)} title="Dial Number" size="sm">
+      <Modal
+        open={dialOpen}
+        onClose={() => setDialOpen(false)}
+        title="Dial Number"
+        size="sm"
+      >
         <div className="space-y-4">
           <Input
             label="Phone Number"
@@ -218,7 +234,9 @@ export default function CallsPage() {
             Your extension will ring first, then the destination will be dialled.
           </p>
           <div className="flex gap-2 justify-end">
-            <Button variant="secondary" onClick={() => setDialOpen(false)}>Cancel</Button>
+            <Button variant="secondary" onClick={() => setDialOpen(false)}>
+              Cancel
+            </Button>
             <Button
               variant="success"
               icon={<PhoneOutgoing size={16} />}
