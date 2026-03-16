@@ -14,7 +14,7 @@ from apps.common.permissions import IsAgent
 class CallViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['direction', 'status', 'agent', 'queue']
+    filterset_fields = ['direction', 'status', 'agent', 'queue', 'customer']
     http_method_names = ['get', 'post', 'patch', 'head', 'options']
 
     def get_queryset(self):

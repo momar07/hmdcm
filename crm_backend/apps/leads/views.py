@@ -11,7 +11,7 @@ from .services import create_lead, assign_lead, update_lead_status
 class LeadViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['status', 'priority', 'source', 'assigned_to', 'campaign']
+    filterset_fields = ['status', 'priority', 'source', 'assigned_to', 'campaign', 'customer']
 
     def get_queryset(self):
         return get_all_leads(user=self.request.user)
