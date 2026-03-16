@@ -8,7 +8,6 @@ import { leadsApi }     from '@/lib/api/leads';
 import { PageHeader }   from '@/components/ui/PageHeader';
 import { DataTable }    from '@/components/ui/DataTable';
 import { Button }       from '@/components/ui/Button';
-import { StatusBadge }  from '@/components/ui/StatusBadge';
 import { Select }       from '@/components/ui/Select';
 import type { Lead, Column } from '@/types';
 
@@ -18,21 +17,30 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 export default function LeadsPage() {
-  const router              = useRouter();
+  const router                          = useRouter();
   const [statusFilter, setStatusFilter] = useState('');
-  const [page, setPage]     = useState(1);
+  const [page, setPage]                 = useState(1);
 
+  // ── statuses ────────────────────────────────────────────────
   const { data: statusData } = useQuery({
     queryKey: ['lead-statuses'],
-    queryFn:  () => leadsApi.statuses().then((r) => r.data),
+    queryFn:  async () => {
+      const r = await leadsApi.statuses();
+      // handle both array and paginated { results: [] }
+      const raw = r.data as any;
+      if (Array.isArray(raw))        return raw;
+      if (Array.isArray(raw?.results)) return raw.results;
+      return [];
+    },
   });
 
+  // ── leads list ───────────────────────────────────────────────
   const { data, isLoading } = useQuery({
     queryKey: ['leads', page, statusFilter],
     queryFn:  () =>
       leadsApi.list({
         page,
-        status: statusFilter || undefined,
+        status:    statusFilter || undefined,
         page_size: 25,
       }).then((r) => r.data),
     keepPreviousData: true,
@@ -40,7 +48,10 @@ export default function LeadsPage() {
 
   const statusOptions = [
     { value: '', label: 'All Statuses' },
-    ...(statusData?.map((s) => ({ value: s.id, label: s.name })) ?? []),
+    ...((Array.isArray(statusData) ? statusData : []).map((s: any) => ({
+      value: s.id,
+      label: s.name,
+    }))),
   ];
 
   const columns: Column<Lead>[] = [
@@ -57,20 +68,25 @@ export default function LeadsPage() {
     {
       key:    'status',
       header: 'Status',
-      render: (l) => l.status_name ? (
-        <span className="inline-flex items-center px-2 py-0.5
-                         rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-          {l.status_name}
-        </span>
-      ) : <span className="text-gray-400">—</span>,
+      render: (l) =>
+        l.status_name ? (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            {l.status_name}
+          </span>
+        ) : (
+          <span className="text-gray-400">—</span>
+        ),
       width: '120px',
     },
     {
       key:    'priority',
       header: 'Priority',
-      render: (l) => l.priority_name ? (
-        <span className="text-xs font-medium text-gray-700">{l.priority_name}</span>
-      ) : <span className="text-gray-400">—</span>,
+      render: (l) =>
+        l.priority_name ? (
+          <span className="text-xs font-medium text-gray-700">{l.priority_name}</span>
+        ) : (
+          <span className="text-gray-400">—</span>
+        ),
       width: '100px',
     },
     {
@@ -146,12 +162,20 @@ export default function LeadsPage() {
             {Math.min(page * 25, data.count)} of {data.count}
           </span>
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm"
-                    disabled={!data.previous}
-                    onClick={() => setPage((p) => p - 1)}>Previous</Button>
-            <Button variant="secondary" size="sm"
-                    disabled={!data.next}
-                    onClick={() => setPage((p) => p + 1)}>Next</Button>
+            <Button
+              variant="secondary" size="sm"
+              disabled={!data.previous}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="secondary" size="sm"
+              disabled={!data.next}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </Button>
           </div>
         </div>
       )}

@@ -1,6 +1,13 @@
 import api from './axios';
 import type { Lead, LeadStatus, LeadPriority, PaginatedResponse } from '@/types';
 
+// helper — بيضمن إن الـ response دايماً array
+const toArray = <T>(data: T[] | { results: T[] } | any): T[] => {
+  if (Array.isArray(data))           return data;
+  if (Array.isArray(data?.results))  return data.results;
+  return [];
+};
+
 export const leadsApi = {
   list: (params?: Record<string, unknown>) =>
     api.get<PaginatedResponse<Lead>>('/leads/', { params }),
@@ -24,8 +31,14 @@ export const leadsApi = {
     api.patch(`/leads/${id}/status/`, { status_id }),
 
   statuses: () =>
-    api.get<LeadStatus[]>('/leads/statuses/'),
+    api.get('/leads/statuses/').then((r) => ({
+      ...r,
+      data: toArray<LeadStatus>(r.data),
+    })),
 
   priorities: () =>
-    api.get<LeadPriority[]>('/leads/priorities/'),
+    api.get('/leads/priorities/').then((r) => ({
+      ...r,
+      data: toArray<LeadPriority>(r.data),
+    })),
 };
