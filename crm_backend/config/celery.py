@@ -24,3 +24,6 @@ app.conf.beat_schedule = {
 }
 
 app.conf.timezone = 'Africa/Cairo'
+
+# suppress broker_connection_retry deprecation warning
+app.conf.broker_connection_retry_on_startup = True
