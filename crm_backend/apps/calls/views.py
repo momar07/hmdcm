@@ -56,6 +56,63 @@ class CallViewSet(viewsets.ModelViewSet):
         return Response({'message': 'Originate action placeholder.'})
 
 
+# ── Screen Pop View ─────────────────────────────────────────────────────
+
+class ScreenPopView(APIView):
+    """
+    GET /api/calls/screen-pop/?phone=+201001234567
+    Returns customer + open leads matching the caller number.
+    Used by the frontend IncomingCallPopup to show caller info.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        phone = request.query_params.get('phone', '').strip()
+        if not phone:
+            return Response(
+                {'detail': 'phone parameter is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # normalise — keep last 9 digits for fuzzy match
+        digits = ''.join(c for c in phone if c.isdigit())
+        suffix = digits[-9:] if len(digits) >= 9 else digits
+
+        from apps.customers.models import CustomerPhone
+        from apps.leads.models import Lead
+
+        phone_obj = CustomerPhone.objects.select_related('customer').filter(
+            normalized__endswith=suffix
+        ).first()
+
+        if not phone_obj:
+            return Response({'found': False, 'customer': None, 'leads': []})
+
+        customer = phone_obj.customer
+        leads = Lead.objects.filter(
+            customer=customer, is_active=True
+        ).select_related('stage', 'status', 'assigned_to').order_by('-created_at')[:5]
+
+        return Response({
+            'found': True,
+            'customer': {
+                'id':        str(customer.id),
+                'name':      customer.get_full_name(),
+                'phone':     phone_obj.number,
+                'email':     customer.email,
+            },
+            'leads': [{
+                'id':           str(l.id),
+                'title':        l.title,
+                'stage_name':   l.stage.name  if l.stage  else None,
+                'stage_color':  l.stage.color if l.stage  else None,
+                'status_name':  l.status.name if l.status else None,
+                'assigned_to':  l.assigned_to.get_full_name() if l.assigned_to else None,
+                'value':        str(l.value)  if l.value  else None,
+            } for l in leads],
+        })
+
+
 # ── Call Completion (Enforcement) Views ──────────────────────────────────
 
 class CallCompleteView(APIView):
