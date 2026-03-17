@@ -29,3 +29,11 @@ export const usersApi = {
     delete: (id: string) => api.delete(`/teams/${id}/`),
   },
 };
+
+// ── Queue / Agent Status ──────────────────────────────────────
+export const agentStatusApi = {
+  get:    ()                              => api.get('/users/me/queue-status/'),
+  set:    (action: 'login'|'pause'|'logoff', reason = 'Break') =>
+            api.post('/users/me/queue-status/', { action, reason }),
+  live:   ()                              => api.get('/users/live-agents/'),
+};

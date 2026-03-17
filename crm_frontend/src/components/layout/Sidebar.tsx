@@ -18,8 +18,9 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
+  Activity,
 } from 'lucide-react';
-import { useAuthStore, useUIStore } from '@/store';
+import { useAuthStore, useUIStore, useAgentStatusStore } from '@/store';
 import type { Role } from '@/types';
 
 interface NavItem {
@@ -49,6 +50,11 @@ const NAV_ITEMS: NavItem[] = [
     href: '/leads/pipeline', label: 'Pipeline',
     icon: <LayoutGrid size={18} />,
     roles: ['admin', 'supervisor', 'agent'],
+  },
+  {
+    href: '/live-agents', label: 'Live Agents',
+    icon: <Activity size={18} />,
+    roles: ['admin', 'supervisor'],
   },
   {
     href: '/calls', label: 'Calls',
@@ -91,6 +97,7 @@ export function Sidebar() {
   const pathname             = usePathname();
   const { user, logout }     = useAuthStore();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { status } = useAgentStatusStore();
 
   const visible = NAV_ITEMS.filter(
     (item) => user && item.roles.includes(user.role)
@@ -151,7 +158,18 @@ export function Sidebar() {
         {!sidebarCollapsed && user && (
           <div className="px-1 pb-1">
             <p className="text-xs font-semibold text-white truncate">{user.full_name}</p>
-            <p className="text-xs text-gray-400 capitalize">{user.role}</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                status === 'available' ? 'bg-green-400' :
+                status === 'on_call'   ? 'bg-blue-400'  :
+                status === 'away'      ? 'bg-yellow-400':
+                status === 'busy'      ? 'bg-orange-400':
+                'bg-gray-500'
+              }`} />
+              <p className="text-xs text-gray-400 capitalize">
+                {status === 'away' ? 'Break' : status.replace('_', ' ')}
+              </p>
+            </div>
           </div>
         )}
         <button
