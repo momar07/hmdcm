@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'apps.settings_core',
     'apps.dashboard',
     'apps.auditlog',
+    'apps.asterisk',
 ]
 
 MIDDLEWARE = [

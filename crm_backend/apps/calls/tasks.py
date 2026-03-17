@@ -95,32 +95,54 @@ def notify_call_ended(self, call_id: str, status: str):
 @shared_task(bind=True, max_retries=5, default_retry_delay=10)
 def process_ami_event(self, event: dict):
     """
-    Processes a raw AMI event dict from the Asterisk listener.
-    Creates/updates Call records accordingly.
+    Processes a raw AMI event dict from Asterisk 11 (Issabel).
     """
     from django.utils import timezone
     from .models import Call
     from apps.customers.models import CustomerPhone
 
     event_name = event.get('Event', '')
-    uniqueid   = event.get('Uniqueid') or event.get('Linkedid', '')
+
+    # Asterisk 11 uses Uniqueid per channel — use Uniqueid1 for Bridge
+    uniqueid = (
+        event.get('Uniqueid1')   # Bridge event
+        or event.get('Uniqueid') # all others
+        or ''
+    )
+
+    if not uniqueid:
+        return
 
     try:
+        # ── Newchannel ────────────────────────────────────────
         if event_name == 'Newchannel':
-            caller  = event.get('CallerIDNum', '')
-            callee  = event.get('Exten', '')
-            direction = 'inbound' if event.get('Context') == 'from-trunk' else 'outbound'
+            caller    = event.get('CallerIDNum', '').strip()
+            callee    = event.get('Exten', '').strip()
+            context   = event.get('Context', '')
+            channel   = event.get('Channel', '')
 
-            # screen pop — find customer by phone
+            # skip the second leg (callee channel — CallerIDNum == callee)
+            # we only create a Call record for the originating channel
+            if not callee or caller == callee:
+                return
+
+            # direction: from-trunk = inbound, from-internal = outbound
+            direction = 'inbound' if 'trunk' in context else 'outbound'
+
+            # screen pop
             customer = None
             try:
-                phone = CustomerPhone.objects.select_related('customer').filter(
-                    normalized__endswith=caller[-9:]
-                ).first()
-                if phone:
-                    customer = phone.customer
-            except Exception:
-                pass
+                lookup_num = caller if direction == 'inbound' else callee
+                digits = ''.join(c for c in lookup_num if c.isdigit())
+                suffix = digits[-9:] if len(digits) >= 9 else digits
+                if suffix:
+                    phone = CustomerPhone.objects.select_related(
+                        'customer'
+                    ).filter(normalized__endswith=suffix).first()
+                    if phone:
+                        customer = phone.customer
+            except Exception as e:
+                logger.warning(f'[AMI] Screen pop failed: {e}')
 
             call, created = Call.objects.get_or_create(
                 uniqueid = uniqueid,
@@ -134,41 +156,62 @@ def process_ami_event(self, event: dict):
             )
 
             if created:
+                logger.info(
+                    f'[AMI] ✅ New call: {uniqueid} '
+                    f'{caller} → {callee} ({direction})'
+                )
                 notify_incoming_call.delay(str(call.id))
-                logger.info(f'[AMI] New call created: {uniqueid}')
+            else:
+                logger.debug(f'[AMI] Call already exists: {uniqueid}')
 
+        # ── Bridge (Link = answered) ──────────────────────────
         elif event_name == 'Bridge':
-            Call.objects.filter(uniqueid=uniqueid).update(
-                status    = 'answered',
-                started_at= timezone.now(),
-            )
-            logger.info(f'[AMI] Call answered: {uniqueid}')
+            bridge_state = event.get('Bridgestate', '')
+            if bridge_state == 'Link':
+                updated = Call.objects.filter(
+                    uniqueid = uniqueid,
+                    status   = 'ringing',
+                ).update(
+                    status     = 'answered',
+                    started_at = timezone.now(),
+                )
+                if updated:
+                    logger.info(f'[AMI] ✅ Call answered: {uniqueid}')
 
-        elif event_name in ('Hangup', 'SoftHangupRequest'):
-            duration = int(event.get('Duration', 0))
+        # ── Hangup ────────────────────────────────────────────
+        elif event_name == 'Hangup':
+            # only process the primary channel (Uniqueid matches)
+            event_uid = event.get('Uniqueid', '')
+            call = Call.objects.filter(uniqueid=event_uid).first()
+            if not call:
+                return
+
+            # calculate duration
+            from django.utils import timezone as tz
+            duration = 0
+            if call.started_at:
+                duration = int((tz.now() - call.started_at).total_seconds())
+
+            cause = str(event.get('Cause', '16'))
             status_map = {
-                '16': 'answered',
+                '16': 'no_answer' if call.status == 'ringing' else 'answered',
                 '17': 'busy',
                 '19': 'no_answer',
                 '21': 'failed',
             }
-            cause   = str(event.get('Cause', '16'))
-            status  = status_map.get(cause, 'failed')
+            final_status = status_map.get(cause, 'no_answer')
 
-            updated = Call.objects.filter(
-                uniqueid   = uniqueid,
-                is_completed = False,
-            ).update(
-                status   = status,
-                ended_at = timezone.now(),
-                duration = duration,
-            )
-
-            if updated:
-                call = Call.objects.filter(uniqueid=uniqueid).first()
-                if call:
-                    notify_call_ended.delay(str(call.id), status)
-                logger.info(f'[AMI] Call ended: {uniqueid} → {status}')
+            # don't overwrite if already completed
+            if not call.is_completed:
+                call.status   = final_status
+                call.ended_at = tz.now()
+                call.duration = duration
+                call.save(update_fields=['status', 'ended_at', 'duration'])
+                notify_call_ended.delay(str(call.id), final_status)
+                logger.info(
+                    f'[AMI] ✅ Call ended: {event_uid} '
+                    f'→ {final_status} ({duration}s)'
+                )
 
     except Exception as exc:
         logger.error(f'[AMI] Error processing {event_name}: {exc}')
