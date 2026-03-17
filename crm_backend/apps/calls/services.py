@@ -50,7 +50,7 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
     # Rule 6: لو disposition بتطلب followup — لازم followup data
     followup_required = disposition.requires_followup
     followup_due_at   = data.get('followup_due_at')
-    followup_assigned = data.get('followup_assigned_id')
+    followup_assigned = data.get('followup_assigned_to') or data.get('followup_assigned_id')
     followup_type     = data.get('followup_type', '').strip()
 
     if followup_required:
