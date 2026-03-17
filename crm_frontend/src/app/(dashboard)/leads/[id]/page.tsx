@@ -15,6 +15,8 @@ export default function LeadDetailPage() {
   const router      = useRouter();
   const qc          = useQueryClient();
 
+  const qc = useQueryClient();
+
   const { data: lead, isLoading } = useQuery({
     queryKey: ['lead', id],
     queryFn:  () => leadsApi.get(id).then((r) => r.data),
@@ -27,6 +29,24 @@ export default function LeadDetailPage() {
       const raw = r.data as any;
       return Array.isArray(raw) ? raw : (raw?.results ?? []);
     },
+  });
+
+  const { data: stages } = useQuery({
+    queryKey: ['lead-stages'],
+    queryFn:  async () => {
+      const r = await leadsApi.stages();
+      const raw = r.data as any;
+      return Array.isArray(raw) ? raw : (raw?.results ?? []);
+    },
+  });
+
+  const moveStage = useMutation({
+    mutationFn: (stageId: string) => leadsApi.moveStage(id, stageId),
+    onSuccess: () => {
+      toast.success('Stage updated ✅');
+      qc.invalidateQueries({ queryKey: ['lead', id] });
+    },
+    onError: () => toast.error('Failed to update stage'),
   });
 
   const changeStatus = useMutation({
@@ -102,6 +122,51 @@ export default function LeadDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Current Stage */}
+        {lead.stage_name && (
+          <div className="flex items-center gap-2">
+            <span
+              className="w-3 h-3 rounded-full"
+              style={{ backgroundColor: lead.stage_color ?? '#6B7280' }}
+            />
+            <span className="text-sm font-medium text-gray-700">
+              Stage: {lead.stage_name}
+            </span>
+          </div>
+        )}
+
+        {/* Move Stage */}
+        {stages && stages.length > 0 && (
+          <div className="pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
+              Move Stage
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(stages as any[]).map((s: any) => (
+                <button
+                  key={s.id}
+                  onClick={() => moveStage.mutate(s.id)}
+                  disabled={moveStage.isPending || lead.stage === s.id}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full
+                             text-xs font-medium border transition-colors
+                             disabled:opacity-50 disabled:cursor-default"
+                  style={{
+                    backgroundColor: lead.stage === s.id ? s.color + '25' : '',
+                    borderColor:     lead.stage === s.id ? s.color : '#E5E7EB',
+                    color:           lead.stage === s.id ? s.color : '#374151',
+                  }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: s.color }}
+                  />
+                  {s.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Change Status */}
         {statuses && statuses.length > 0 && (

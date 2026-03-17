@@ -20,7 +20,7 @@ export default function NewLeadPage() {
     title: '', source: 'manual', description: '',
     value: '', followup_date: '',
     customer_id: preCustomer,
-    status_id: '', priority_id: '',
+    status_id: '', priority_id: '', stage_id: '',
   });
 
   const { data: statusData } = useQuery({
@@ -36,6 +36,15 @@ export default function NewLeadPage() {
     queryKey: ['lead-priorities'],
     queryFn: async () => {
       const r = await leadsApi.priorities();
+      const raw = r.data as any;
+      return Array.isArray(raw) ? raw : (raw?.results ?? []);
+    },
+  });
+
+  const { data: stageData } = useQuery({
+    queryKey: ['lead-stages'],
+    queryFn: async () => {
+      const r = await leadsApi.stages();
       const raw = r.data as any;
       return Array.isArray(raw) ? raw : (raw?.results ?? []);
     },
@@ -68,6 +77,7 @@ export default function NewLeadPage() {
       description:   form.description,
       value:         form.value ? parseFloat(form.value) : undefined,
       followup_date: form.followup_date || undefined,
+      stage_id:      form.stage_id || undefined,
     } as any),
     onSuccess: (res) => {
       toast.success('Lead created!');
@@ -178,6 +188,23 @@ export default function NewLeadPage() {
           <Input label="Value (EGP)" type="number" value={form.value}
                  onChange={(e) => set('value', e.target.value)}
                  placeholder="0.00" />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Stage</label>
+          <select
+            className="w-full border border-gray-300 rounded-lg px-3 py-2
+                       text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={form.stage_id}
+            onChange={(e) => set('stage_id', e.target.value)}
+          >
+            <option value="">— Select Stage —</option>
+            {(stageData ?? []).map((s: any) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
         </div>
 
         <Input label="Follow-up Date" type="datetime-local"
