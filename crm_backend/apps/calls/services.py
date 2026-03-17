@@ -56,10 +56,9 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
     if followup_required:
         if not followup_due_at:
             raise ValidationError('Follow-up due date is required for this disposition.')
-        if not followup_assigned:
-            raise ValidationError('Follow-up assigned user is required.')
+        # followup_assigned defaults to current agent if not provided
         if not followup_type:
-            raise ValidationError('Follow-up type is required.')
+            followup_type = 'call'
 
     # Rule 7: لو next_action = close_lead — لازم lead مرتبط
     if next_action == 'close_lead' and not call.lead:
@@ -81,12 +80,12 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
     # ── كل الـ validation passed — ابدأ الحفظ ──────────────────
     from apps.users.models import User
 
-    assigned_user = None
+    assigned_user = agent  # default to current agent
     if followup_assigned:
         try:
             assigned_user = User.objects.get(pk=followup_assigned)
         except User.DoesNotExist:
-            raise ValidationError('Assigned user not found.')
+            assigned_user = agent  # fallback to current agent
 
     # إنشاء الـ CallCompletion
     completion = CallCompletion.objects.create(
@@ -127,8 +126,8 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
     # إنشاء الـ Followup تلقائياً لو مطلوب
     if followup_required and assigned_user:
         from apps.followups.models import Followup
-        followup = Followup.objects.create(
-            customer     = call.customer,
+        # customer is optional — only set if linked to the call
+        followup_data = dict(
             lead         = call.lead,
             call         = call,
             assigned_to  = assigned_user,
@@ -138,6 +137,18 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
             scheduled_at = followup_due_at,
             status       = 'pending',
         )
+        if call.customer:
+            followup_data['customer'] = call.customer
+        elif call.lead and call.lead.customer:
+            followup_data['customer'] = call.lead.customer
+
+        if 'customer' not in followup_data:
+            # skip followup creation if no customer available
+            completion.followup_required = False
+            completion.save(update_fields=['followup_required'])
+            return completion
+
+        followup = Followup.objects.create(**followup_data)
         completion.followup_created = followup
         completion.save(update_fields=['followup_created'])
 

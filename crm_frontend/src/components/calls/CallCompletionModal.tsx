@@ -101,8 +101,11 @@ export function CallCompletionModal({ callId, callInfo, open, onClose, onSuccess
       e.note = 'Note must be at least 10 characters';
     if (!form.next_action)
       e.next_action = 'Next action is required';
-    if (form.followup_required && !form.followup_due_at)
-      e.followup_due_at = 'Due date is required for follow-up';
+    if (form.followup_required) {
+      if (!form.followup_due_at || !form.followup_due_at.includes('T') || form.followup_due_at.endsWith('T')) {
+        e.followup_due_at = 'Please select a complete date and time';
+      }
+    }
     if (form.update_lead_stage && isWon && !form.won_amount)
       e.won_amount = 'Won amount is required';
     if (form.update_lead_stage && isLost && !form.lost_reason)
@@ -265,13 +268,37 @@ export function CallCompletionModal({ callId, callInfo, open, onClose, onSuccess
 
         {form.followup_required && (
           <div className="pl-6 space-y-3 border-l-2 border-green-100">
-            <Input
-              label="Due Date *"
-              type="datetime-local"
-              value={form.followup_due_at}
-              onChange={(e) => set('followup_due_at', e.target.value)}
-              error={errors.followup_due_at}
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Due Date & Time *
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  className={`flex-1 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.followup_due_at ? 'border-red-400' : 'border-gray-300'}`}
+                  value={form.followup_due_at ? form.followup_due_at.split('T')[0] : ''}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => {
+                    const date = e.target.value;
+                    const time = form.followup_due_at?.split('T')[1] || '09:00';
+                    set('followup_due_at', date ? `${date}T${time}` : '');
+                  }}
+                />
+                <input
+                  type="time"
+                  className={`w-32 rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.followup_due_at ? 'border-red-400' : 'border-gray-300'}`}
+                  value={form.followup_due_at ? form.followup_due_at.split('T')[1]?.slice(0,5) || '09:00' : '09:00'}
+                  onChange={(e) => {
+                    const time = e.target.value;
+                    const date = form.followup_due_at?.split('T')[0] || new Date().toISOString().split('T')[0];
+                    set('followup_due_at', `${date}T${time}`);
+                  }}
+                />
+              </div>
+              {errors.followup_due_at && (
+                <p className="text-xs text-red-500 mt-1">{errors.followup_due_at}</p>
+              )}
+            </div>
             <Select
               label="Follow-up Type"
               value={form.followup_type ?? 'call'}
