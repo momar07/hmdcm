@@ -126,29 +126,16 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
     # إنشاء الـ Followup تلقائياً لو مطلوب
     if followup_required and assigned_user:
         from apps.followups.models import Followup
-        # customer is optional — only set if linked to the call
-        followup_data = dict(
-            lead         = call.lead,
-            call         = call,
-            assigned_to  = assigned_user,
-            title        = f'Follow-up: {disposition.name}',
-            description  = note,
+        followup = Followup.objects.create(
+            lead          = call.lead,
+            call          = call,
+            assigned_to   = assigned_user,
+            title         = f'Follow-up: {disposition.name}',
+            description   = note,
             followup_type = followup_type,
-            scheduled_at = followup_due_at,
-            status       = 'pending',
+            scheduled_at  = followup_due_at,
+            status        = 'pending',
         )
-        if call.customer:
-            followup_data['customer'] = call.customer
-        elif call.lead and call.lead.customer:
-            followup_data['customer'] = call.lead.customer
-
-        if 'customer' not in followup_data:
-            # skip followup creation if no customer available
-            completion.followup_required = False
-            completion.save(update_fields=['followup_required'])
-            return completion
-
-        followup = Followup.objects.create(**followup_data)
         completion.followup_created = followup
         completion.save(update_fields=['followup_created'])
 

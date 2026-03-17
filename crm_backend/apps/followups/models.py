@@ -19,10 +19,6 @@ class Followup(BaseModel):
         ('other',   'Other'),
     ]
 
-    customer     = models.ForeignKey(
-        'customers.Customer', on_delete=models.CASCADE,
-        related_name='followups', null=True, blank=True
-    )
     lead         = models.ForeignKey(
         'leads.Lead', null=True, blank=True,
         on_delete=models.SET_NULL, related_name='followups'
