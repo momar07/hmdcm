@@ -172,20 +172,21 @@ export interface Disposition {
 
 // ── Followups ─────────────────────────────────────────────────────────────
 export interface Followup {
-  id:            string;
-  customer:      string;
-  customer_name: string;
-  lead:          string | null;
-  call:          string | null;
-  assigned_to:   string;
-  assigned_name: string;
-  title:         string;
-  description:   string;
-  followup_type: 'call' | 'email' | 'meeting' | 'sms' | 'other';
-  scheduled_at:  string;
-  completed_at:  string | null;
-  status:        'pending' | 'completed' | 'cancelled' | 'rescheduled';
-  created_at:    string;
+  id:              string;
+  lead:            string | null;
+  lead_title:      string | null;
+  call:            string | null;
+  assigned_to:     string;
+  assigned_to_name: string;
+  title:           string;
+  description:     string;
+  followup_type:   'call' | 'email' | 'meeting' | 'sms' | 'other';
+  scheduled_at:    string;
+  completed_at:    string | null;
+  status:          'pending' | 'completed' | 'cancelled' | 'rescheduled';
+  reminder_sent:   boolean;
+  created_at:      string;
+  updated_at:      string;
 }
 
 // ── Campaigns ─────────────────────────────────────────────────────────────

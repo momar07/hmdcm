@@ -8,7 +8,14 @@ export const followupsApi = {
   get: (id: string) =>
     api.get<Followup>(`/followups/${id}/`),
 
-  create: (data: Partial<Followup> & { customer_id?: string; scheduled_at: string }) =>
+  create: (data: {
+    lead_id?:      string;
+    title:         string;
+    description?:  string;
+    followup_type: string;
+    scheduled_at:  string;
+    assigned_to?:  string;
+  }) =>
     api.post<Followup>('/followups/', data),
 
   update: (id: string, data: Partial<Followup>) =>
