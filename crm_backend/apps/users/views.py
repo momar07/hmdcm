@@ -52,6 +52,56 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response({'status': agent_status})
 
 
+
+    @action(detail=True, methods=['post'], url_path='reset-password')
+    def reset_password(self, request, pk=None):
+        """Admin resets a user's password."""
+        new_password = request.data.get('new_password', '').strip()
+        if len(new_password) < 8:
+            return Response({'error': 'Password must be at least 8 characters.'}, status=400)
+        try:
+            user = User.objects.get(pk=pk)
+            user.set_password(new_password)
+            user.save(update_fields=['password'])
+            return Response({'success': True, 'message': f'Password reset for {user.get_full_name()}'})
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=404)
+
+    @action(detail=True, methods=['post'], url_path='set-extension')
+    def set_extension(self, request, pk=None):
+        """Admin sets/updates SIP extension for a user."""
+        from .models import Extension
+        number    = request.data.get('number', '').strip()
+        peer_name = request.data.get('peer_name', '').strip()
+
+        if not number:
+            return Response({'error': 'Extension number is required.'}, status=400)
+
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found.'}, status=404)
+
+        # check if number is taken by another user
+        existing = Extension.objects.filter(number=number).exclude(user=user).first()
+        if existing:
+            return Response({'error': f'Extension {number} is already assigned to {existing.user.get_full_name()}.'}, status=400)
+
+        ext, created = Extension.objects.update_or_create(
+            user=user,
+            defaults={
+                'number':    number,
+                'peer_name': peer_name or f'SIP/{number}',
+                'is_active': True,
+            }
+        )
+        return Response({
+            'success':   True,
+            'created':   created,
+            'extension': {'id': str(ext.id), 'number': ext.number, 'peer_name': ext.peer_name},
+            'message':   f'Extension {number} {"assigned" if created else "updated"} for {user.get_full_name()}',
+        })
+
 class QueueViewSet(viewsets.ModelViewSet):
     serializer_class = QueueSerializer
     permission_classes = [permissions.IsAuthenticated, IsSupervisor]

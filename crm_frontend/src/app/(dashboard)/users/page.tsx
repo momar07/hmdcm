@@ -2,9 +2,10 @@
 
 import { useState }        from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, KeyRound, Phone } from 'lucide-react';
 import toast               from 'react-hot-toast';
 import { usersApi }        from '@/lib/api/users';
+import { agentStatusApi }  from '@/lib/api/users';
 import { PageHeader }      from '@/components/ui/PageHeader';
 import { DataTable }       from '@/components/ui/DataTable';
 import { Button }          from '@/components/ui/Button';
@@ -27,11 +28,66 @@ const AVATAR_BG: Record<string, string> = {
   qa:         'bg-yellow-500',
 };
 
+// ── Reset Password Modal ──────────────────────────────────────
+function ResetPasswordModal({ user, onClose }: { user: User; onClose: () => void }) {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirm,     setConfirm]     = useState('');
+
+  const { mutate, isLoading } = useMutation({
+    mutationFn: () => usersApi.resetPassword(user.id, newPassword),
+    onSuccess: () => {
+      toast.success('Password reset successfully ✅');
+      onClose();
+    },
+    onError: () => toast.error('Failed to reset password'),
+  });
+
+  const valid = newPassword.length >= 8 && newPassword === confirm;
+
+  return (
+    <Modal open onClose={onClose} title={`Reset Password — ${user.full_name}`} size="sm">
+      <div className="space-y-4">
+        <Input
+          label="New Password *"
+          type="password"
+          placeholder="Min 8 characters"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+        />
+        <Input
+          label="Confirm Password *"
+          type="password"
+          placeholder="Repeat password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+        />
+        {confirm && newPassword !== confirm && (
+          <p className="text-xs text-red-500">Passwords do not match</p>
+        )}
+        <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button
+            variant="primary"
+            icon={<KeyRound size={14} />}
+            loading={isLoading}
+            disabled={!valid}
+            onClick={() => mutate()}
+          >
+            Reset Password
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────
 export default function UsersPage() {
-  const [roleFilter, setRoleFilter] = useState('');
-  const [page, setPage]             = useState(1);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [editUser, setEditUser]     = useState<User | null>(null);
+  const [roleFilter,    setRoleFilter]    = useState('');
+  const [page,          setPage]          = useState(1);
+  const [createOpen,    setCreateOpen]    = useState(false);
+  const [editUser,      setEditUser]      = useState<User | null>(null);
+  const [resetUser,     setResetUser]     = useState<User | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -92,27 +148,42 @@ export default function UsersPage() {
       width: '110px',
     },
     {
-      key: 'extension', header: 'Ext',
+      key: 'extension', header: 'SIP Ext',
       render: (u) => (
-        <span className="font-mono text-sm text-gray-700">{u.extension?.number ?? '—'}</span>
+        <span className="font-mono text-sm text-blue-600 font-medium">
+          {u.extension?.number ? `📞 ${u.extension.number}` : '—'}
+        </span>
       ),
-      width: '70px',
+      width: '90px',
     },
     {
       key: 'actions', header: '',
       render: (u) => (
         <div className="flex items-center gap-1">
-          <button onClick={(e) => { e.stopPropagation(); setEditUser(u); }}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
+          <button
+            onClick={(e) => { e.stopPropagation(); setResetUser(u); }}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors"
+            title="Reset Password"
+          >
+            <KeyRound size={15} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditUser(u); }}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+            title="Edit"
+          >
             <Pencil size={15} />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); confirmDelete(u); }}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete">
+          <button
+            onClick={(e) => { e.stopPropagation(); confirmDelete(u); }}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+            title="Delete"
+          >
             <Trash2 size={15} />
           </button>
         </div>
       ),
-      width: '80px',
+      width: '100px',
     },
   ];
 
@@ -161,19 +232,31 @@ export default function UsersPage() {
         </div>
       )}
 
+      {/* Create Modal */}
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Add New User" size="md">
-        <UserForm onClose={() => setCreateOpen(false)} />
+        <UserForm onClose={() => { setCreateOpen(false); queryClient.invalidateQueries({ queryKey: ['users'] }); }} />
       </Modal>
 
+      {/* Edit Modal */}
       <Modal open={!!editUser} onClose={() => setEditUser(null)} title="Edit User" size="md">
-        {editUser && <UserForm user={editUser} onClose={() => setEditUser(null)} />}
+        {editUser && (
+          <UserForm
+            user={editUser}
+            onClose={() => { setEditUser(null); queryClient.invalidateQueries({ queryKey: ['users'] }); }}
+          />
+        )}
       </Modal>
+
+      {/* Reset Password Modal */}
+      {resetUser && (
+        <ResetPasswordModal user={resetUser} onClose={() => setResetUser(null)} />
+      )}
     </div>
   );
 }
 
+// ── User Form (Create + Edit) ─────────────────────────────────
 function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
-  const queryClient = useQueryClient();
   const isEdit = !!user;
 
   const { data: teamsData } = useQuery({
@@ -187,28 +270,30 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
   ];
 
   const [form, setForm] = useState({
-    first_name: user?.first_name ?? '',
-    last_name:  user?.last_name  ?? '',
-    email:      user?.email      ?? '',
-    password:   '',
-    role:       user?.role       ?? 'agent',
-    phone:      user?.phone      ?? '',
-    team:       (user?.team as unknown as string) ?? '',
-    is_active:  user?.is_active  ?? true,
+    first_name:      user?.first_name                  ?? '',
+    last_name:       user?.last_name                   ?? '',
+    email:           user?.email                       ?? '',
+    password:        '',
+    role:            user?.role                        ?? 'agent',
+    phone:           user?.phone                       ?? '',
+    team:            (user?.team as unknown as string) ?? '',
+    is_active:       user?.is_active                   ?? true,
+    sip_extension:   user?.extension?.number           ?? '',
   });
 
   const { mutate, isLoading } = useMutation({
-    mutationFn: () =>
-      isEdit
-        ? usersApi.update(user!.id, {
+    mutationFn: async () => {
+      // 1. create or update user
+      const payload = isEdit
+        ? {
             first_name: form.first_name,
             last_name:  form.last_name,
             role:       form.role as User['role'],
             phone:      form.phone,
             team:       (form.team || null) as unknown as User['team'],
             is_active:  form.is_active,
-          })
-        : usersApi.create({
+          }
+        : {
             first_name: form.first_name,
             last_name:  form.last_name,
             email:      form.email,
@@ -216,10 +301,21 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
             role:       form.role as User['role'],
             phone:      form.phone,
             team:       (form.team || null) as unknown as User['team'],
-          }),
+          };
+
+      const res  = isEdit
+        ? await usersApi.update(user!.id, payload)
+        : await usersApi.create(payload as Parameters<typeof usersApi.create>[0]);
+
+      const userId = res.data.id;
+
+      // 2. set SIP extension if provided
+      if (form.sip_extension.trim()) {
+        await usersApi.setExtension(userId, form.sip_extension.trim());
+      }
+    },
     onSuccess: () => {
-      toast.success(isEdit ? 'User updated!' : 'User created!');
-      queryClient.invalidateQueries({ queryKey: ['users'] });
+      toast.success(isEdit ? 'User updated! ✅' : 'User created! ✅');
       onClose();
     },
     onError: (err: unknown) => {
@@ -235,15 +331,22 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        <Input label="First Name *" placeholder="Ahmed" value={form.first_name} onChange={set('first_name')} />
-        <Input label="Last Name *"  placeholder="Hassan" value={form.last_name} onChange={set('last_name')} />
+        <Input label="First Name *" placeholder="Ahmed"  value={form.first_name} onChange={set('first_name')} />
+        <Input label="Last Name *"  placeholder="Hassan" value={form.last_name}  onChange={set('last_name')} />
       </div>
-      <Input label="Email *" type="email" placeholder="agent@company.com"
-             value={form.email} onChange={set('email')} disabled={isEdit} />
+
+      <Input
+        label="Email *" type="email" placeholder="agent@company.com"
+        value={form.email} onChange={set('email')} disabled={isEdit}
+      />
+
       {!isEdit && (
-        <Input label="Password *" type="password" placeholder="Min 8 characters"
-               value={form.password} onChange={set('password')} />
+        <Input
+          label="Password *" type="password" placeholder="Min 8 characters"
+          value={form.password} onChange={set('password')}
+        />
       )}
+
       <div className="grid grid-cols-2 gap-4">
         <Select
           label="Role"
@@ -263,7 +366,32 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
           onChange={set('team')}
         />
       </div>
-      <Input label="Phone" placeholder="+20100000000" value={form.phone} onChange={set('phone')} />
+
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          label="Phone" placeholder="+20100000000"
+          value={form.phone} onChange={set('phone')}
+        />
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            SIP Extension
+          </label>
+          <div className="relative">
+            <Phone size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="e.g. 200"
+              value={form.sip_extension}
+              onChange={set('sip_extension')}
+              className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg
+                         focus:outline-none focus:ring-2 focus:ring-blue-500
+                         font-mono"
+            />
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Asterisk/Issabel extension number</p>
+        </div>
+      </div>
+
       {isEdit && (
         <Select
           label="Active"
@@ -275,9 +403,10 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
           onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === 'true' }))}
         />
       )}
-      <div className="flex justify-end gap-2 pt-2">
+
+      <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" isLoading={isLoading} onClick={() => mutate()}>
+        <Button variant="primary" loading={isLoading} onClick={() => mutate()}>
           {isEdit ? 'Save Changes' : 'Create User'}
         </Button>
       </div>

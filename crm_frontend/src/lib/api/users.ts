@@ -14,6 +14,12 @@ export const usersApi = {
   update: (id: string, data: Partial<User>) =>
     api.patch<User>(`/users/${id}/`, data),
 
+  resetPassword: (id: string, password: string) =>
+    api.post(`/users/${id}/reset-password/`, { new_password: password }),
+
+  setExtension: (id: string, number: string) =>
+    api.post(`/users/${id}/set-extension/`, { number }),
+
   delete: (id: string) =>
     api.delete(`/users/${id}/`),
 
@@ -26,7 +32,13 @@ export const usersApi = {
     create: (data: Partial<Team>) => api.post<Team>('/teams/', data),
     update: (id: string, data: Partial<Team>) =>
       api.patch<Team>(`/teams/${id}/`, data),
-    delete: (id: string) => api.delete(`/teams/${id}/`),
+    resetPassword: (id: string, password: string) =>
+    api.post(`/users/${id}/reset-password/`, { new_password: password }),
+
+  setExtension: (id: string, number: string) =>
+    api.post(`/users/${id}/set-extension/`, { number }),
+
+  delete: (id: string) => api.delete(`/teams/${id}/`),
   },
 };
 
