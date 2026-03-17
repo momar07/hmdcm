@@ -17,6 +17,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  LayoutGrid,
 } from 'lucide-react';
 import { useAuthStore, useUIStore } from '@/store';
 import type { Role } from '@/types';
@@ -42,6 +43,11 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/leads', label: 'Leads',
     icon: <BookOpen size={18} />,
+    roles: ['admin', 'supervisor', 'agent'],
+  },
+  {
+    href: '/leads/pipeline', label: 'Pipeline',
+    icon: <LayoutGrid size={18} />,
     roles: ['admin', 'supervisor', 'agent'],
   },
   {
