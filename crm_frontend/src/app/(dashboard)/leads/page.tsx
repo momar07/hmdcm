@@ -3,7 +3,7 @@
 import { useState }     from 'react';
 import { useRouter }    from 'next/navigation';
 import { useQuery }     from '@tanstack/react-query';
-import { Plus }         from 'lucide-react';
+import { Plus, LayoutGrid } from 'lucide-react';
 import { leadsApi }     from '@/lib/api/leads';
 import { PageHeader }   from '@/components/ui/PageHeader';
 import { DataTable }    from '@/components/ui/DataTable';
@@ -127,13 +127,22 @@ export default function LeadsPage() {
         title="Leads"
         subtitle={`${data?.count ?? 0} total leads`}
         actions={
-          <Button
-            variant="primary"
-            icon={<Plus size={16} />}
-            onClick={() => router.push('/leads/new')}
-          >
-            New Lead
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              icon={<LayoutGrid size={16} />}
+              onClick={() => router.push('/leads/pipeline')}
+            >
+              Pipeline
+            </Button>
+            <Button
+              variant="primary"
+              icon={<Plus size={16} />}
+              onClick={() => router.push('/leads/new')}
+            >
+              New Lead
+            </Button>
+          </div>
         }
       />
 

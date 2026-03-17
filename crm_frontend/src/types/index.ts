@@ -112,6 +112,17 @@ export interface LeadPriority {
   color: string;
 }
 
+export interface LeadStage {
+  id:        string;
+  name:      string;
+  slug:      string;
+  order:     number;
+  color:     string;
+  is_closed: boolean;
+  is_won:    boolean;
+  is_active: boolean;
+}
+
 export interface Lead {
   id:             string;
   title:          string;
@@ -124,6 +135,10 @@ export interface Lead {
   priority:       string | LeadPriority | null;
   priority_name:  string;
   priority_detail?: LeadPriority;
+  stage:          string | null;
+  stage_name:     string | null;
+  stage_color:    string | null;
+  stage_slug:     string | null;
   source:         string;
   assigned_to:    string | null;
   assigned_name:  string;
@@ -131,7 +146,10 @@ export interface Lead {
   description:    string;
   value:          number | null;
   followup_date:  string | null;
-  closed_at:      string | null;
+  won_at:         string | null;
+  lost_at:        string | null;
+  won_amount:     number | null;
+  lost_reason:    string;
   is_active:      boolean;
   created_at:     string;
   updated_at:     string;

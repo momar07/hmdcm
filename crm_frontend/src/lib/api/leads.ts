@@ -40,4 +40,13 @@ export const leadsApi = {
       ...r,
       data: toArray<LeadPriority>(r.data),
     })),
+
+  stages: () =>
+    api.get('/leads/stages/').then((r) => ({
+      ...r,
+      data: toArray<any>(r.data),
+    })),
+
+  moveStage: (leadId: string, stageId: string) =>
+    api.patch(`/leads/${leadId}/move-stage/`, { stage_id: stageId }),
 };
