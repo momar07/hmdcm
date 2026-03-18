@@ -138,8 +138,13 @@ class AMIClient:
     @staticmethod
     def _dispatch(event: dict):
         """Send relevant events to the Celery task."""
-        relevant = {'Newchannel', 'Bridge', 'Hangup',
-                    'SoftHangupRequest', 'Dial'}
+        relevant = {
+            'Newchannel', 'Bridge', 'Hangup', 'SoftHangupRequest', 'Dial',
+            'AgentLogin', 'AgentLogoff', 'AgentCalled',
+            'AgentConnect', 'AgentComplete', 'AgentRinghangup',
+            'QueueMemberAdded', 'QueueMemberRemoved',
+            'QueueMemberPause', 'QueueMemberStatus',
+        }
         name = event.get('Event', '')
 
         if name in relevant:

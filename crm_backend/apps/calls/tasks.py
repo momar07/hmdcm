@@ -216,6 +216,94 @@ def process_ami_event(self, event: dict):
                     notify_call_ended.apply(args=[str(call.id), status])
                 logger.info(f'[AMI] Call ended: {uniqueid} → {status} ({duration}s)')
 
+
+        elif event_name in ('AgentLogin', 'QueueMemberAdded'):
+            # Agent logged in to queue
+            interface = event.get('Interface', '') or event.get('Member', '')
+            if '/' in interface:
+                ext_num = interface.split('/')[1]
+                try:
+                    from apps.users.models import Extension
+                    from apps.users.services import update_user_status, _notify_status_change
+                    ext_obj = Extension.objects.select_related('user').get(
+                        number=ext_num, is_active=True
+                    )
+                    update_user_status(str(ext_obj.user.id), 'available')
+                    _notify_status_change(ext_obj.user, 'available')
+                    logger.info(f'[AMI] Agent logged in: {ext_num}')
+                except Exception as e:
+                    logger.debug(f'[AMI] AgentLogin error: {e}')
+
+        elif event_name in ('AgentLogoff', 'QueueMemberRemoved'):
+            # Agent logged off from queue
+            interface = event.get('Interface', '') or event.get('Member', '')
+            if '/' in interface:
+                ext_num = interface.split('/')[1]
+                try:
+                    from apps.users.models import Extension
+                    from apps.users.services import update_user_status, _notify_status_change
+                    ext_obj = Extension.objects.select_related('user').get(
+                        number=ext_num, is_active=True
+                    )
+                    update_user_status(str(ext_obj.user.id), 'offline')
+                    _notify_status_change(ext_obj.user, 'offline')
+                    logger.info(f'[AMI] Agent logged off: {ext_num}')
+                except Exception as e:
+                    logger.debug(f'[AMI] AgentLogoff error: {e}')
+
+        elif event_name in ('QueueMemberPause', 'QueueMemberStatus'):
+            # Agent paused/unpaused
+            interface = event.get('Interface', '') or event.get('Member', '')
+            paused    = event.get('Paused', '0')
+            if '/' in interface:
+                ext_num = interface.split('/')[1]
+                try:
+                    from apps.users.models import Extension
+                    from apps.users.services import update_user_status, _notify_status_change
+                    ext_obj = Extension.objects.select_related('user').get(
+                        number=ext_num, is_active=True
+                    )
+                    new_status = 'away' if paused == '1' else 'available'
+                    update_user_status(str(ext_obj.user.id), new_status)
+                    _notify_status_change(ext_obj.user, new_status)
+                    logger.info(f'[AMI] Agent pause={paused}: {ext_num}')
+                except Exception as e:
+                    logger.debug(f'[AMI] QueueMemberPause error: {e}')
+
+        elif event_name == 'AgentConnect':
+            # Agent answered a call — set status to on_call
+            interface = event.get('Interface', '') or event.get('Member', '')
+            if '/' in interface:
+                ext_num = interface.split('/')[1]
+                try:
+                    from apps.users.models import Extension
+                    from apps.users.services import update_user_status, _notify_status_change
+                    ext_obj = Extension.objects.select_related('user').get(
+                        number=ext_num, is_active=True
+                    )
+                    update_user_status(str(ext_obj.user.id), 'on_call')
+                    _notify_status_change(ext_obj.user, 'on_call')
+                    logger.info(f'[AMI] Agent on call: {ext_num}')
+                except Exception as e:
+                    logger.debug(f'[AMI] AgentConnect error: {e}')
+
+        elif event_name in ('AgentComplete', 'AgentRinghangup'):
+            # Call completed — set back to available
+            interface = event.get('Interface', '') or event.get('Member', '')
+            if '/' in interface:
+                ext_num = interface.split('/')[1]
+                try:
+                    from apps.users.models import Extension
+                    from apps.users.services import update_user_status, _notify_status_change
+                    ext_obj = Extension.objects.select_related('user').get(
+                        number=ext_num, is_active=True
+                    )
+                    update_user_status(str(ext_obj.user.id), 'available')
+                    _notify_status_change(ext_obj.user, 'available')
+                    logger.info(f'[AMI] Agent available again: {ext_num}')
+                except Exception as e:
+                    logger.debug(f'[AMI] AgentComplete error: {e}')
+
     except Exception as exc:
         logger.error(f'[AMI] Error processing {event_name}: {exc}')
         raise self.retry(exc=exc)

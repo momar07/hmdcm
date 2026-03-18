@@ -1,5 +1,5 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action, api_view, permission_classes as pc
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
@@ -10,16 +10,6 @@ from .selectors import get_all_users, get_active_queues
 from .services import (create_user, update_user_status,
                        agent_queue_login, agent_queue_pause, agent_queue_logoff)
 from apps.common.permissions import IsAdmin, IsSupervisor
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from django_filters.rest_framework import DjangoFilterBackend
-from .models import User, Queue
-from .serializers import (UserListSerializer, UserDetailSerializer,
-                          UserCreateSerializer, UserUpdateSerializer, QueueSerializer)
-from .selectors import get_all_users, get_active_queues
-from .services import create_user, update_user_status
-from apps.common.permissions import IsAdmin, IsSupervisor
-
 
 class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsAdmin]
