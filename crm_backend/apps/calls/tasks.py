@@ -217,9 +217,9 @@ def process_ami_event(self, event: dict):
                 logger.info(f'[AMI] Call ended: {uniqueid} → {status} ({duration}s)')
 
 
-        elif event_name in ('AgentLogin', 'QueueMemberAdded'):
+        elif event_name == 'QueueMemberAdded':
             # Agent logged in to queue
-            interface = event.get('Interface', '') or event.get('Member', '')
+            interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             if '/' in interface:
                 ext_num = interface.split('/')[1]
                 try:
@@ -234,9 +234,9 @@ def process_ami_event(self, event: dict):
                 except Exception as e:
                     logger.debug(f'[AMI] AgentLogin error: {e}')
 
-        elif event_name in ('AgentLogoff', 'QueueMemberRemoved'):
+        elif event_name == 'QueueMemberRemoved':
             # Agent logged off from queue
-            interface = event.get('Interface', '') or event.get('Member', '')
+            interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             if '/' in interface:
                 ext_num = interface.split('/')[1]
                 try:
@@ -251,9 +251,9 @@ def process_ami_event(self, event: dict):
                 except Exception as e:
                     logger.debug(f'[AMI] AgentLogoff error: {e}')
 
-        elif event_name in ('QueueMemberPause', 'QueueMemberStatus'):
+        elif event_name in ('QueueMemberPaused', 'QueueMemberStatus'):
             # Agent paused/unpaused
-            interface = event.get('Interface', '') or event.get('Member', '')
+            interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             paused    = event.get('Paused', '0')
             if '/' in interface:
                 ext_num = interface.split('/')[1]
@@ -272,7 +272,7 @@ def process_ami_event(self, event: dict):
 
         elif event_name == 'AgentConnect':
             # Agent answered a call — set status to on_call
-            interface = event.get('Interface', '') or event.get('Member', '')
+            interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             if '/' in interface:
                 ext_num = interface.split('/')[1]
                 try:
@@ -289,7 +289,7 @@ def process_ami_event(self, event: dict):
 
         elif event_name in ('AgentComplete', 'AgentRinghangup'):
             # Call completed — set back to available
-            interface = event.get('Interface', '') or event.get('Member', '')
+            interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             if '/' in interface:
                 ext_num = interface.split('/')[1]
                 try:

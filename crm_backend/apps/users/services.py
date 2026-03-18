@@ -77,13 +77,23 @@ def agent_queue_login(user) -> bool:
 
     ok = True
     for q in queues:
+        # جرب SIP/ الأول، لو فشل جرب Agent/
         result = _ami_action({
             'Action':    'QueueAdd',
             'Queue':     q.name,
             'Interface': f'SIP/{ext.number}',
+            'MemberName': ext.peer_name or f'SIP/{ext.number}',
             'Penalty':   '0',
             'Paused':    '0',
         })
+        if not result:
+            result = _ami_action({
+                'Action':    'QueueAdd',
+                'Queue':     q.name,
+                'Interface': f'Agent/{ext.number}',
+                'Penalty':   '0',
+                'Paused':    '0',
+            })
         ok = ok and result
 
     update_user_status(str(user.id), 'available')
@@ -106,11 +116,17 @@ def agent_queue_pause(user, reason: str = 'Break') -> bool:
         for q in queues:
             result = _ami_action({
                 'Action':    'QueuePause',
-                'Queue':     q.name,
                 'Interface': f'SIP/{ext.number}',
                 'Paused':    '1',
                 'Reason':    reason,
             })
+            if not result:
+                result = _ami_action({
+                    'Action':    'QueuePause',
+                    'Interface': f'Agent/{ext.number}',
+                    'Paused':    '1',
+                    'Reason':    reason,
+                })
             ok = ok and result
     else:
         ok = True
@@ -140,6 +156,12 @@ def agent_queue_logoff(user) -> bool:
                 'Queue':     q.name,
                 'Interface': f'SIP/{ext.number}',
             })
+            if not result:
+                result = _ami_action({
+                    'Action':    'QueueRemove',
+                    'Queue':     q.name,
+                    'Interface': f'Agent/{ext.number}',
+                })
             ok = ok and result
 
     update_user_status(str(user.id), 'offline')

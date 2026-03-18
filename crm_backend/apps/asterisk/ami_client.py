@@ -139,11 +139,15 @@ class AMIClient:
     def _dispatch(event: dict):
         """Send relevant events to the Celery task."""
         relevant = {
+            # Call events
             'Newchannel', 'Bridge', 'Hangup', 'SoftHangupRequest', 'Dial',
-            'AgentLogin', 'AgentLogoff', 'AgentCalled',
-            'AgentConnect', 'AgentComplete', 'AgentRinghangup',
+            # Queue member events (Issabel/Asterisk 11)
             'QueueMemberAdded', 'QueueMemberRemoved',
-            'QueueMemberPause', 'QueueMemberStatus',
+            'QueueMemberPaused',   # ← الاسم الصح في Asterisk 11
+            'QueueMemberStatus',
+            # Agent events
+            'AgentLogin', 'AgentLogoff',
+            'AgentConnect', 'AgentComplete', 'AgentRinghangup',
         }
         name = event.get('Event', '')
 
