@@ -2,6 +2,7 @@
 
 import Link        from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import clsx        from 'clsx';
 import {
   LayoutDashboard,
@@ -98,6 +99,8 @@ export function Sidebar() {
   const { user, logout }     = useAuthStore();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const { status } = useAgentStatusStore();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const visible = NAV_ITEMS.filter(
     (item) => user && item.roles.includes(user.role)
@@ -160,6 +163,7 @@ export function Sidebar() {
             <p className="text-xs font-semibold text-white truncate">{user.full_name}</p>
             <div className="flex items-center gap-1.5 mt-0.5">
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                !mounted ? 'bg-gray-500' :
                 status === 'available' ? 'bg-green-400' :
                 status === 'on_call'   ? 'bg-blue-400'  :
                 status === 'away'      ? 'bg-yellow-400':

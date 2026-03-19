@@ -28,7 +28,11 @@ export function AgentStatusDropdown() {
   const { status, setStatus }     = useAgentStatusStore();
   const [open, setOpen]           = useState(false);
   const [vicidialUrl, setVicidialUrl] = useState<string | null>(null);
+  const [mounted, setMounted]         = useState(false);
   const iframeRef                     = useRef<HTMLIFrameElement>(null);
+
+  // Fix hydration mismatch — only render after client mount
+  useEffect(() => { setMounted(true); }, []);
 
   // sync status from server on mount
   useQuery({
@@ -41,7 +45,7 @@ export function AgentStatusDropdown() {
     refetchInterval: 30_000,
   });
 
-  const { mutate, isLoading } = useMutation({
+  const { mutate, isPending: isLoading } = useMutation({
     mutationFn: ({ action, reason }: { action: 'login'|'open_session'|'pause'|'logoff'; reason?: string }) =>
       agentStatusApi.set(action, reason),
     onSuccess: (res, vars) => {
@@ -74,8 +78,8 @@ export function AgentStatusDropdown() {
     onError: () => toast.error('Failed to update status'),
   });
 
-  // only agents see this
-  if (!user || !['agent', 'supervisor'].includes(user.role)) return null;
+  // Fix hydration + role check
+  if (!mounted || !user || !['agent', 'supervisor'].includes(user.role)) return null;
 
   const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.offline;
 
