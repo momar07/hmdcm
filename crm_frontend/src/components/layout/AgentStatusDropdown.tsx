@@ -64,17 +64,22 @@ export function AgentStatusDropdown() {
 
       // ── VICIdial two-step login flow ────────────────────
       if (vars.action === 'open_session') {
-        const url = res?.data?.vicidial_url;
-        if (url) {
-          // Force fresh iframe load every time (add timestamp to bust cache)
-          setVicidialUrl(null);  // clear first to force remount
+        const resumeOnly = res?.data?.resume_only;
+        const url        = res?.data?.vicidial_url;
+
+        if (resumeOnly) {
+          // Agent already logged in (coming from Break) — just send RESUME
+          toast.loading('Resuming...', { id: 'vicidial-login' });
+          setTimeout(() => mutate({ action: 'login' }), 500);
+        } else if (url) {
+          // Fresh login — open iframe first, then send RESUME after 6s
+          setVicidialUrl(null);
           setTimeout(() => {
             const freshUrl = url + '&_t=' + Date.now();
             setVicidialUrl(freshUrl);
             toast.loading('Connecting to VICIdial...', { id: 'vicidial-login' });
-            // Wait 6s for fresh iframe session, then send RESUME
             setTimeout(() => mutate({ action: 'login' }), 6000);
-          }, 500);  // small delay to ensure iframe unmounts first
+          }, 500);
         } else {
           toast.error('No extension assigned — contact admin');
         }

@@ -135,12 +135,23 @@ class AgentQueueStatusView(APIView):
         reason = request.data.get('reason', 'Break')
 
         if act == 'open_session':
-            # Step 1: return vicidial URL only — no VICIdial API call yet
             ext          = getattr(user, 'extension', None)
             vicidial_url = ext.vicidial_login_url if ext else None
+
+            # If agent is on Break → skip iframe, just send RESUME
+            if user.status == 'away':
+                return Response({
+                    'success':     True,
+                    'status':      user.status,
+                    'resume_only': True,
+                    'message':     'Agent on break — resume only',
+                })
+
+            # Fresh login — return URL for iframe
             return Response({
                 'success':      True,
                 'status':       user.status,
+                'resume_only':  False,
                 'message':      'Session URL ready — open iframe',
                 'vicidial_url': vicidial_url,
             })
