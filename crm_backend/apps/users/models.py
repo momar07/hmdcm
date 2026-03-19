@@ -93,18 +93,27 @@ class Extension(TimeStampedModel):
     def vicidial_login_url(self):
         """Build the full vicidial.php login URL for this agent."""
         from django.conf import settings
-        base = getattr(settings, 'VICIDIAL_URL', '')
-        if not base or not self.vicidial_user:
+        base = getattr(settings, 'VICIDIAL_URL', '').rstrip('/')
+        if not base or not self.number:
             return None
+        phone_pass = self.secret or self.number
+        vd_pass    = self.vicidial_pass or self.secret or self.number
+        vd_user    = self.vicidial_user or self.number
+        campaign   = self.vicidial_campaign or getattr(settings, 'VICIDIAL_CAMPAIGN', '')
+        ingroup    = self.vicidial_ingroup  # only use DB value — ignore settings fallback
+
         params = (
             f'?phone_login={self.number}'
-            f'&phone_pass={self.secret or self.number}'
-            f'&VD_login={self.vicidial_user or self.number}'
-            f'&VD_pass={self.vicidial_pass or self.number}'
-            f'&VD_campaign={self.vicidial_campaign or getattr(settings, "VICIDIAL_CAMPAIGN", "")}'
-            f'&VD_ingroup={self.vicidial_ingroup or getattr(settings, "VICIDIAL_INGROUP", "")}'
+            f'&phone_pass={phone_pass}'
+            f'&VD_login={vd_user}'
+            f'&VD_pass={vd_pass}'
+            f'&VD_campaign={campaign}'
             f'&auto_login=YES'
         )
+        # add ingroup only if set
+        if ingroup:
+            params += f'&VD_ingroup={ingroup}'
+
         return f'{base}/agc/vicidial.php{params}'
 
 
