@@ -38,6 +38,7 @@ export interface User {
   team:       string | null;
   extension:  Extension | null;
   avatar:     string | null;
+  phone:      string | null;
 }
 
 export interface Extension {
@@ -45,6 +46,10 @@ export interface Extension {
   number:    string;
   peer_name: string;
   is_active: boolean;
+  vicidial_user:     string | null;
+  vicidial_pass:     string | null;
+  vicidial_campaign: string | null;
+  vicidial_ingroup:  string | null;
 }
 
 export interface Team {

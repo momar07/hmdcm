@@ -114,7 +114,7 @@ export function CallCompletionModal({ callId, callInfo, open, onClose, onSuccess
     return Object.keys(e).length === 0;
   };
 
-  const { mutate, isLoading } = useMutation({
+  const { mutate, isPending: isLoading } = useMutation({
     mutationFn: () => callsApi.complete(callId, {
       ...form,
       won_amount:        form.won_amount || null,

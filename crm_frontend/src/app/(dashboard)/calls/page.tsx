@@ -14,7 +14,7 @@ import { Modal }                      from '@/components/ui/Modal';
 import { Input }                      from '@/components/ui/Input';
 import { Select }                     from '@/components/ui/Select';
 import { CallCompletionModal }        from '@/components/calls/CallCompletionModal';
-import type { Call, Column }          from '@/types';
+import type { Call, Column, PaginatedResponse } from '@/types';
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '—';
@@ -34,7 +34,7 @@ export default function CallsPage() {
   const [dialing, setDialing]               = useState(false);
   const [completingCall, setCompletingCall] = useState<Call | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<PaginatedResponse<Call>>({
     queryKey: ['calls', page, dirFilter, statusFilter],
     queryFn:  () =>
       callsApi.list({
@@ -43,7 +43,7 @@ export default function CallsPage() {
         status:    statusFilter || undefined,
         page_size: 25,
       }).then((r) => r.data),
-    keepPreviousData: true,
+    placeholderData: (prev: PaginatedResponse<Call> | undefined) => prev,
     refetchInterval:  10_000,
   });
 

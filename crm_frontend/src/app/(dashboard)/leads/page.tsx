@@ -43,7 +43,7 @@ export default function LeadsPage() {
         status:    statusFilter || undefined,
         page_size: 25,
       }).then((r) => r.data),
-    keepPreviousData: true,
+    placeholderData: (prev: any) => prev,
   });
 
   const statusOptions = [

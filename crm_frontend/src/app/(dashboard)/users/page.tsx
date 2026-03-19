@@ -13,7 +13,7 @@ import { StatusBadge }     from '@/components/ui/StatusBadge';
 import { Select }          from '@/components/ui/Select';
 import { Modal }           from '@/components/ui/Modal';
 import { Input }           from '@/components/ui/Input';
-import type { User, Column } from '@/types';
+import type { User, Column , PaginatedResponse} from '@/types';
 
 const ROLE_COLORS: Record<string, string> = {
   admin:      'bg-purple-100 text-purple-800',
@@ -33,7 +33,7 @@ function ResetPasswordModal({ user, onClose }: { user: User; onClose: () => void
   const [newPassword, setNewPassword] = useState('');
   const [confirm,     setConfirm]     = useState('');
 
-  const { mutate, isLoading } = useMutation({
+  const { mutate, isPending: isLoading } = useMutation({
     mutationFn: () => usersApi.resetPassword(user.id, newPassword),
     onSuccess: () => {
       toast.success('Password reset successfully ✅');
@@ -90,10 +90,10 @@ export default function UsersPage() {
   const [resetUser,     setResetUser]     = useState<User | null>(null);
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<PaginatedResponse<User>>({
     queryKey: ['users', page, roleFilter],
     queryFn:  () => usersApi.list({ page, role: roleFilter || undefined, page_size: 25 }).then((r) => r.data),
-    keepPreviousData: true,
+    placeholderData: (prev: any) => prev,
   });
 
   const { mutate: deleteUser } = useMutation({
@@ -285,7 +285,7 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
     vicidial_ingroup:     user?.extension?.vicidial_ingroup      ?? '',
   });
 
-  const { mutate, isLoading } = useMutation({
+  const { mutate, isPending: isLoading } = useMutation({
     mutationFn: async () => {
       // 1. create or update user
       const payload = isEdit

@@ -4,24 +4,24 @@ import { useState }     from 'react';
 import { useRouter }    from 'next/navigation';
 import { useQuery }     from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
-import { customersApi } from '@/lib/api/customers';
+import { customersApi }                from '@/lib/api/customers';
 import { PageHeader }   from '@/components/ui/PageHeader';
 import { DataTable }    from '@/components/ui/DataTable';
 import { Button }       from '@/components/ui/Button';
 import { Input }        from '@/components/ui/Input';
 import { StatusBadge }  from '@/components/ui/StatusBadge';
-import type { Customer, Column } from '@/types';
+import type { Customer, Column, PaginatedResponse } from '@/types';
 
 export default function CustomersPage() {
   const router            = useRouter();
   const [search, setSearch] = useState('');
   const [page, setPage]   = useState(1);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<PaginatedResponse<Customer>>({
     queryKey: ['customers', page, search],
     queryFn:  () =>
       customersApi.list({ page, search, page_size: 25 }).then((r) => r.data),
-    keepPreviousData: true,
+    placeholderData: (prev: PaginatedResponse<Customer> | undefined) => prev,
   });
 
   const columns: Column<Customer>[] = [

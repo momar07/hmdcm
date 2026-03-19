@@ -148,7 +148,7 @@ function TeamForm({ team, onClose }: { team?: Team; onClose: () => void }) {
     is_active:   team?.is_active   ?? true,
   });
 
-  const { mutate, isLoading } = useMutation({
+  const { mutate, isPending: isLoading } = useMutation({
     mutationFn: () =>
       isEdit
         ? usersApi.teams.update(team!.id, {
@@ -192,7 +192,7 @@ function TeamForm({ team, onClose }: { team?: Team; onClose: () => void }) {
       )}
       <div className="flex justify-end gap-2 pt-2">
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button variant="primary" isLoading={isLoading}
+        <Button variant="primary" loading={isLoading}
                 disabled={!form.name.trim()} onClick={() => mutate()}>
           {isEdit ? 'Save Changes' : 'Create Team'}
         </Button>

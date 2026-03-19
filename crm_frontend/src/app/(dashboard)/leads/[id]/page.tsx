@@ -15,7 +15,7 @@ export default function LeadDetailPage() {
   const router      = useRouter();
   const qc          = useQueryClient();
 
-  const qc = useQueryClient();
+  // duplicate removed
 
   const { data: lead, isLoading } = useQuery({
     queryKey: ['lead', id],

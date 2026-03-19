@@ -50,7 +50,7 @@ function RescheduleModal({
     followup.scheduled_at ? followup.scheduled_at.split('T')[1]?.slice(0, 5) || '09:00' : '09:00'
   );
 
-  const { mutate, isLoading } = useMutation({
+  const { mutate, isPending: isLoading } = useMutation({
     mutationFn: () =>
       followupsApi.reschedule(followup.id, `${date}T${time}:00`),
     onSuccess: () => {
@@ -219,7 +219,7 @@ export default function FollowupsPage() {
         page,
         page_size:     20,
       }).then((r) => r.data),
-    keepPreviousData: true,
+    placeholderData: (prev: any) => prev,
     refetchInterval:  30_000,
   });
 

@@ -61,7 +61,7 @@ export default function FollowupDetailPage() {
 
       <PageHeader
         title={followup.title}
-        subtitle={`For ${followup.customer_name}`}
+        subtitle={`For ${(followup as any).customer_name ?? ""}`}
         actions={
           <div className="flex gap-2">
             {followup.status === 'pending' && (
@@ -109,7 +109,7 @@ export default function FollowupDetailPage() {
           </div>
           <div>
             <p className="text-gray-400 text-xs mb-0.5">Assigned To</p>
-            <p className="font-medium">{followup.assigned_name}</p>
+            <p className="font-medium">{followup.assigned_to_name}</p>
           </div>
           <div>
             <p className="text-gray-400 text-xs mb-0.5">Scheduled At</p>
