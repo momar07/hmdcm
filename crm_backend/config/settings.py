@@ -161,3 +161,10 @@ AMI_USERNAME = env('AMI_USERNAME', default='admin')
 AMI_SECRET = env('AMI_SECRET', default='secret')
 RECORDING_BASE_PATH = env('RECORDING_BASE_PATH', default='/var/spool/asterisk/monitor')
 RECORDING_BASE_URL = env('RECORDING_BASE_URL', default='http://localhost/recordings')
+
+# ── VICIdial MySQL Direct ──────────────────────────────────
+VICIDIAL_DB_HOST = env('VICIDIAL_DB_HOST', default='192.168.2.110')
+VICIDIAL_DB_PORT = env.int('VICIDIAL_DB_PORT', default=3306)
+VICIDIAL_DB_NAME = env('VICIDIAL_DB_NAME', default='asterisk')
+VICIDIAL_DB_USER = env('VICIDIAL_DB_USER', default='cron')
+VICIDIAL_DB_PASS = env('VICIDIAL_DB_PASS', default='1234')

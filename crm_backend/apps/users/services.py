@@ -69,6 +69,41 @@ def _vicidial_api(agent_user: str, function: str, value: str, extra: dict = None
         return False, str(e)
 
 
+
+def _vicidial_db_ready(agent_user: str) -> bool:
+    """
+    Directly update vicidial_live_agents in MySQL to set agent READY.
+    Used because external_pause RESUME does not override LOGIN pause code.
+    """
+    import pymysql
+    from django.conf import settings
+    import logging
+    _log = logging.getLogger(__name__)
+
+    try:
+        conn = pymysql.connect(
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+            user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+            passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+            db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+            connect_timeout = 5,
+        )
+        with conn.cursor() as cur:
+            rows = cur.execute(
+                "UPDATE vicidial_live_agents "
+                "SET status='READY', pause_code='' "
+                "WHERE user=%s AND status='PAUSED'",
+                (agent_user,)
+            )
+        conn.commit()
+        conn.close()
+        _log.info(f'[VICIdial DB] Agent {agent_user} set READY — rows updated: {rows}')
+        return rows > 0
+    except Exception as e:
+        _log.error(f'[VICIdial DB] Error setting READY for {agent_user}: {e}')
+        return False
+
 def agent_queue_login(user) -> bool:
     """
     Make agent Available:
@@ -89,19 +124,19 @@ def agent_queue_login(user) -> bool:
 
     agent_num = ext.vicidial_user or ext.number
 
+    # Step 1: API RESUME
     ok, msg = _vicidial_api(agent_num, 'external_pause', 'RESUME')
+    _log.info(f'[Login] external_pause RESUME → {msg}')
 
-    if ok:
-        update_user_status(str(user.id), 'available')
-        _notify_status_change(user, 'available')
-        _log.info(f'[Login] Agent {user.email} is now AVAILABLE')
-    else:
-        _log.warning(f'[Login] VICIdial RESUME failed for {user.email}: {msg}')
-        # Still update CRM status even if VICIdial session not ready yet
-        update_user_status(str(user.id), 'available')
-        _notify_status_change(user, 'available')
+    # Step 2: Direct DB update to override LOGIN pause code
+    db_ok = _vicidial_db_ready(agent_num)
+    _log.info(f'[Login] DB READY update → {db_ok}')
 
-    return ok
+    update_user_status(str(user.id), 'available')
+    _notify_status_change(user, 'available')
+    _log.info(f'[Login] Agent {user.email} is now AVAILABLE')
+
+    return ok or db_ok
 
 
 def agent_queue_pause(user, reason: str = 'Break') -> bool:
