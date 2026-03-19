@@ -66,12 +66,16 @@ export function AgentStatusDropdown() {
       if (vars.action === 'open_session') {
         const url = res?.data?.vicidial_url;
         if (url) {
-          setVicidialUrl(url);
-          toast.loading('Connecting to VICIdial...', { id: 'vicidial-login' });
-          // Wait 5s for iframe to establish VICIdial session, then send RESUME
-          setTimeout(() => mutate({ action: 'login' }), 5000);
+          // Force fresh iframe load every time (add timestamp to bust cache)
+          setVicidialUrl(null);  // clear first to force remount
+          setTimeout(() => {
+            const freshUrl = url + '&_t=' + Date.now();
+            setVicidialUrl(freshUrl);
+            toast.loading('Connecting to VICIdial...', { id: 'vicidial-login' });
+            // Wait 6s for fresh iframe session, then send RESUME
+            setTimeout(() => mutate({ action: 'login' }), 6000);
+          }, 500);  // small delay to ensure iframe unmounts first
         } else {
-          // No VICIdial URL — no extension assigned
           toast.error('No extension assigned — contact admin');
         }
       }
@@ -80,10 +84,19 @@ export function AgentStatusDropdown() {
       if (vars.action === 'login') {
         toast.dismiss('vicidial-login');
         if (!res?.data?.success) {
-          // Login failed — revert status and show error
-          setStatus('offline');
-          toast.error(res?.data?.message ?? 'VICIdial login failed');
-          setVicidialUrl(null);
+          if (res?.data?.retry) {
+            // Session not ready yet — retry after more delay
+            toast.loading('Waiting for VICIdial session...', { id: 'vicidial-login' });
+            setTimeout(() => {
+              toast.dismiss('vicidial-login');
+              mutate({ action: 'login' });
+            }, 4000);
+          } else {
+            // Real failure — revert and show error
+            setStatus('offline');
+            toast.error(res?.data?.message ?? 'VICIdial login failed');
+            setVicidialUrl(null);
+          }
         }
       }
 

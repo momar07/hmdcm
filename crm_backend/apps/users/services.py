@@ -218,8 +218,16 @@ def agent_queue_login(user) -> dict:
         return {'success': False, 'status': 'offline', 'message': f'DB connection error: {e}'}
 
     if not row:
-        _log.warning(f'[Login] Agent {agent_num} not found in vicidial_live_agents — session not ready yet')
-        return {'success': False, 'status': 'offline', 'message': 'VICIdial session not ready — try again in a moment'}
+        # Agent not in vicidial_live_agents yet — iframe still loading
+        # This is normal on first login or after logoff
+        # Return success=False with specific code so frontend knows to wait
+        _log.warning(f'[Login] Agent {agent_num} not in vicidial_live_agents yet — iframe still loading')
+        return {
+            'success':  False,
+            'status':   'offline',
+            'message':  'VICIdial session not ready yet',
+            'retry':    True,   # tell frontend to retry after more delay
+        }
 
     _log.info(f'[Login] Agent {agent_num} DB status before RESUME: {row[0]}, pause_code: {row[1]}')
 
@@ -259,8 +267,8 @@ def agent_queue_login(user) -> dict:
         # Start background keep-ready loop to fight vicidial.php heartbeat
         try:
             from apps.calls.tasks import keep_agent_ready
-            keep_agent_ready.delay(agent_num)
-            _log.info(f'[Login] keep_agent_ready task started for {agent_num}')
+            keep_agent_ready.delay(agent_num, str(user.id))
+            _log.info(f'[Login] keep_agent_ready task started for {agent_num} user={user.id}')
         except Exception as e:
             _log.warning(f'[Login] Could not start keep_agent_ready: {e}')
         return {'success': True, 'status': 'available', 'message': 'Agent is now available'}

@@ -7,74 +7,129 @@ logger = logging.getLogger(__name__)
 
 
 
-@shared_task(bind=True, max_retries=0)
-def keep_agent_ready(self, agent_num: str):
+@shared_task(bind=True, max_retries=0, soft_time_limit=86400, time_limit=86401)
+def keep_agent_ready(self, agent_num: str, user_id: str):
     """
-    Permanent heartbeat — keeps agent READY as long as they are logged in.
-    Stops only when agent manually pauses (manual break) or logs off.
+    Permanent heartbeat with graceful shutdown support.
+    Uses SoftTimeLimitExceeded for clean stop on Ctrl+C / revoke.
     """
     import pymysql, time, logging
+    from celery.exceptions import SoftTimeLimitExceeded
     from django.conf import settings
-    _log = logging.getLogger(__name__)
+    from apps.users.services import update_user_status, _notify_status_change
+    from apps.users.models   import User
 
-    _log.info(f'[KeepReady] Starting permanent heartbeat for agent {agent_num}')
+    _log            = logging.getLogger(__name__)
+    last_crm_status = None
+    db_errors       = 0
+    MAX_DB_ERRORS   = 5
 
-    while True:
-        try:
-            conn = pymysql.connect(
-                host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
-                port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
-                user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
-                passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
-                db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
-                connect_timeout=3,
-            )
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT status, pause_code FROM vicidial_live_agents WHERE user=%s",
-                    (agent_num,)
+    _log.info(f'[Heartbeat] Started for agent={agent_num} user={user_id}')
+
+    try:
+        while True:
+            try:
+                conn = pymysql.connect(
+                    host            = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+                    port            = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+                    user            = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+                    passwd          = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+                    db              = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+                    connect_timeout = 3,
                 )
-                row = cur.fetchone()
+                db_errors = 0
 
-                if not row:
-                    _log.info(f'[KeepReady] Agent {agent_num} not found — stopping')
-                    conn.close()
-                    return f'stopped: agent {agent_num} not in live_agents'
-
-                cur_status = row[0]
-                cur_pause  = row[1] or ''
-
-                if cur_status == 'PAUSED' and cur_pause in ('LOGIN', ''):
-                    # LAGGED or LOGIN pause — override to READY
+                with conn.cursor() as cur:
                     cur.execute(
-                        "UPDATE vicidial_live_agents "
-                        "SET status='READY', pause_code='', last_update_time=NOW() "
-                        "WHERE user=%s",
+                        "SELECT status, pause_code FROM vicidial_live_agents WHERE user=%s",
                         (agent_num,)
                     )
-                    conn.commit()
-                    _log.info(f'[KeepReady] ♻️  Overrode LAGGED/LOGIN pause for {agent_num}')
+                    row = cur.fetchone()
 
-                elif cur_status == 'READY':
-                    # Keep heartbeat alive
-                    cur.execute(
-                        "UPDATE vicidial_live_agents SET last_update_time=NOW() WHERE user=%s",
-                        (agent_num,)
-                    )
-                    conn.commit()
+                    if not row:
+                        conn.close()
+                        if last_crm_status != 'offline':
+                            update_user_status(user_id, 'offline')
+                            try:
+                                user = User.objects.get(pk=user_id)
+                                _notify_status_change(user, 'offline')
+                            except Exception:
+                                pass
+                            last_crm_status = 'offline'
+                            _log.info(f'[Heartbeat] CRM → offline (session lost)')
+                        time.sleep(5)
+                        continue
 
-                elif cur_status == 'PAUSED' and cur_pause not in ('LOGIN', ''):
-                    # Manual break — stop heartbeat
-                    _log.info(f'[KeepReady] ⏸  Manual pause ({cur_pause}) — stopping')
-                    conn.close()
-                    return f'stopped: manual pause {cur_pause}'
+                    vd_status = row[0]
+                    vd_pause  = row[1] or ''
 
-            conn.close()
+                    if vd_status == 'READY':
+                        target_crm = 'available'
+                        cur.execute(
+                            "UPDATE vicidial_live_agents SET last_update_time=NOW() WHERE user=%s",
+                            (agent_num,)
+                        )
 
-        except Exception as e:
-            _log.error(f'[KeepReady] Error: {e}')
+                    elif vd_status == 'INCALL':
+                        target_crm = 'on_call'
 
-        time.sleep(2)
+                    elif vd_status == 'PAUSED' and vd_pause in ('LOGIN', ''):
+                        cur.execute(
+                            "UPDATE vicidial_live_agents "
+                            "SET status='READY', pause_code='', last_update_time=NOW() "
+                            "WHERE user=%s",
+                            (agent_num,)
+                        )
+                        _log.info(f'[Heartbeat] ♻️  Overrode LAGGED/LOGIN pause')
+                        target_crm = 'available'
+
+                    elif vd_status == 'PAUSED' and vd_pause not in ('LOGIN', ''):
+                        target_crm = 'away'
+
+                    elif vd_status == 'DISPO':
+                        target_crm = 'busy'
+
+                    else:
+                        target_crm = 'available'
+
+                conn.commit()
+                conn.close()
+
+                if target_crm != last_crm_status:
+                    update_user_status(user_id, target_crm)
+                    try:
+                        user = User.objects.get(pk=user_id)
+                        _notify_status_change(user, target_crm)
+                    except Exception:
+                        pass
+                    _log.info(f'[Heartbeat] CRM → {target_crm} (VD={vd_status}/{vd_pause})')
+                    last_crm_status = target_crm
+
+                    if target_crm == 'away':
+                        _log.info(f'[Heartbeat] Manual break — stopping')
+                        return f'stopped: manual break {vd_pause}'
+
+            except SoftTimeLimitExceeded:
+                raise
+
+            except Exception as e:
+                db_errors += 1
+                _log.error(f'[Heartbeat] DB error ({db_errors}/{MAX_DB_ERRORS}): {e}')
+                if db_errors >= MAX_DB_ERRORS:
+                    try:
+                        update_user_status(user_id, 'offline')
+                        user = User.objects.get(pk=user_id)
+                        _notify_status_change(user, 'offline')
+                    except Exception:
+                        pass
+                    last_crm_status = 'offline'
+                    db_errors = 0
+
+            time.sleep(2)
+
+    except SoftTimeLimitExceeded:
+        _log.info(f'[Heartbeat] Graceful shutdown for agent {agent_num}')
+        return f'stopped: shutdown'
 
 def notify_incoming_call(self, call_id: str):
     """
