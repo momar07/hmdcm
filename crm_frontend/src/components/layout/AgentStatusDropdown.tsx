@@ -107,9 +107,8 @@ export function AgentStatusDropdown() {
         <iframe
           ref={iframeRef}
           src={vicidialUrl}
-          style={{ display: 'none', width: 1, height: 1 }}
+          style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}
           title="vicidial-session"
-          sandbox="allow-same-origin allow-scripts allow-forms"
         />
       )}
       <button

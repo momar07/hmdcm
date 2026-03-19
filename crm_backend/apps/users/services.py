@@ -104,6 +104,79 @@ def _vicidial_db_ready(agent_user: str) -> bool:
         _log.error(f'[VICIdial DB] Error setting READY for {agent_user}: {e}')
         return False
 
+
+def agent_keep_ready(agent_num: str, attempts: int = 15) -> bool:
+    """
+    Keep agent READY by repeatedly updating DB.
+    vicidial.php heartbeat tries to revert — we override it.
+    Runs in background via Celery.
+    """
+    import pymysql, time
+    from django.conf import settings
+    import logging
+    _log = logging.getLogger(__name__)
+
+    ready_count = 0
+    for i in range(attempts):
+        time.sleep(2)
+        try:
+            conn = pymysql.connect(
+                host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+                port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+                user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+                passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+                db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+                connect_timeout=3,
+            )
+            with conn.cursor() as cur:
+                # Check current status first
+                cur.execute(
+                    "SELECT status, pause_code FROM vicidial_live_agents WHERE user=%s",
+                    (agent_num,)
+                )
+                row = cur.fetchone()
+
+                if row:
+                    cur_status   = row[0]
+                    cur_pause    = row[1]
+
+                    # Override PAUSED only if pause_code is LOGIN or empty (LAGGED)
+                    # Don't override manual breaks (e.g. BREAK, LUNCH, etc.)
+                    if cur_status == 'PAUSED' and cur_pause in ('LOGIN', '', None):
+                        cur.execute(
+                            "UPDATE vicidial_live_agents "
+                            "SET status='READY', pause_code='', last_update_time=NOW() "
+                            "WHERE user=%s",
+                            (agent_num,)
+                        )
+                        _log.info(f'[KeepReady] attempt {i+1}: overrode PAUSED({cur_pause}) → READY')
+                    else:
+                        # Update heartbeat only
+                        cur.execute(
+                            "UPDATE vicidial_live_agents "
+                            "SET last_update_time=NOW() "
+                            "WHERE user=%s AND status='READY'",
+                            (agent_num,)
+                        )
+                        if cur_status == 'READY':
+                            ready_count += 1
+                            _log.info(f'[KeepReady] attempt {i+1}: READY ✅ (heartbeat updated) count={ready_count}')
+                        elif cur_status == 'PAUSED' and cur_pause not in ('LOGIN', '', None):
+                            # Manual break — stop loop
+                            _log.info(f'[KeepReady] attempt {i+1}: manual pause ({cur_pause}) — stopping')
+                            conn.commit()
+                            conn.close()
+                            return False
+
+            conn.commit()
+            conn.close()
+
+        except Exception as e:
+            _log.error(f'[KeepReady] Error: {e}')
+
+    _log.info(f'[KeepReady] ✅ Completed {attempts} attempts for agent {agent_num}')
+    return ready_count > 0
+
 def agent_queue_login(user) -> dict:
     """
     Make agent Available with full validation.
@@ -183,6 +256,13 @@ def agent_queue_login(user) -> dict:
         update_user_status(str(user.id), 'available')
         _notify_status_change(user, 'available')
         _log.info(f'[Login] ✅ Agent {user.email} confirmed READY in VICIdial')
+        # Start background keep-ready loop to fight vicidial.php heartbeat
+        try:
+            from apps.calls.tasks import keep_agent_ready
+            keep_agent_ready.delay(agent_num)
+            _log.info(f'[Login] keep_agent_ready task started for {agent_num}')
+        except Exception as e:
+            _log.warning(f'[Login] Could not start keep_agent_ready: {e}')
         return {'success': True, 'status': 'available', 'message': 'Agent is now available'}
     else:
         db_status = final[0] if final else 'unknown'

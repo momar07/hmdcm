@@ -6,7 +6,76 @@ from channels.layers import get_channel_layer
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3)
+
+@shared_task(bind=True, max_retries=0)
+def keep_agent_ready(self, agent_num: str):
+    """
+    Permanent heartbeat — keeps agent READY as long as they are logged in.
+    Stops only when agent manually pauses (manual break) or logs off.
+    """
+    import pymysql, time, logging
+    from django.conf import settings
+    _log = logging.getLogger(__name__)
+
+    _log.info(f'[KeepReady] Starting permanent heartbeat for agent {agent_num}')
+
+    while True:
+        try:
+            conn = pymysql.connect(
+                host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+                port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+                user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+                passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+                db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+                connect_timeout=3,
+            )
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT status, pause_code FROM vicidial_live_agents WHERE user=%s",
+                    (agent_num,)
+                )
+                row = cur.fetchone()
+
+                if not row:
+                    _log.info(f'[KeepReady] Agent {agent_num} not found — stopping')
+                    conn.close()
+                    return f'stopped: agent {agent_num} not in live_agents'
+
+                cur_status = row[0]
+                cur_pause  = row[1] or ''
+
+                if cur_status == 'PAUSED' and cur_pause in ('LOGIN', ''):
+                    # LAGGED or LOGIN pause — override to READY
+                    cur.execute(
+                        "UPDATE vicidial_live_agents "
+                        "SET status='READY', pause_code='', last_update_time=NOW() "
+                        "WHERE user=%s",
+                        (agent_num,)
+                    )
+                    conn.commit()
+                    _log.info(f'[KeepReady] ♻️  Overrode LAGGED/LOGIN pause for {agent_num}')
+
+                elif cur_status == 'READY':
+                    # Keep heartbeat alive
+                    cur.execute(
+                        "UPDATE vicidial_live_agents SET last_update_time=NOW() WHERE user=%s",
+                        (agent_num,)
+                    )
+                    conn.commit()
+
+                elif cur_status == 'PAUSED' and cur_pause not in ('LOGIN', ''):
+                    # Manual break — stop heartbeat
+                    _log.info(f'[KeepReady] ⏸  Manual pause ({cur_pause}) — stopping')
+                    conn.close()
+                    return f'stopped: manual pause {cur_pause}'
+
+            conn.close()
+
+        except Exception as e:
+            _log.error(f'[KeepReady] Error: {e}')
+
+        time.sleep(2)
+
 def notify_incoming_call(self, call_id: str):
     """
     Called by the AMI listener when a new inbound call arrives.
