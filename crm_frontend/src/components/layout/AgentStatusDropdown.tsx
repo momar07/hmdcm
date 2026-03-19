@@ -1,13 +1,13 @@
 'use client';
 
-import { useState }              from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import toast                     from 'react-hot-toast';
-import { ChevronDown, Loader2 }  from 'lucide-react';
-import { agentStatusApi }        from '@/lib/api/users';
-import { useAgentStatusStore }   from '@/store';
-import { useAuthStore }          from '@/store';
-import type { AgentStatus }      from '@/types';
+import { useState, useRef, useEffect } from 'react';
+import { useMutation, useQuery }        from '@tanstack/react-query';
+import toast                            from 'react-hot-toast';
+import { ChevronDown, Loader2 }         from 'lucide-react';
+import { agentStatusApi }               from '@/lib/api/users';
+import { useAgentStatusStore }          from '@/store';
+import { useAuthStore }                 from '@/store';
+import type { AgentStatus }             from '@/types';
 
 const STATUS_CONFIG: Record<AgentStatus, { label: string; dot: string; bg: string }> = {
   available: { label: 'Available', dot: 'bg-green-500',  bg: 'bg-green-50  text-green-700  border-green-200'  },
@@ -27,6 +27,8 @@ export function AgentStatusDropdown() {
   const { user }                  = useAuthStore();
   const { status, setStatus }     = useAgentStatusStore();
   const [open, setOpen]           = useState(false);
+  const [vicidialUrl, setVicidialUrl] = useState<string | null>(null);
+  const iframeRef                     = useRef<HTMLIFrameElement>(null);
 
   // sync status from server on mount
   useQuery({
@@ -42,7 +44,7 @@ export function AgentStatusDropdown() {
   const { mutate, isLoading } = useMutation({
     mutationFn: ({ action, reason }: { action: 'login'|'pause'|'logoff'; reason?: string }) =>
       agentStatusApi.set(action, reason),
-    onSuccess: (_, vars) => {
+    onSuccess: (res, vars) => {
       const map: Record<string, AgentStatus> = {
         login: 'available', pause: 'away', logoff: 'offline',
       };
@@ -50,6 +52,25 @@ export function AgentStatusDropdown() {
       setStatus(newStatus);
       toast.success(`Status: ${STATUS_CONFIG[newStatus].label}`);
       setOpen(false);
+
+      // ── Open hidden VICIdial iframe on login ──────────────
+      if (vars.action === 'login') {
+        const url = res?.data?.vicidial_url;
+        if (url) {
+          setVicidialUrl(url);
+          // After 4 seconds send RESUME via API (session should be ready)
+          setTimeout(async () => {
+            try {
+              await agentStatusApi.set('login', 'RESUME');
+            } catch (_) { /* silent */ }
+          }, 4000);
+        }
+      }
+
+      // ── Clear iframe on logoff ────────────────────────────
+      if (vars.action === 'logoff') {
+        setVicidialUrl(null);
+      }
     },
     onError: () => toast.error('Failed to update status'),
   });
@@ -61,6 +82,16 @@ export function AgentStatusDropdown() {
 
   return (
     <div className="relative">
+      {/* Hidden VICIdial session iframe */}
+      {vicidialUrl && (
+        <iframe
+          ref={iframeRef}
+          src={vicidialUrl}
+          style={{ display: 'none', width: 1, height: 1 }}
+          title="vicidial-session"
+          sandbox="allow-same-origin allow-scripts allow-forms"
+        />
+      )}
       <button
         onClick={() => setOpen((o) => !o)}
         disabled={isLoading}

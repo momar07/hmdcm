@@ -147,6 +147,14 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Asterisk / Issabel settings
+
+# VICIdial integration
+VICIDIAL_URL      = env('VICIDIAL_URL',      default='')   # e.g. http://192.168.2.XXX
+VICIDIAL_API_USER = env('VICIDIAL_API_USER', default='6666')
+VICIDIAL_API_PASS = env('VICIDIAL_API_PASS', default='1234')
+VICIDIAL_CAMPAIGN = env('VICIDIAL_CAMPAIGN', default='2000')
+VICIDIAL_INGROUP  = env('VICIDIAL_INGROUP',  default='901')
+
 AMI_HOST = env('AMI_HOST', default='127.0.0.1')
 AMI_PORT = env.int('AMI_PORT', default=5038)
 AMI_USERNAME = env('AMI_USERNAME', default='admin')

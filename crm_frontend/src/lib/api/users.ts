@@ -17,8 +17,13 @@ export const usersApi = {
   resetPassword: (id: string, password: string) =>
     api.post(`/users/${id}/reset-password/`, { new_password: password }),
 
-  setExtension: (id: string, number: string) =>
-    api.post(`/users/${id}/set-extension/`, { number }),
+  setExtension: (id: string, number: string, vicidial?: {
+    vicidial_user?:     string;
+    vicidial_pass?:     string;
+    vicidial_campaign?: string;
+    vicidial_ingroup?:  string;
+  }) =>
+    api.post(`/users/${id}/set-extension/`, { number, ...vicidial }),
 
   delete: (id: string) =>
     api.delete(`/users/${id}/`),

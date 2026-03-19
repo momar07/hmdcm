@@ -73,11 +73,39 @@ class Extension(TimeStampedModel):
     is_active = models.BooleanField(default=True)
     secret    = models.CharField(max_length=100, blank=True)
 
+    # VICIdial integration fields
+    vicidial_user     = models.CharField(max_length=50,  blank=True,
+                                         help_text='VICIdial username (usually same as extension number)')
+    vicidial_pass     = models.CharField(max_length=100, blank=True,
+                                         help_text='VICIdial user password')
+    vicidial_campaign = models.CharField(max_length=50,  blank=True,
+                                         help_text='VICIdial campaign ID (e.g. 2000)')
+    vicidial_ingroup  = models.CharField(max_length=50,  blank=True,
+                                         help_text='VICIdial ingroup ID (e.g. 901)')
+
     class Meta:
         db_table = 'extensions'
 
     def __str__(self):
         return f'Ext {self.number} → {self.user}'
+
+    @property
+    def vicidial_login_url(self):
+        """Build the full vicidial.php login URL for this agent."""
+        from django.conf import settings
+        base = getattr(settings, 'VICIDIAL_URL', '')
+        if not base or not self.vicidial_user:
+            return None
+        params = (
+            f'?phone_login={self.number}'
+            f'&phone_pass={self.secret or self.number}'
+            f'&VD_login={self.vicidial_user or self.number}'
+            f'&VD_pass={self.vicidial_pass or self.number}'
+            f'&VD_campaign={self.vicidial_campaign or getattr(settings, "VICIDIAL_CAMPAIGN", "")}'
+            f'&VD_ingroup={self.vicidial_ingroup or getattr(settings, "VICIDIAL_INGROUP", "")}'
+            f'&auto_login=YES'
+        )
+        return f'{base}/agc/vicidial.php{params}'
 
 
 class Queue(TimeStampedModel):

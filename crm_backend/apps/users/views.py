@@ -77,13 +77,25 @@ class UserViewSet(viewsets.ModelViewSet):
         if existing:
             return Response({'error': f'Extension {number} is already assigned to {existing.user.get_full_name()}.'}, status=400)
 
+        # VICIdial fields (optional)
+        vicidial_user     = request.data.get('vicidial_user',     '').strip()
+        vicidial_pass     = request.data.get('vicidial_pass',     '').strip()
+        vicidial_campaign = request.data.get('vicidial_campaign', '').strip()
+        vicidial_ingroup  = request.data.get('vicidial_ingroup',  '').strip()
+
+        defaults = {
+            'number':    number,
+            'peer_name': peer_name or f'SIP/{number}',
+            'is_active': True,
+        }
+        if vicidial_user:     defaults['vicidial_user']     = vicidial_user
+        if vicidial_pass:     defaults['vicidial_pass']     = vicidial_pass
+        if vicidial_campaign: defaults['vicidial_campaign'] = vicidial_campaign
+        if vicidial_ingroup:  defaults['vicidial_ingroup']  = vicidial_ingroup
+
         ext, created = Extension.objects.update_or_create(
             user=user,
-            defaults={
-                'number':    number,
-                'peer_name': peer_name or f'SIP/{number}',
-                'is_active': True,
-            }
+            defaults=defaults,
         )
         return Response({
             'success':   True,
@@ -118,16 +130,21 @@ class AgentQueueStatusView(APIView):
         })
 
     def post(self, request):
-        user       = request.user
-        act        = request.data.get('action', '').strip()
-        reason     = request.data.get('reason', 'Break')
+        user   = request.user
+        act    = request.data.get('action', '').strip()
+        reason = request.data.get('reason', 'Break')
 
         if act == 'login':
+            # Build vicidial.php URL for hidden iframe
+            ext         = getattr(user, 'extension', None)
+            vicidial_url = ext.vicidial_login_url if ext else None
+
             ok = agent_queue_login(user)
             return Response({
-                'success': ok,
-                'status':  'available',
-                'message': 'Logged in to queue' if ok else 'Login failed (no extension?)',
+                'success':      ok,
+                'status':       'available',
+                'message':      'Logged in to queue' if ok else 'Login failed (no extension?)',
+                'vicidial_url': vicidial_url,   # ← frontend opens this in hidden iframe
             })
         elif act == 'pause':
             ok = agent_queue_pause(user, reason)
