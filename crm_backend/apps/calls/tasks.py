@@ -146,15 +146,47 @@ def notify_incoming_call(self, call_id: str):
         logger.error(f'[Notify] Call {call_id} not found')
         return
 
+    # ── Build rich customer payload ──────────────────────────
+    customer     = call.customer
+    customer_data = {}
+    if customer:
+        customer_data = {
+            'customer_id':      str(customer.id),
+            'customer_name':    customer.get_full_name(),
+            'customer_phone':   customer.primary_phone or call.caller,
+            'customer_company': getattr(customer, 'company', None) or '',
+        }
+    else:
+        customer_data = {
+            'customer_id':      None,
+            'customer_name':    None,
+            'customer_phone':   call.caller,
+            'customer_company': None,
+        }
+
+    # ── Lead info ─────────────────────────────────────────────
+    lead_data = {}
+    if call.lead_id:
+        try:
+            lead_data = {
+                'lead_id':    str(call.lead_id),
+                'lead_title': call.lead.title if call.lead else None,
+            }
+        except Exception:
+            lead_data = {'lead_id': str(call.lead_id), 'lead_title': None}
+    else:
+        lead_data = {'lead_id': None, 'lead_title': None}
+
     payload = {
-        'type':          'incoming_call',
-        'uniqueid':      call.uniqueid,
-        'caller':        call.caller,
-        'callee':        call.callee,
-        'queue':         call.queue or '',
-        'customer_id':   str(call.customer_id)   if call.customer_id else None,
-        'customer_name': call.customer.get_full_name() if call.customer else None,
-        'lead_id':       str(call.lead_id)        if call.lead_id    else None,
+        'type':      'incoming_call',
+        'call_id':   str(call.id),
+        'uniqueid':  call.uniqueid,
+        'caller':    call.caller,
+        'callee':    call.callee,
+        'queue':     call.queue or '',
+        'direction': call.direction,
+        **customer_data,
+        **lead_data,
     }
 
     channel_layer = get_channel_layer()

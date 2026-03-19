@@ -261,11 +261,18 @@ export type DashboardData = AgentDashboard | SupervisorDashboard | AdminDashboar
 export interface IncomingCallEvent {
   type:            'incoming_call';
   uniqueid:        string;
+  call_id:         string;
   caller:          string;
+  callee:          string;
   queue:           string;
+  direction:       'inbound' | 'outbound' | 'internal';
   agent_extension: string;
   customer_id:     string | null;
   customer_name:   string | null;
+  customer_phone:  string | null;
+  customer_company?: string | null;
+  lead_id:         string | null;
+  lead_title?:     string | null;
 }
 
 export interface CallEndedEvent {

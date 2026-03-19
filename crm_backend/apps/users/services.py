@@ -279,9 +279,10 @@ def agent_queue_login(user) -> dict:
 
 
 def agent_queue_pause(user, reason: str = 'Break') -> bool:
-    """Put agent on Break via VICIdial API."""
+    """Put agent on Break — direct DB update + stop heartbeat loop."""
     from .models import Extension
-    import logging
+    import logging, pymysql
+    from django.conf import settings
     _log = logging.getLogger(__name__)
 
     try:
@@ -292,18 +293,43 @@ def agent_queue_pause(user, reason: str = 'Break') -> bool:
         return True
 
     agent_num = ext.vicidial_user or ext.number
+    pause_code = reason.upper()
 
-    # First pause the agent
-    ok, msg = _vicidial_api(agent_num, 'external_pause', 'PAUSE')
-
-    # Then set the pause code reason
-    if ok:
-        _vicidial_api(agent_num, 'pause_code', reason.upper())
+    # ── Direct DB pause (same approach as READY override) ──
+    db_ok = False
+    try:
+        conn = pymysql.connect(
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+            user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+            passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+            db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+            connect_timeout=3,
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE vicidial_live_agents "
+                "SET status='PAUSED', pause_code=%s, last_update_time=NOW() "
+                "WHERE user=%s",
+                (pause_code, agent_num)
+            )
+            affected = cur.rowcount
+        conn.commit()
+        conn.close()
+        db_ok = affected > 0
+        _log.info(f'[Break] DB pause → {pause_code} for agent {agent_num} (rows={affected})')
+    except Exception as e:
+        _log.error(f'[Break] DB pause error: {e}')
+        # Fallback to API
+        ok, msg = _vicidial_api(agent_num, 'external_pause', 'PAUSE')
+        if ok:
+            _vicidial_api(agent_num, 'pause_code', pause_code)
+        db_ok = ok
 
     update_user_status(str(user.id), 'away')
     _notify_status_change(user, 'away')
     _log.info(f'[Break] Agent {user.email} paused — reason: {reason}')
-    return ok
+    return db_ok
 
 
 def agent_queue_logoff(user) -> bool:

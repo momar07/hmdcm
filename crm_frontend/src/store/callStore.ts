@@ -26,7 +26,11 @@ export const useCallStore = create<CallState>()((set) => ({
   screenPopOpen:  false,
 
   setIncomingCall: (call) =>
-    set({ incomingCall: call, screenPopOpen: !!call }),
+    set({
+      incomingCall:  call,
+      screenPopOpen: !!call,
+      // keep activeCall if already on call
+    }),
 
   setActiveCall:   (call) => set({ activeCall: call }),
 

@@ -5,7 +5,7 @@ import { useRouter }           from 'next/navigation';
 import { Sidebar }             from '@/components/layout/Sidebar';
 import { Topbar }              from '@/components/layout/Topbar';
 import { IncomingCallPopup }   from '@/components/calls/IncomingCallPopup';
-import { useAuthStore, useCallStore } from '@/store';
+import { useAuthStore, useCallStore, useAgentStatusStore } from '@/store';
 import { useWebSocket }        from '@/lib/websocket/useWebSocket';
 import type { WSEvent }        from '@/types';
 
@@ -32,9 +32,15 @@ export default function DashboardLayout({
     }
   }, [hydrated, isAuthenticated, router]);
 
+  const { setStatus } = useAgentStatusStore();
+
   useWebSocket((event: WSEvent) => {
     if (event.type === 'incoming_call') {
       setIncomingCall(event);
+    }
+    if (event.type === 'agent_status') {
+      const s = (event as any).status;
+      if (s) setStatus(s);
     }
   });
 
