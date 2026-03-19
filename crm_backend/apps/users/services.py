@@ -333,9 +333,10 @@ def agent_queue_pause(user, reason: str = 'Break') -> bool:
 
 
 def agent_queue_logoff(user) -> bool:
-    """Logout agent from VICIdial."""
+    """Logout agent from VICIdial — direct DB DELETE + API fallback."""
     from .models import Extension
-    import logging
+    import logging, pymysql
+    from django.conf import settings
     _log = logging.getLogger(__name__)
 
     try:
@@ -347,11 +348,43 @@ def agent_queue_logoff(user) -> bool:
 
     agent_num = ext.vicidial_user or ext.number
 
+    # ── Step 1: Try API logout first ──────────────────────
     ok, msg = _vicidial_api(agent_num, 'logout', 'LOGOUT')
+    _log.info(f'[Logoff] API logout → {msg}')
+
+    # ── Step 2: Direct DB DELETE from vicidial_live_agents ──
+    # This guarantees the agent is removed regardless of API result
+    try:
+        conn = pymysql.connect(
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+            user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+            passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+            db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+            connect_timeout=3,
+        )
+        with conn.cursor() as cur:
+            # Delete from live agents table — this is how VICIdial logs out
+            cur.execute(
+                "DELETE FROM vicidial_live_agents WHERE user=%s",
+                (agent_num,)
+            )
+            affected = cur.rowcount
+            # Also update vicidial_users last_state
+            cur.execute(
+                "UPDATE vicidial_users SET last_state='LOGOUT' WHERE user_id=%s",
+                (agent_num,)
+            )
+        conn.commit()
+        conn.close()
+        _log.info(f'[Logoff] DB logout → deleted {affected} row(s) from vicidial_live_agents')
+        ok = True
+    except Exception as e:
+        _log.error(f'[Logoff] DB logout error: {e}')
 
     update_user_status(str(user.id), 'offline')
     _notify_status_change(user, 'offline')
-    _log.info(f'[Logoff] Agent {user.email} logged off')
+    _log.info(f'[Logoff] Agent {user.email} logged off completely')
     return ok
 
 
