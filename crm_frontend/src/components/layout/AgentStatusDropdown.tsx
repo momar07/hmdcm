@@ -17,10 +17,10 @@ const STATUS_CONFIG: Record<AgentStatus, { label: string; dot: string; bg: strin
   offline:   { label: 'Offline',   dot: 'bg-gray-400',   bg: 'bg-gray-50   text-gray-600   border-gray-200'   },
 };
 
-const ACTIONS: { action: 'login'|'open_session'|'pause'|'logoff'; label: string; status: AgentStatus }[] = [
-  { action: 'open_session',  label: '🟢 Go Available', status: 'available' },
-  { action: 'pause',  label: '⏸  Take a Break',  status: 'away'      },
-  { action: 'logoff', label: '🔴 Go Offline',    status: 'offline'   },
+const ALL_ACTIONS: { action: 'login'|'open_session'|'pause'|'logoff'; label: string; status: AgentStatus; allowedFrom: AgentStatus[] }[] = [
+  { action: 'open_session', label: '🟢 Go Available', status: 'available', allowedFrom: ['offline', 'away']              },
+  { action: 'pause',        label: '⏸  Take a Break', status: 'away',      allowedFrom: ['available', 'on_call']         },
+  { action: 'logoff',       label: '🔴 Go Offline',   status: 'offline',   allowedFrom: ['available', 'away', 'on_call'] },
 ];
 
 export function AgentStatusDropdown() {
@@ -45,6 +45,17 @@ export function AgentStatusDropdown() {
     refetchInterval: 30_000,
   });
 
+  // ── Sync real VICIdial status on mount ─────────────────
+  useEffect(() => {
+    if (!mounted) return;
+    const user = useAuthStore.getState().user;
+    if (!user || !['agent', 'supervisor'].includes(user.role)) return;
+    agentStatusApi.set('sync_status').then((res) => {
+      const s = res?.data?.status as AgentStatus;
+      if (s) setStatus(s);
+    }).catch(() => {});
+  }, [mounted]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const { mutate, isPending: isLoading } = useMutation({
     mutationFn: ({ action, reason }: { action: 'login'|'open_session'|'pause'|'logoff'; reason?: string }) =>
       agentStatusApi.set(action, reason),
@@ -58,7 +69,10 @@ export function AgentStatusDropdown() {
       const newStatus = map[vars.action] as AgentStatus;
       if (newStatus) {
         setStatus(newStatus);
-        toast.success(`Status: ${STATUS_CONFIG[newStatus].label}`);
+        // Only show toast for pause/logoff — login flow has its own toast
+        if (vars.action !== 'open_session') {
+          toast.success(`Status: ${STATUS_CONFIG[newStatus].label}`);
+        }
       }
       setOpen(false);
 
@@ -152,22 +166,18 @@ export function AgentStatusDropdown() {
           {/* dropdown */}
           <div className="absolute right-0 mt-1.5 w-44 bg-white rounded-xl
                           shadow-lg border border-gray-200 py-1 z-20 overflow-hidden">
-            {ACTIONS.map(({ action, label, status: targetStatus }) => (
+            {ALL_ACTIONS.filter(a => a.allowedFrom.includes(status)).map(({ action, label, status: targetStatus }) => (
               <button
                 key={action}
-                disabled={status === targetStatus || isLoading}
+                disabled={isLoading}
                 onClick={() => mutate({ action })}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors
-                  flex items-center gap-2
-                  ${status === targetStatus
-                    ? 'bg-gray-50 text-gray-400 cursor-default'
-                    : 'hover:bg-gray-50 text-gray-700'
-                  }`}
+                className="w-full text-left px-4 py-2.5 text-sm transition-colors
+                  flex items-center gap-2 hover:bg-gray-50 text-gray-700"
               >
                 <span className={`w-2 h-2 rounded-full flex-shrink-0
                   ${STATUS_CONFIG[targetStatus].dot}`} />
                 {label}
-                {status === targetStatus && (
+                {false && (
                   <span className="ml-auto text-xs text-gray-400">current</span>
                 )}
               </button>

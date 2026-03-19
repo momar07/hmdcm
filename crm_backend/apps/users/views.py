@@ -134,6 +134,58 @@ class AgentQueueStatusView(APIView):
         act    = request.data.get('action', '').strip()
         reason = request.data.get('reason', 'Break')
 
+        if act == 'sync_status':
+            # Check real VICIdial status on page load
+            import pymysql
+            from django.conf import settings
+            ext       = getattr(user, 'extension', None)
+            agent_num = (ext.vicidial_user or ext.number) if ext else None
+
+            real_status = 'offline'
+            if agent_num:
+                try:
+                    conn = pymysql.connect(
+                        host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+                        port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+                        user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+                        passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+                        db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+                        connect_timeout=3,
+                    )
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT status, pause_code FROM vicidial_live_agents WHERE user=%s",
+                            (agent_num,)
+                        )
+                        row = cur.fetchone()
+                    conn.close()
+                    if row:
+                        vd_status = row[0]
+                        vd_pause  = row[1]
+                        if vd_status == 'READY':
+                            real_status = 'available'
+                        elif vd_status == 'INCALL':
+                            real_status = 'on_call'
+                        elif vd_status == 'PAUSED' and vd_pause in ('LOGIN', '', None):
+                            real_status = 'offline'
+                        elif vd_status == 'PAUSED':
+                            real_status = 'away'
+                        elif vd_status == 'DISPO':
+                            real_status = 'busy'
+                        # else: offline (not in table)
+                    # Update CRM DB to match real status
+                    if user.status != real_status:
+                        from apps.users.services import update_user_status
+                        update_user_status(str(user.id), real_status)
+                except Exception as e:
+                    pass
+
+            return Response({
+                'success': True,
+                'status':  real_status,
+                'message': f'Real VICIdial status: {real_status}',
+            })
+
         if act == 'open_session':
             ext          = getattr(user, 'extension', None)
             vicidial_url = ext.vicidial_login_url if ext else None
