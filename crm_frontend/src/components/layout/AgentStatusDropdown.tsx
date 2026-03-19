@@ -17,8 +17,8 @@ const STATUS_CONFIG: Record<AgentStatus, { label: string; dot: string; bg: strin
   offline:   { label: 'Offline',   dot: 'bg-gray-400',   bg: 'bg-gray-50   text-gray-600   border-gray-200'   },
 };
 
-const ACTIONS: { action: 'login'|'pause'|'logoff'; label: string; status: AgentStatus }[] = [
-  { action: 'login',  label: '🟢 Go Available', status: 'available' },
+const ACTIONS: { action: 'login'|'open_session'|'pause'|'logoff'; label: string; status: AgentStatus }[] = [
+  { action: 'open_session',  label: '🟢 Go Available', status: 'available' },
   { action: 'pause',  label: '⏸  Take a Break',  status: 'away'      },
   { action: 'logoff', label: '🔴 Go Offline',    status: 'offline'   },
 ];
@@ -42,7 +42,7 @@ export function AgentStatusDropdown() {
   });
 
   const { mutate, isLoading } = useMutation({
-    mutationFn: ({ action, reason }: { action: 'login'|'pause'|'logoff'; reason?: string }) =>
+    mutationFn: ({ action, reason }: { action: 'login'|'open_session'|'pause'|'logoff'; reason?: string }) =>
       agentStatusApi.set(action, reason),
     onSuccess: (res, vars) => {
       const map: Record<string, AgentStatus> = {
@@ -53,17 +53,16 @@ export function AgentStatusDropdown() {
       toast.success(`Status: ${STATUS_CONFIG[newStatus].label}`);
       setOpen(false);
 
-      // ── Open hidden VICIdial iframe on login ──────────────
-      if (vars.action === 'login') {
+      // ── VICIdial two-step login flow ────────────────────
+      if (vars.action === 'open_session') {
         const url = res?.data?.vicidial_url;
         if (url) {
           setVicidialUrl(url);
-          // After 4 seconds send RESUME via API (session should be ready)
-          setTimeout(async () => {
-            try {
-              await agentStatusApi.set('login', 'RESUME');
-            } catch (_) { /* silent */ }
-          }, 4000);
+          // Wait 5s for iframe to establish VICIdial session, then send RESUME
+          setTimeout(() => mutate({ action: 'login' }), 5000);
+        } else {
+          // No VICIdial URL — no extension assigned, just mark available
+          mutate({ action: 'login' });
         }
       }
 

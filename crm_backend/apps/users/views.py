@@ -134,17 +134,27 @@ class AgentQueueStatusView(APIView):
         act    = request.data.get('action', '').strip()
         reason = request.data.get('reason', 'Break')
 
-        if act == 'login':
-            # Build vicidial.php URL for hidden iframe
-            ext         = getattr(user, 'extension', None)
+        if act == 'open_session':
+            # Step 1: return vicidial URL only — no VICIdial API call yet
+            ext          = getattr(user, 'extension', None)
             vicidial_url = ext.vicidial_login_url if ext else None
+            return Response({
+                'success':      True,
+                'status':       user.status,
+                'message':      'Session URL ready — open iframe',
+                'vicidial_url': vicidial_url,
+            })
 
+        elif act == 'login':
+            # Step 2: iframe loaded, now send external_pause RESUME
+            ext          = getattr(user, 'extension', None)
+            vicidial_url = ext.vicidial_login_url if ext else None
             ok = agent_queue_login(user)
             return Response({
                 'success':      ok,
                 'status':       'available',
                 'message':      'Logged in to queue' if ok else 'Login failed (no extension?)',
-                'vicidial_url': vicidial_url,   # ← frontend opens this in hidden iframe
+                'vicidial_url': vicidial_url,
             })
         elif act == 'pause':
             ok = agent_queue_pause(user, reason)
