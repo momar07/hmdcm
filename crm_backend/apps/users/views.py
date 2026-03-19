@@ -146,16 +146,16 @@ class AgentQueueStatusView(APIView):
             })
 
         elif act == 'login':
-            # Step 2: iframe loaded, now send external_pause RESUME
+            # Step 2: iframe loaded — RESUME + DB validation
             ext          = getattr(user, 'extension', None)
             vicidial_url = ext.vicidial_login_url if ext else None
-            ok = agent_queue_login(user)
+            result       = agent_queue_login(user)
             return Response({
-                'success':      ok,
-                'status':       'available',
-                'message':      'Logged in to queue' if ok else 'Login failed (no extension?)',
+                'success':      result['success'],
+                'status':       result['status'],
+                'message':      result['message'],
                 'vicidial_url': vicidial_url,
-            })
+            }, status=200 if result['success'] else 400)
         elif act == 'pause':
             ok = agent_queue_pause(user, reason)
             return Response({

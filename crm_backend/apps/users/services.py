@@ -104,13 +104,14 @@ def _vicidial_db_ready(agent_user: str) -> bool:
         _log.error(f'[VICIdial DB] Error setting READY for {agent_user}: {e}')
         return False
 
-def agent_queue_login(user) -> bool:
+def agent_queue_login(user) -> dict:
     """
-    Make agent Available:
-    1. Build vicidial.php URL and return it (frontend will open hidden iframe)
-    2. After session is ready, call external_pause RESUME
+    Make agent Available with full validation.
+    Returns dict: { success, status, message }
     """
     from .models import Extension
+    import pymysql
+    from django.conf import settings
     import logging
     _log = logging.getLogger(__name__)
 
@@ -118,25 +119,75 @@ def agent_queue_login(user) -> bool:
         ext = Extension.objects.get(user=user, is_active=True)
     except Extension.DoesNotExist:
         _log.warning(f'[Login] No active extension for {user.email}')
-        update_user_status(str(user.id), 'available')
-        _notify_status_change(user, 'available')
-        return True
+        return {'success': False, 'status': 'offline', 'message': 'No active extension assigned to this agent'}
 
     agent_num = ext.vicidial_user or ext.number
 
-    # Step 1: API RESUME
+    # ── Step 1: Check agent is logged in VICIdial ─────────
+    try:
+        conn = pymysql.connect(
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+            user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+            passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+            db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+            connect_timeout=5,
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT status, pause_code FROM vicidial_live_agents WHERE user=%s",
+                (agent_num,)
+            )
+            row = cur.fetchone()
+        conn.close()
+    except Exception as e:
+        _log.error(f'[Login] DB check failed: {e}')
+        return {'success': False, 'status': 'offline', 'message': f'DB connection error: {e}'}
+
+    if not row:
+        _log.warning(f'[Login] Agent {agent_num} not found in vicidial_live_agents — session not ready yet')
+        return {'success': False, 'status': 'offline', 'message': 'VICIdial session not ready — try again in a moment'}
+
+    _log.info(f'[Login] Agent {agent_num} DB status before RESUME: {row[0]}, pause_code: {row[1]}')
+
+    # ── Step 2: Send external_pause RESUME via API ────────
     ok, msg = _vicidial_api(agent_num, 'external_pause', 'RESUME')
     _log.info(f'[Login] external_pause RESUME → {msg}')
 
-    # Step 2: Direct DB update to override LOGIN pause code
+    # ── Step 3: Direct DB UPDATE to clear LOGIN pause ─────
     db_ok = _vicidial_db_ready(agent_num)
     _log.info(f'[Login] DB READY update → {db_ok}')
 
-    update_user_status(str(user.id), 'available')
-    _notify_status_change(user, 'available')
-    _log.info(f'[Login] Agent {user.email} is now AVAILABLE')
+    # ── Step 4: Verify final status in DB ─────────────────
+    try:
+        conn = pymysql.connect(
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+            user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+            passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+            db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+            connect_timeout=5,
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT status, pause_code FROM vicidial_live_agents WHERE user=%s",
+                (agent_num,)
+            )
+            final = cur.fetchone()
+        conn.close()
+    except Exception as e:
+        _log.error(f'[Login] Final DB check failed: {e}')
+        final = None
 
-    return ok or db_ok
+    if final and final[0] == 'READY':
+        update_user_status(str(user.id), 'available')
+        _notify_status_change(user, 'available')
+        _log.info(f'[Login] ✅ Agent {user.email} confirmed READY in VICIdial')
+        return {'success': True, 'status': 'available', 'message': 'Agent is now available'}
+    else:
+        db_status = final[0] if final else 'unknown'
+        _log.warning(f'[Login] ❌ Agent {user.email} still {db_status} after RESUME attempt')
+        return {'success': False, 'status': 'offline', 'message': f'Login failed — agent status is still {db_status} in VICIdial'}
 
 
 def agent_queue_pause(user, reason: str = 'Break') -> bool:

@@ -67,11 +67,23 @@ export function AgentStatusDropdown() {
         const url = res?.data?.vicidial_url;
         if (url) {
           setVicidialUrl(url);
+          toast.loading('Connecting to VICIdial...', { id: 'vicidial-login' });
           // Wait 5s for iframe to establish VICIdial session, then send RESUME
           setTimeout(() => mutate({ action: 'login' }), 5000);
         } else {
-          // No VICIdial URL — no extension assigned, just mark available
-          mutate({ action: 'login' });
+          // No VICIdial URL — no extension assigned
+          toast.error('No extension assigned — contact admin');
+        }
+      }
+
+      // ── Handle login validation result ───────────────────
+      if (vars.action === 'login') {
+        toast.dismiss('vicidial-login');
+        if (!res?.data?.success) {
+          // Login failed — revert status and show error
+          setStatus('offline');
+          toast.error(res?.data?.message ?? 'VICIdial login failed');
+          setVicidialUrl(null);
         }
       }
 
