@@ -50,11 +50,16 @@ export function AgentStatusDropdown() {
       agentStatusApi.set(action, reason),
     onSuccess: (res, vars) => {
       const map: Record<string, AgentStatus> = {
-        login: 'available', pause: 'away', logoff: 'offline',
+        login:        'available',
+        open_session: 'available',
+        pause:        'away',
+        logoff:       'offline',
       };
       const newStatus = map[vars.action] as AgentStatus;
-      setStatus(newStatus);
-      toast.success(`Status: ${STATUS_CONFIG[newStatus].label}`);
+      if (newStatus) {
+        setStatus(newStatus);
+        toast.success(`Status: ${STATUS_CONFIG[newStatus].label}`);
+      }
       setOpen(false);
 
       // ── VICIdial two-step login flow ────────────────────
