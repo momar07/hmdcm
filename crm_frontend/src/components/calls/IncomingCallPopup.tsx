@@ -3,58 +3,58 @@
 import { useEffect, useState, useRef } from 'react';
 import { Phone, PhoneOff, User, Briefcase, Tag, ExternalLink } from 'lucide-react';
 import { useCallStore }  from '@/store';
-import { useAuthStore }  from '@/store';
-import { useAgentStatusStore } from '@/store';
-import { callsApi }      from '@/lib/api/calls';
+import { useSipStore }   from '@/store/sipStore';
 import { useRouter }     from 'next/navigation';
-import toast             from 'react-hot-toast';
 
 export function IncomingCallPopup() {
-  const { incomingCall, clearIncoming, setActiveCall } = useCallStore();
-  const { setStatus } = useAgentStatusStore();
-  const user   = useAuthStore((s) => s.user);
+  const { incomingCall, clearIncoming } = useCallStore();
+  const { actions, callStatus }         = useSipStore();
   const router = useRouter();
 
   const [visible,   setVisible]   = useState(false);
   const [countdown, setCountdown] = useState(30);
-  const timerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const countRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const audioRef   = useRef<HTMLAudioElement | null>(null);
+  const countRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // ── Show popup when incoming call arrives ───────────────
+  // Show popup when incoming call arrives via WebSocket
   useEffect(() => {
     if (!incomingCall) { setVisible(false); return; }
 
     setVisible(true);
     setCountdown(30);
 
-    // Ring sound
+    // ring sound
     try {
-      audioRef.current = new Audio('/sounds/ring.mp3');
+      audioRef.current = new Audio('/sounds/ringing.mp3');
       audioRef.current.loop = true;
       audioRef.current.play().catch(() => {});
     } catch {}
 
-    // Countdown
+    // countdown
     countRef.current = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          handleDismiss();
-          return 0;
-        }
+      setCountdown(c => {
+        if (c <= 1) { handleDismiss(); return 0; }
         return c - 1;
       });
     }, 1000);
 
-    return () => {
-      clearTimers();
-      stopRing();
-    };
+    return () => { clearCount(); stopRing(); };
   }, [incomingCall]);
 
-  const clearTimers = () => {
-    if (timerRef.current)  clearTimeout(timerRef.current);
-    if (countRef.current)  clearInterval(countRef.current);
+  // Auto-hide popup when call becomes active (answered) or idle (rejected)
+  useEffect(() => {
+    if (callStatus === 'active' || callStatus === 'idle') {
+      if (callStatus === 'active' && incomingCall?.customer_id) {
+        router.push(`/customers/${incomingCall.customer_id}`);
+      }
+      setVisible(false);
+      clearCount();
+      stopRing();
+    }
+  }, [callStatus]);
+
+  const clearCount = () => {
+    if (countRef.current) clearInterval(countRef.current);
   };
 
   const stopRing = () => {
@@ -65,17 +65,21 @@ export function IncomingCallPopup() {
   };
 
   const handleDismiss = () => {
-    clearTimers();
+    clearCount();
     stopRing();
     setVisible(false);
     clearIncoming();
+    actions?.hangup();
   };
 
-  const handleViewCustomer = () => {
-    if (incomingCall?.customer_id) {
-      router.push(`/customers/${incomingCall.customer_id}`);
+  const handleAnswer = () => {
+    clearCount();
+    stopRing();
+    actions?.answer();
+    // navigation happens in the useEffect above when callStatus → active
+    if (!incomingCall?.customer_id) {
+      clearIncoming();
     }
-    handleDismiss();
   };
 
   if (!visible || !incomingCall) return null;
@@ -84,16 +88,14 @@ export function IncomingCallPopup() {
 
   return (
     <>
-      {/* Backdrop blur */}
       <div className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[1px]"
            onClick={handleDismiss} />
 
-      {/* Popup */}
       <div className="fixed bottom-6 right-6 z-50 bg-white rounded-2xl
                       shadow-2xl border border-gray-100 w-88 max-w-[calc(100vw-3rem)]
                       overflow-hidden animate-slide-up">
 
-        {/* Header — green for inbound */}
+        {/* Header */}
         <div className={`px-5 py-4 flex items-center gap-3
                          ${isInbound ? 'bg-green-500' : 'bg-blue-500'}`}>
           <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
@@ -107,7 +109,6 @@ export function IncomingCallPopup() {
               {incomingCall.caller}
             </p>
           </div>
-          {/* Countdown */}
           <div className="shrink-0 w-9 h-9 rounded-full border-2 border-white/40
                           flex items-center justify-center">
             <span className="text-white text-sm font-bold">{countdown}</span>
@@ -116,7 +117,6 @@ export function IncomingCallPopup() {
 
         {/* Customer info */}
         <div className="px-5 py-4 space-y-3">
-
           {incomingCall.customer_name ? (
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center
@@ -124,18 +124,14 @@ export function IncomingCallPopup() {
                 <User size={16} className="text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-gray-900">
-                  {incomingCall.customer_name}
-                </p>
+                <p className="font-semibold text-gray-900">{incomingCall.customer_name}</p>
                 {incomingCall.customer_phone && (
-                  <p className="text-xs text-gray-400 font-mono">
-                    {incomingCall.customer_phone}
-                  </p>
+                  <p className="text-xs text-gray-400 font-mono">{incomingCall.customer_phone}</p>
                 )}
               </div>
               {incomingCall.customer_id && (
                 <button
-                  onClick={handleViewCustomer}
+                  onClick={() => router.push(`/customers/${incomingCall.customer_id}`)}
                   className="shrink-0 p-1.5 rounded-lg hover:bg-gray-100
                              text-gray-400 hover:text-blue-600 transition-colors"
                   title="View customer profile"
@@ -146,8 +142,7 @@ export function IncomingCallPopup() {
             </div>
           ) : (
             <div className="flex items-center gap-3 py-1">
-              <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center
-                              justify-center shrink-0">
+              <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0">
                 <User size={16} className="text-gray-400" />
               </div>
               <div>
@@ -157,7 +152,6 @@ export function IncomingCallPopup() {
             </div>
           )}
 
-          {/* Company */}
           {incomingCall.customer_company && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Briefcase size={13} className="text-gray-400 shrink-0" />
@@ -165,7 +159,6 @@ export function IncomingCallPopup() {
             </div>
           )}
 
-          {/* Lead */}
           {incomingCall.lead_title && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Tag size={13} className="text-gray-400 shrink-0" />
@@ -173,37 +166,31 @@ export function IncomingCallPopup() {
             </div>
           )}
 
-          {/* Queue */}
           {incomingCall.queue && (
-            <div className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400">
               Queue: <span className="text-gray-600 font-medium">{incomingCall.queue}</span>
-            </div>
+            </p>
           )}
         </div>
 
-        {/* Actions */}
+        {/* Answer / Reject */}
         <div className="px-5 pb-5 flex gap-3">
           <button
             onClick={handleDismiss}
             className="flex-1 flex items-center justify-center gap-2
-                       bg-gray-100 hover:bg-gray-200 text-gray-700
-                       rounded-xl py-2.5 text-sm font-medium transition-colors"
+                       bg-red-100 hover:bg-red-200 text-red-700
+                       rounded-xl py-3 text-sm font-semibold transition-colors"
           >
-            <PhoneOff size={15} />
-            Dismiss
+            <PhoneOff size={16} /> Reject
           </button>
-
-          {incomingCall.customer_id && (
-            <button
-              onClick={handleViewCustomer}
-              className="flex-1 flex items-center justify-center gap-2
-                         bg-blue-500 hover:bg-blue-600 text-white
-                         rounded-xl py-2.5 text-sm font-medium transition-colors"
-            >
-              <User size={15} />
-              Open Profile
-            </button>
-          )}
+          <button
+            onClick={handleAnswer}
+            className="flex-1 flex items-center justify-center gap-2
+                       bg-green-500 hover:bg-green-600 text-white
+                       rounded-xl py-3 text-sm font-semibold transition-colors"
+          >
+            <Phone size={16} /> Answer
+          </button>
         </div>
       </div>
     </>
