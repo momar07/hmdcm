@@ -46,6 +46,7 @@ export interface Extension {
   number:    string;
   peer_name: string;
   is_active: boolean;
+  sip_password:      string | null;
   vicidial_user:     string | null;
   vicidial_pass:     string | null;
   vicidial_campaign: string | null;

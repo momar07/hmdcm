@@ -30,7 +30,7 @@ def keep_agent_ready(self, agent_num: str, user_id: str):
         while True:
             try:
                 conn = pymysql.connect(
-                    host            = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+                    host            = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
                     port            = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
                     user            = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
                     passwd          = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
@@ -63,7 +63,7 @@ def keep_agent_ready(self, agent_num: str, user_id: str):
                     vd_status = row[0]
                     vd_pause  = row[1] or ''
 
-                    if vd_status == 'READY':
+                    if vd_status in ('READY', 'CLOSER'):
                         target_crm = 'available'
                         cur.execute(
                             "UPDATE vicidial_live_agents SET last_update_time=NOW() WHERE user=%s",
@@ -76,7 +76,7 @@ def keep_agent_ready(self, agent_num: str, user_id: str):
                     elif vd_status == 'PAUSED' and vd_pause in ('LOGIN', ''):
                         cur.execute(
                             "UPDATE vicidial_live_agents "
-                            "SET status='READY', pause_code='', last_update_time=NOW() "
+                            "SET status='CLOSER', pause_code='', outbound_autodial='N', last_update_time=NOW() "
                             "WHERE user=%s",
                             (agent_num,)
                         )
@@ -131,6 +131,7 @@ def keep_agent_ready(self, agent_num: str, user_id: str):
         _log.info(f'[Heartbeat] Graceful shutdown for agent {agent_num}')
         return f'stopped: shutdown'
 
+@shared_task(bind=True, max_retries=3)
 def notify_incoming_call(self, call_id: str):
     """
     Called by the AMI listener when a new inbound call arrives.

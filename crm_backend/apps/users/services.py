@@ -82,7 +82,7 @@ def _vicidial_db_ready(agent_user: str) -> bool:
 
     try:
         conn = pymysql.connect(
-            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
             port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
             user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
             passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
@@ -92,7 +92,7 @@ def _vicidial_db_ready(agent_user: str) -> bool:
         with conn.cursor() as cur:
             rows = cur.execute(
                 "UPDATE vicidial_live_agents "
-                "SET status='READY', pause_code='' "
+                "SET status='CLOSER', pause_code='', outbound_autodial='N' "
                 "WHERE user=%s AND status='PAUSED'",
                 (agent_user,)
             )
@@ -121,7 +121,7 @@ def agent_keep_ready(agent_num: str, attempts: int = 15) -> bool:
         time.sleep(2)
         try:
             conn = pymysql.connect(
-                host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+                host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
                 port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
                 user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
                 passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
@@ -145,7 +145,7 @@ def agent_keep_ready(agent_num: str, attempts: int = 15) -> bool:
                     if cur_status == 'PAUSED' and cur_pause in ('LOGIN', '', None):
                         cur.execute(
                             "UPDATE vicidial_live_agents "
-                            "SET status='READY', pause_code='', last_update_time=NOW() "
+                            "SET status='CLOSER', pause_code='', outbound_autodial='N', last_update_time=NOW() "
                             "WHERE user=%s",
                             (agent_num,)
                         )
@@ -155,12 +155,12 @@ def agent_keep_ready(agent_num: str, attempts: int = 15) -> bool:
                         cur.execute(
                             "UPDATE vicidial_live_agents "
                             "SET last_update_time=NOW() "
-                            "WHERE user=%s AND status='READY'",
+                            "WHERE user=%s AND status IN ('READY','CLOSER')",
                             (agent_num,)
                         )
-                        if cur_status == 'READY':
+                        if cur_status in ('READY', 'CLOSER'):
                             ready_count += 1
-                            _log.info(f'[KeepReady] attempt {i+1}: READY ✅ (heartbeat updated) count={ready_count}')
+                            _log.info(f'[KeepReady] attempt {i+1}: {cur_status} ✅ (heartbeat updated) count={ready_count}')
                         elif cur_status == 'PAUSED' and cur_pause not in ('LOGIN', '', None):
                             # Manual break — stop loop
                             _log.info(f'[KeepReady] attempt {i+1}: manual pause ({cur_pause}) — stopping')
@@ -199,7 +199,7 @@ def agent_queue_login(user) -> dict:
     # ── Step 1: Check agent is logged in VICIdial ─────────
     try:
         conn = pymysql.connect(
-            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
             port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
             user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
             passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
@@ -239,10 +239,39 @@ def agent_queue_login(user) -> dict:
     db_ok = _vicidial_db_ready(agent_num)
     _log.info(f'[Login] DB READY update → {db_ok}')
 
+    # ── Step 3b: Set closer_campaigns from vicidial_users ─
+    try:
+        conn = pymysql.connect(
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
+            port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
+            user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
+            passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
+            db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
+            connect_timeout=3,
+        )
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT closer_campaigns FROM vicidial_users WHERE user_id=%s",
+                (agent_num,)
+            )
+            vu_row = cur.fetchone()
+            if vu_row and vu_row[0]:
+                cur.execute(
+                    "UPDATE vicidial_live_agents "
+                    "SET closer_campaigns=%s, status='CLOSER', outbound_autodial='N' "
+                    "WHERE user=%s",
+                    (vu_row[0], agent_num)
+                )
+                _log.info(f'[Login] closer_campaigns={vu_row[0]}, status=CLOSER, outbound_autodial=N')
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        _log.warning(f'[Login] closer_campaigns update skipped: {e}')
+
     # ── Step 4: Verify final status in DB ─────────────────
     try:
         conn = pymysql.connect(
-            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
             port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
             user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
             passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
@@ -260,10 +289,10 @@ def agent_queue_login(user) -> dict:
         _log.error(f'[Login] Final DB check failed: {e}')
         final = None
 
-    if final and final[0] == 'READY':
+    if final and final[0] in ('READY', 'CLOSER', 'PAUSED'):
         update_user_status(str(user.id), 'available')
         _notify_status_change(user, 'available')
-        _log.info(f'[Login] ✅ Agent {user.email} confirmed READY in VICIdial')
+        _log.info(f'[Login] ✅ Agent {user.email} confirmed {final[0]} in VICIdial')
         # Start background keep-ready loop to fight vicidial.php heartbeat
         try:
             from apps.calls.tasks import keep_agent_ready
@@ -275,7 +304,7 @@ def agent_queue_login(user) -> dict:
     else:
         db_status = final[0] if final else 'unknown'
         _log.warning(f'[Login] ❌ Agent {user.email} still {db_status} after RESUME attempt')
-        return {'success': False, 'status': 'offline', 'message': f'Login failed — agent status is still {db_status} in VICIdial'}
+        return {'success': False, 'status': 'offline', 'message': f'Login failed — agent status is {db_status} in VICIdial (expected CLOSER or READY)'}
 
 
 def agent_queue_pause(user, reason: str = 'Break') -> bool:
@@ -299,7 +328,7 @@ def agent_queue_pause(user, reason: str = 'Break') -> bool:
     db_ok = False
     try:
         conn = pymysql.connect(
-            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
             port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
             user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
             passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
@@ -356,7 +385,7 @@ def agent_queue_logoff(user) -> bool:
     # This guarantees the agent is removed regardless of API result
     try:
         conn = pymysql.connect(
-            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+            host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
             port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
             user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
             passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),

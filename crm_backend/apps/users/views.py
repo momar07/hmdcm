@@ -145,7 +145,7 @@ class AgentQueueStatusView(APIView):
             if agent_num:
                 try:
                     conn = pymysql.connect(
-                        host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.110'),
+                        host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
                         port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
                         user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
                         passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),

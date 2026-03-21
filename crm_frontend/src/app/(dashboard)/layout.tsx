@@ -5,6 +5,7 @@ import { useRouter }           from 'next/navigation';
 import { Sidebar }             from '@/components/layout/Sidebar';
 import { Topbar }              from '@/components/layout/Topbar';
 import { IncomingCallPopup }   from '@/components/calls/IncomingCallPopup';
+import { SoftPhone }           from '@/components/softphone/SoftPhone';
 import { useAuthStore, useCallStore, useAgentStatusStore } from '@/store';
 import { useWebSocket }        from '@/lib/websocket/useWebSocket';
 import type { WSEvent }        from '@/types';
@@ -58,6 +59,7 @@ export default function DashboardLayout({
         </main>
       </div>
       <IncomingCallPopup />
+      <SoftPhone />
     </div>
   );
 }

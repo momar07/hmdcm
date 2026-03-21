@@ -139,8 +139,9 @@ export function AgentStatusDropdown() {
         <iframe
           ref={iframeRef}
           src={vicidialUrl}
-          style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }}
+          style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: '800px', height: '600px', opacity: 0, pointerEvents: 'none' }}
           title="vicidial-session"
+          allow="autoplay"
         />
       )}
       <button
