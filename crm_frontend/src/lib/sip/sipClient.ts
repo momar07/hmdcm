@@ -45,7 +45,7 @@ export class SipClient {
 
   private _startRinging() {
     if (this._ringAudio) return;
-    const audio    = new Audio('/sounds/ringing.mp3');
+    const audio    = new Audio('/sounds/ringing.ogg');
     audio.loop     = true;
     audio.volume   = 0.7;
     audio.play().catch(e => console.warn('[SIP] Ring audio blocked:', e));
