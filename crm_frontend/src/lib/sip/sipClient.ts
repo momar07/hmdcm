@@ -99,6 +99,18 @@ export class SipClient {
 
     this.ua.on('newRTCSession', (data: any) => {
       const { session, originator } = data;
+
+      // If there's already a pending/active session, terminate it cleanly
+      // before accepting the new one (handles re-queue re-ring scenario)
+      if (this.session && this.session !== session) {
+        try {
+          this._stopRinging();
+          this.session.terminate();
+        } catch (_) {}
+        this.session = null;
+        this.onCallStatusChange('idle');
+      }
+
       this.session = session;
 
       // Attach remote audio as soon as track arrives

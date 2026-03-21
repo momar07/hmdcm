@@ -41,15 +41,17 @@ export function IncomingCallPopup() {
     return () => { clearCount(); stopRing(); };
   }, [incomingCall]);
 
-  // Auto-hide popup when call becomes active (answered) or idle (rejected)
+  // Auto-hide popup only when call is answered (active)
+  // Do NOT hide on 'idle' — idle fires transiently during re-queue re-ring
   useEffect(() => {
-    if (callStatus === 'active' || callStatus === 'idle') {
-      if (callStatus === 'active' && incomingCall?.customer_id) {
+    if (callStatus === 'active') {
+      if (incomingCall?.customer_id) {
         router.push(`/customers/${incomingCall.customer_id}`);
       }
       setVisible(false);
       clearCount();
       stopRing();
+      clearIncoming();
     }
   }, [callStatus]);
 
@@ -86,11 +88,11 @@ export function IncomingCallPopup() {
     }
   };
 
-  // Reset visible=true whenever a new incomingCall arrives
-  // This handles the case where the same caller re-rings after being dismissed
+  // Force visible=true on every new call_id (re-ring safe)
   useEffect(() => {
-    if (incomingCall && callStatus !== 'active') {
+    if (incomingCall?.call_id) {
       setVisible(true);
+      setCountdown(30);
     }
   }, [incomingCall?.call_id]);
 
