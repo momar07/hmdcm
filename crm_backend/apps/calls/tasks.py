@@ -379,6 +379,69 @@ def process_ami_event(self, event: dict):
             notify_incoming_call.apply(args=[str(call.id)])
             logger.info(f'[AMI] Queue call: {uniqueid} | caller={caller} queue={queue} new={created}')
 
+        elif event_name == 'QueueCallerJoin':
+            # Authoritative inbound event: real caller joins the queue
+            caller = event.get('CallerIDNum', '')
+            queue  = event.get('Queue', '')
+
+            # Customer screen pop
+            customer = None
+            if caller and len(caller) >= 4:
+                try:
+                    from apps.customers.models import CustomerPhone
+                    phone = CustomerPhone.objects.select_related('customer').filter(
+                        normalized__endswith=caller[-9:]
+                    ).first()
+                    if phone:
+                        customer = phone.customer
+                        logger.info(f'[AMI] QueueJoin customer: {customer}')
+                except Exception as e:
+                    logger.debug(f'[AMI] QueueJoin lookup error: {e}')
+
+            # update_or_create so we always set correct direction/caller/queue
+            # even if Newchannel already made the record with wrong data
+            call, created = Call.objects.update_or_create(
+                uniqueid=uniqueid,
+                defaults={
+                    'caller':    caller,
+                    'callee':    queue,
+                    'direction': 'inbound',
+                    'status':    'ringing',
+                    'queue':     queue,
+                    'customer':  customer,
+                    'started_at': timezone.now(),
+                }
+            )
+            # Always fire the notification here — this is the correct trigger
+            notify_incoming_call.apply(args=[str(call.id)])
+            logger.info(
+                f'[AMI] QueueCallerJoin: uid={uniqueid} caller={caller} '
+                f'queue={queue} created={created}'
+            )
+
+        elif event_name == 'AgentCalled':
+            # Which agent extension was rung for this queue call
+            member = event.get('MemberName', '') or event.get('Interface', '')
+            linked = event.get('Linkedid', '') or uniqueid
+            ext_num = ''
+            if '/' in member:
+                raw = member.split('/')[1]
+                ext_num = raw.split('@')[0].split('-')[0]
+            if ext_num:
+                try:
+                    ext_obj = Extension.objects.select_related('user').get(
+                        number=ext_num, is_active=True
+                    )
+                    updated = Call.objects.filter(
+                        uniqueid=linked, agent__isnull=True
+                    ).update(agent=ext_obj.user)
+                    if updated:
+                        logger.info(
+                            f'[AMI] AgentCalled: ext {ext_num} → uid={linked}'
+                        )
+                except Exception as e:
+                    logger.debug(f'[AMI] AgentCalled error: {e}')
+
         elif event_name == 'Bridge':
             # Asterisk 11: Bridge has Uniqueid1 and Uniqueid2
             uid1 = event.get('Uniqueid1', '')
