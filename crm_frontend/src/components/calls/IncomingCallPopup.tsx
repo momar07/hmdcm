@@ -69,7 +69,11 @@ export function IncomingCallPopup() {
     stopRing();
     setVisible(false);
     clearIncoming();
-    actions?.hangup();
+    // Only hangup the SIP session if the call is currently active (answered)
+    // For ringing/unanswered calls, let JsSIP handle rejection naturally
+    if (callStatus === 'active') {
+      actions?.hangup();
+    }
   };
 
   const handleAnswer = () => {
@@ -81,6 +85,14 @@ export function IncomingCallPopup() {
       clearIncoming();
     }
   };
+
+  // Reset visible=true whenever a new incomingCall arrives
+  // This handles the case where the same caller re-rings after being dismissed
+  useEffect(() => {
+    if (incomingCall && callStatus !== 'active') {
+      setVisible(true);
+    }
+  }, [incomingCall?.call_id]);
 
   if (!visible || !incomingCall) return null;
 
