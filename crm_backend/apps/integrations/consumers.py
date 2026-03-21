@@ -30,6 +30,10 @@ class CallEventConsumer(AsyncWebsocketConsumer):
             self.personal_group, self.channel_name
         )
 
+        # All authenticated users join the 'agents' group
+        # so queue calls (which have no agent yet) can reach everyone
+        await self.channel_layer.group_add('agents', self.channel_name)
+
         if self.user.role in ('admin', 'supervisor'):
             await self.channel_layer.group_add('supervisors', self.channel_name)
 
@@ -44,6 +48,7 @@ class CallEventConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_discard(
             self.personal_group, self.channel_name
         )
+        await self.channel_layer.group_discard('agents', self.channel_name)
         if self.user.role in ('admin', 'supervisor'):
             await self.channel_layer.group_discard('supervisors', self.channel_name)
         logger.info(f'[WS] Disconnected: {self.user.email}')
