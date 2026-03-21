@@ -4,8 +4,8 @@ from .models import Customer, CustomerPhone
 
 def get_all_customers(user=None) -> QuerySet:
     qs = Customer.objects.prefetch_related('phones', 'tags').filter(is_active=True)
-    if user and user.role == 'agent':
-        qs = qs.filter(assigned_to=user)
+    # Agents see all active customers (not just assigned ones)
+    # Admins and supervisors see everything
     return qs
 
 

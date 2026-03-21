@@ -271,11 +271,27 @@ def process_ami_event(self, event: dict):
             chan_name  = event.get('Channel', '')
 
             # ── Direction detection ──────────────────────────────
-            INBOUND_CONTEXTS  = {'from-trunk', 'from-pstn', 'from-did',
-                                  'from-sip-external', 'ext-did', 'from-external'}
+            INBOUND_CONTEXTS  = {
+                'from-trunk', 'from-pstn', 'from-did',
+                'from-sip-external', 'ext-did', 'from-external',
+                'from-queue', 'from-queues', 'ext-queues',
+                'from-did-direct', 'from-pstn-toheader',
+            }
             INTERNAL_CONTEXTS = {'ext-local', 'from-internal', 'default'}
 
+            # Issabel routes queue calls via from-internal —
+            # detect by checking if callee is a queue number (3 digits)
+            # or caller looks like an external number (starts with 0 or +)
+            caller_num = event.get('CallerIDNum', '')
+            is_external_caller = (
+                caller_num.startswith('0') or
+                caller_num.startswith('+') or
+                (len(caller_num) > 6)
+            )
+
             if context in INBOUND_CONTEXTS:
+                direction = 'inbound'
+            elif context in INTERNAL_CONTEXTS and is_external_caller:
                 direction = 'inbound'
             elif context in INTERNAL_CONTEXTS:
                 direction = 'internal'
