@@ -27,13 +27,16 @@ export default function DashboardLayout({
   const router                       = useRouter();
   const [hydrated, setHydrated]      = useState(false);
 
-  // الخطوة 1: hydrate من localStorage أول
+  // ring key — increments on every incoming_call WS event
+  // forces useEffect to re-fire even if call_id is the same (re-queue scenario)
+  const [ringKey, setRingKey]    = useState(0);
+  const lastEventRef             = useRef<any>(null);
+
   useEffect(() => {
     hydrate();
     setHydrated(true);
   }, [hydrate]);
 
-  // الخطوة 2: بعد ما hydrate خلص، لو مش authenticated → login
   useEffect(() => {
     if (hydrated && !isAuthenticated) {
       router.replace('/login');
@@ -41,21 +44,17 @@ export default function DashboardLayout({
   }, [hydrated, isAuthenticated, router]);
 
   const { setStatus } = useAgentStatusStore();
-
   const prevCallStatus = useRef<string>('idle');
 
   useEffect(() => {
-    // When call goes from active → idle, show disposition modal
     if (prevCallStatus.current === 'active' && callStatus === 'idle') {
-      // find the most recent active call from store
       const call = incomingCall;
       setDispModal({
-        callId:       '',   // will be filled from pendingCompletions
+        callId:       '',
         callerNumber: call?.caller ?? 'Unknown',
         customerName: call?.customer_name ?? null,
         customerId:   call?.customer_id   ?? null,
       });
-      // fetch actual call_id from backend
       import('@/lib/api/calls').then(({ callsApi }) => {
         callsApi.pendingCompletions().then(res => {
           const pending = res.data;
@@ -74,11 +73,12 @@ export default function DashboardLayout({
     prevCallStatus.current = callStatus;
   }, [callStatus]);
 
+  // Step 1: WS event arrives → save it + clear store + bump ringKey
   useWebSocket((event: WSEvent) => {
     if (event.type === 'incoming_call') {
-      // Always clear first so React re-triggers useEffect even for same caller
-      setIncomingCall(null);
-      setTimeout(() => setIncomingCall(event as any), 50);
+      lastEventRef.current = event;
+      setIncomingCall(null);          // clear first
+      setRingKey(k => k + 1);        // trigger effect below
     }
     if (event.type === 'agent_status') {
       const s = (event as any).status;
@@ -86,7 +86,13 @@ export default function DashboardLayout({
     }
   });
 
-  // استنّى hydration قبل ما ترندر حاجة
+  // Step 2: ringKey changed → set the real event (runs after null render)
+  useEffect(() => {
+    if (ringKey > 0 && lastEventRef.current) {
+      setIncomingCall(lastEventRef.current as any);
+    }
+  }, [ringKey]);
+
   if (!hydrated) return null;
   if (!isAuthenticated) return null;
 

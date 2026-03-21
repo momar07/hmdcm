@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Phone, PhoneOff, User, Briefcase, Tag, ExternalLink } from 'lucide-react';
 import { useCallStore }  from '@/store';
 import { useSipStore }   from '@/store/sipStore';
@@ -16,89 +16,92 @@ export function IncomingCallPopup() {
   const countRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Show popup when incoming call arrives via WebSocket
-  useEffect(() => {
-    if (!incomingCall) { setVisible(false); return; }
-
-    setVisible(true);
-    setCountdown(30);
-
-    // ring sound
-    try {
-      audioRef.current = new Audio('/sounds/ringing.mp3');
-      audioRef.current.loop = true;
-      audioRef.current.play().catch(() => {});
-    } catch {}
-
-    // countdown
-    countRef.current = setInterval(() => {
-      setCountdown(c => {
-        if (c <= 1) { handleDismiss(); return 0; }
-        return c - 1;
-      });
-    }, 1000);
-
-    return () => { clearCount(); stopRing(); };
-  }, [incomingCall]);
-
-  // Auto-hide popup only when call is answered (active)
-  // Do NOT hide on 'idle' — idle fires transiently during re-queue re-ring
-  useEffect(() => {
-    if (callStatus === 'active') {
-      if (incomingCall?.customer_id) {
-        router.push(`/customers/${incomingCall.customer_id}`);
-      }
-      setVisible(false);
-      clearCount();
-      stopRing();
-      clearIncoming();
+  const clearCount = useCallback(() => {
+    if (countRef.current) {
+      clearInterval(countRef.current);
+      countRef.current = null;
     }
-  }, [callStatus]);
+  }, []);
 
-  const clearCount = () => {
-    if (countRef.current) clearInterval(countRef.current);
-  };
-
-  const stopRing = () => {
+  const stopRing = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      audioRef.current = null;
     }
-  };
+  }, []);
 
-  const handleDismiss = () => {
+  const handleDismiss = useCallback(() => {
     clearCount();
     stopRing();
     setVisible(false);
     clearIncoming();
-    // Only hangup the SIP session if the call is currently active (answered)
-    // For ringing/unanswered calls, let JsSIP handle rejection naturally
-    if (callStatus === 'active') {
-      actions?.hangup();
-    }
-  };
+  }, [clearCount, stopRing, clearIncoming]);
 
-  const handleAnswer = () => {
+  const handleAnswer = useCallback(() => {
     clearCount();
     stopRing();
     actions?.answer();
-    // navigation happens in the useEffect above when callStatus → active
     if (!incomingCall?.customer_id) {
       clearIncoming();
     }
-  };
+  }, [clearCount, stopRing, actions, incomingCall, clearIncoming]);
 
-  // Force visible=true on every new call_id (re-ring safe)
+  // PRIMARY TRIGGER — JsSIP callStatus goes to 'incoming'
+  // This fires reliably on every ring regardless of WS event timing
   useEffect(() => {
-    if (incomingCall?.call_id) {
+    if (callStatus === 'incoming') {
       setVisible(true);
       setCountdown(30);
+
+      // ring sound
+      try {
+        const audio = new Audio('/sounds/ringing.mp3');
+        audio.loop  = true;
+        audio.volume = 0.7;
+        audio.play().catch(() => {});
+        audioRef.current = audio;
+      } catch {}
+
+      // countdown — use setTimeout chain to avoid render-phase setState
+      clearCount();
+      const tick = () => {
+        setCountdown(c => {
+          if (c <= 1) {
+            // schedule dismiss outside render
+            setTimeout(handleDismiss, 0);
+            return 0;
+          }
+          return c - 1;
+        });
+      };
+      countRef.current = setInterval(tick, 1000);
+
+      return () => { clearCount(); stopRing(); };
     }
-  }, [incomingCall?.call_id]);
 
-  if (!visible || !incomingCall) return null;
+    // Call became active (answered)
+    if (callStatus === 'active') {
+      clearCount();
+      stopRing();
+      setVisible(false);
+      if (incomingCall?.customer_id) {
+        router.push(`/customers/${incomingCall.customer_id}`);
+      }
+      clearIncoming();
+    }
 
-  const isInbound = incomingCall.direction === 'inbound' || !incomingCall.direction;
+    // Call ended/failed/idle — hide popup
+    if (callStatus === 'idle') {
+      clearCount();
+      stopRing();
+      setVisible(false);
+    }
+  }, [callStatus]);
+
+  if (!visible) return null;
+
+  const isInbound = !incomingCall?.direction || incomingCall.direction === 'inbound';
 
   return (
     <>
@@ -117,10 +120,10 @@ export function IncomingCallPopup() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-white/80 uppercase tracking-wide font-medium">
-              {isInbound ? '↙ Incoming Call' : '↗ Outgoing Call'}
+              {isInbound ? '\u2199 Incoming Call' : '\u2197 Outgoing Call'}
             </p>
             <p className="font-bold text-white text-lg truncate">
-              {incomingCall.caller}
+              {incomingCall?.caller ?? 'Unknown'}
             </p>
           </div>
           <div className="shrink-0 w-9 h-9 rounded-full border-2 border-white/40
@@ -131,7 +134,7 @@ export function IncomingCallPopup() {
 
         {/* Customer info */}
         <div className="px-5 py-4 space-y-3">
-          {incomingCall.customer_name ? (
+          {incomingCall?.customer_name ? (
             <div className="flex items-start gap-3">
               <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center
                               justify-center shrink-0 mt-0.5">
@@ -145,10 +148,9 @@ export function IncomingCallPopup() {
               </div>
               {incomingCall.customer_id && (
                 <button
-                  onClick={() => router.push(`/customers/${incomingCall.customer_id}`)}
+                  onClick={() => router.push(`/customers/${incomingCall.customer_id!}`)}
                   className="shrink-0 p-1.5 rounded-lg hover:bg-gray-100
                              text-gray-400 hover:text-blue-600 transition-colors"
-                  title="View customer profile"
                 >
                   <ExternalLink size={14} />
                 </button>
@@ -160,27 +162,29 @@ export function IncomingCallPopup() {
                 <User size={16} className="text-gray-400" />
               </div>
               <div>
-                <p className="font-medium text-gray-500">Unknown Caller</p>
-                <p className="text-xs text-gray-400">{incomingCall.caller}</p>
+                <p className="font-medium text-gray-500">
+                  {incomingCall?.caller ? incomingCall.caller : 'Incoming Call'}
+                </p>
+                <p className="text-xs text-gray-400">Unknown Caller</p>
               </div>
             </div>
           )}
 
-          {incomingCall.customer_company && (
+          {incomingCall?.customer_company && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Briefcase size={13} className="text-gray-400 shrink-0" />
               <span className="truncate">{incomingCall.customer_company}</span>
             </div>
           )}
 
-          {incomingCall.lead_title && (
+          {incomingCall?.lead_title && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Tag size={13} className="text-gray-400 shrink-0" />
               <span className="truncate">{incomingCall.lead_title}</span>
             </div>
           )}
 
-          {incomingCall.queue && (
+          {incomingCall?.queue && (
             <p className="text-xs text-gray-400">
               Queue: <span className="text-gray-600 font-medium">{incomingCall.queue}</span>
             </p>
