@@ -398,19 +398,38 @@ def process_ami_event(self, event: dict):
 
         elif event_name in ('Hangup', 'SoftHangupRequest'):
             duration = int(event.get('Duration', 0))
-            status_map = {
-                '16': 'answered',
+
+            # Cause 16 = Normal Clearing — used for ALL hangups including unanswered
+            # We check the current call status to determine the real outcome
+            cause = str(event.get('Cause', '16'))
+            cause_status_map = {
                 '17': 'busy',
                 '19': 'no_answer',
                 '21': 'failed',
+                '3':  'no_answer',   # No route to destination
+                '18': 'no_answer',   # No user responding
             }
-            cause  = str(event.get('Cause', '16'))
-            status = status_map.get(cause, 'failed')
 
             now = timezone.now()
-            # Asterisk 11 لا يبعت Duration في Hangup — نحسبه من started_at
             call_obj = Call.objects.filter(uniqueid=uniqueid).first()
-            if call_obj and call_obj.started_at and duration == 0:
+
+            if not call_obj:
+                return
+
+            # Determine real status:
+            # - If cause explicitly maps to something, use it
+            # - If cause is 16 (normal) AND call was never answered → no_answer
+            # - If cause is 16 AND call was answered → answered
+            if cause in cause_status_map:
+                status = cause_status_map[cause]
+            elif call_obj.status == 'answered':
+                status = 'answered'
+            else:
+                # ringing or any other pre-answer status → no_answer
+                status = 'no_answer'
+
+            # Calculate duration from started_at if Asterisk didn't send it
+            if duration == 0 and call_obj.started_at and status == 'answered':
                 delta = (now - call_obj.started_at).total_seconds()
                 duration = max(0, int(delta))
 
@@ -427,7 +446,7 @@ def process_ami_event(self, event: dict):
                 call = Call.objects.filter(uniqueid=uniqueid).first()
                 if call:
                     notify_call_ended.apply(args=[str(call.id), status])
-                logger.info(f'[AMI] Call ended: {uniqueid} → {status} ({duration}s)')
+                logger.info(f'[AMI] Call ended: {uniqueid} → {status} (cause={cause}, duration={duration}s)')
 
 
         elif event_name == 'QueueMemberAdded':

@@ -76,7 +76,9 @@ export default function DashboardLayout({
 
   useWebSocket((event: WSEvent) => {
     if (event.type === 'incoming_call') {
-      setIncomingCall(event);
+      // Always clear first so React re-triggers useEffect even for same caller
+      setIncomingCall(null);
+      setTimeout(() => setIncomingCall(event as any), 50);
     }
     if (event.type === 'agent_status') {
       const s = (event as any).status;
