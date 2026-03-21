@@ -141,21 +141,30 @@ class AMIClient:
         relevant = {
             # Call events
             'Newchannel', 'Bridge', 'Hangup', 'SoftHangupRequest', 'Dial',
-            # Queue member events (Issabel/Asterisk 11)
+            # Queue caller events
+            'QueueCallerJoin', 'QueueCallerLeave',
+            # Queue member events
             'QueueMemberAdded', 'QueueMemberRemoved',
-            'QueueMemberPaused',   # ← الاسم الصح في Asterisk 11
+            'QueueMemberPaused',
             'QueueMemberStatus',
             # Agent events
             'AgentLogin', 'AgentLogoff',
+            'AgentCalled',
             'AgentConnect', 'AgentComplete', 'AgentRinghangup',
         }
         name = event.get('Event', '')
 
         if name in relevant:
-            logger.debug(f'[AMI] Dispatching: {name} — {event.get("Uniqueid")}')
+            import sys
+            print(f'[AMI DEBUG] Dispatching: {name} uid={event.get("Uniqueid")}', flush=True)
+            sys.stdout.flush()
             try:
                 from apps.calls.tasks import process_ami_event
-                # apply directly in the same process (no celery worker needed)
-                process_ami_event.apply(args=[event])
+                result = process_ami_event.apply(args=[event])
+                print(f'[AMI DEBUG] Task result: {result.status} — {result.result}', flush=True)
+                if result.traceback:
+                    print(f'[AMI DEBUG] TRACEBACK: {result.traceback}', flush=True)
             except Exception as e:
-                logger.error(f'[AMI] Dispatch error: {e}')
+                import traceback
+                print(f'[AMI DEBUG] Dispatch error: {e}', flush=True)
+                traceback.print_exc()

@@ -192,25 +192,38 @@ def notify_incoming_call(self, call_id: str):
 
     channel_layer = get_channel_layer()
 
-    # send to assigned agent
-    if call.agent_id:
-        try:
-            async_to_sync(channel_layer.group_send)(
-                f'agent_{call.agent_id}',
-                {'type': 'call_event', 'payload': payload}
-            )
-            logger.info(f'[Notify] Sent to agent_{call.agent_id}')
-        except Exception as exc:
-            logger.error(f'[Notify] Agent push failed: {exc}')
+    import asyncio
 
-    # also notify supervisors
-    try:
-        async_to_sync(channel_layer.group_send)(
-            'supervisors',
-            {'type': 'call_event', 'payload': payload}
-        )
-    except Exception as exc:
-        logger.error(f'[Notify] Supervisors push failed: {exc}')
+    async def _push():
+        groups = ['supervisors']
+        if call.agent_id:
+            groups.append(f'agent_{call.agent_id}')
+        for group in groups:
+            try:
+                await channel_layer.group_send(
+                    group,
+                    {'type': 'call_event', 'payload': payload}
+                )
+                logger.info(f'[Notify] Sent to {group}')
+            except Exception as exc:
+                logger.error(f'[Notify] Push to {group} failed: {exc}')
+
+    import threading
+    import concurrent.futures
+
+    def _run_in_thread():
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_push())
+        finally:
+            loop.close()
+
+    # Run in a brand new thread with its own event loop — avoids uvicorn loop conflict
+    t = threading.Thread(target=_run_in_thread, daemon=True)
+    t.start()
+    t.join(timeout=5)
 
     return f'Notified: {call_id}'
 
@@ -237,14 +250,23 @@ def notify_call_ended(self, call_id: str, status: str):
 
     channel_layer = get_channel_layer()
 
-    if call.agent_id:
-        try:
-            async_to_sync(channel_layer.group_send)(
-                f'agent_{call.agent_id}',
-                {'type': 'call_event', 'payload': payload}
-            )
-        except Exception as exc:
-            logger.error(f'[CallEnded] Push failed: {exc}')
+    import asyncio
+
+    async def _push_ended():
+        if call.agent_id:
+            try:
+                await channel_layer.group_send(
+                    f'agent_{call.agent_id}',
+                    {'type': 'call_event', 'payload': payload}
+                )
+                logger.info(f'[CallEnded] Sent to agent_{call.agent_id}')
+            except Exception as exc:
+                logger.error(f'[CallEnded] Push failed: {exc}')
+
+    try:
+        asyncio.run(_push_ended())
+    except Exception as exc:
+        logger.error(f'[CallEnded] asyncio.run error: {exc}')
 
     return f'CallEnded notified: {call_id}'
 
@@ -265,60 +287,39 @@ def process_ami_event(self, event: dict):
 
     try:
         if event_name == 'Newchannel':
-            caller    = event.get('CallerIDNum', '')
-            callee    = event.get('Exten', '')
-            context   = event.get('Context', '')
-            chan_name  = event.get('Channel', '')
+            # Skip internal leg channels (Local/ channels created by queue)
+            chan_name = event.get('Channel', '')
+            if chan_name.startswith('Local/'):
+                logger.debug(f'[AMI] Skipping Local channel: {chan_name}')
+                return
 
-            # ── Direction detection ──────────────────────────────
-            INBOUND_CONTEXTS  = {
+            # Skip extension-to-extension internal calls (short exten, from-internal)
+            caller_num = event.get('CallerIDNum', '')
+            context    = event.get('Context', '')
+            exten      = event.get('Exten', '')
+
+            # Only create call record for truly inbound trunk calls here
+            # Queue calls are handled by QueueCallerJoin instead
+            INBOUND_CONTEXTS = {
                 'from-trunk', 'from-pstn', 'from-did',
                 'from-sip-external', 'ext-did', 'from-external',
-                'from-queue', 'from-queues', 'ext-queues',
                 'from-did-direct', 'from-pstn-toheader',
             }
-            INTERNAL_CONTEXTS = {'ext-local', 'from-internal', 'default'}
+            if context not in INBOUND_CONTEXTS:
+                logger.debug(f'[AMI] Newchannel skipped — context={context}')
+                return
 
-            # Issabel routes queue calls via from-internal —
-            # detect by checking if callee is a queue number (3 digits)
-            # or caller looks like an external number (starts with 0 or +)
-            caller_num = event.get('CallerIDNum', '')
-            is_external_caller = (
-                caller_num.startswith('0') or
-                caller_num.startswith('+') or
-                (len(caller_num) > 6)
-            )
+            caller    = caller_num
+            callee    = exten
+            direction = 'inbound'
 
-            if context in INBOUND_CONTEXTS:
-                direction = 'inbound'
-            elif context in INTERNAL_CONTEXTS and is_external_caller:
-                direction = 'inbound'
-            elif context in INTERNAL_CONTEXTS:
-                direction = 'internal'
-            else:
-                direction = 'outbound'
-
-            # ── Agent detection from extension number ────────────
-            agent = None
-            # Channel format: SIP/200-0000xxxx → extract "200"
-            if '/' in chan_name:
-                ext_num = chan_name.split('/')[1].split('-')[0]
-                try:
-                    ext_obj = Extension.objects.select_related('user').get(
-                        number=ext_num, is_active=True
-                    )
-                    agent = ext_obj.user
-                    logger.info(f'[AMI] Agent detected: {agent.email} (ext {ext_num})')
-                except Extension.DoesNotExist:
-                    logger.debug(f'[AMI] No agent for extension: {ext_num}')
-
-            # ── Customer screen pop ──────────────────────────────
+            # Agent detection — not known yet at Newchannel for trunk calls
+            agent    = None
             customer = None
-            lookup_num = caller if direction != 'outbound' else callee
-            if lookup_num and len(lookup_num) >= 7:
+            if caller and len(caller) >= 7:
                 try:
                     phone = CustomerPhone.objects.select_related('customer').filter(
-                        normalized__endswith=lookup_num[-9:]
+                        normalized__endswith=caller[-9:]
                     ).first()
                     if phone:
                         customer = phone.customer
@@ -329,19 +330,54 @@ def process_ami_event(self, event: dict):
             call, created = Call.objects.get_or_create(
                 uniqueid=uniqueid,
                 defaults={
-                    'caller':    caller,
-                    'callee':    callee,
-                    'direction': direction,
-                    'status':    'ringing',
-                    'customer':  customer,
-                    'agent':     agent,
+                    'caller':     caller,
+                    'callee':     callee,
+                    'direction':  direction,
+                    'status':     'ringing',
+                    'customer':   customer,
+                    'agent':      agent,
                     'started_at': timezone.now(),
                 }
             )
-
             if created:
                 notify_incoming_call.apply(args=[str(call.id)])
-                logger.info(f'[AMI] New call: {uniqueid} | dir={direction} | agent={agent}')
+                logger.info(f'[AMI] New trunk call: {uniqueid} | {caller} → {callee}')
+
+        elif event_name == 'QueueCallerJoin':
+            # ── This is the correct event for queue inbound calls ──
+            # Fired when caller enters the queue — has real CallerIDNum
+            caller    = event.get('CallerIDNum', '')
+            queue     = event.get('Queue', '')
+
+            # Customer lookup
+            customer = None
+            if caller and len(caller) >= 3:
+                try:
+                    phone = CustomerPhone.objects.select_related('customer').filter(
+                        normalized__endswith=caller[-9:] if len(caller) >= 9 else caller
+                    ).first()
+                    if phone:
+                        customer = phone.customer
+                        logger.info(f'[AMI] Customer matched: {customer}')
+                except Exception as e:
+                    logger.debug(f'[AMI] Screen pop error: {e}')
+
+            # Always update/create — Newchannel may have created a wrong record first
+            call, created = Call.objects.update_or_create(
+                uniqueid=uniqueid,
+                defaults={
+                    'caller':     caller,
+                    'callee':     queue,
+                    'direction':  'inbound',
+                    'status':     'ringing',
+                    'queue':      queue,
+                    'customer':   customer,
+                    'started_at': timezone.now(),
+                }
+            )
+            # Always notify — whether new or updated from Newchannel
+            notify_incoming_call.apply(args=[str(call.id)])
+            logger.info(f'[AMI] Queue call: {uniqueid} | caller={caller} queue={queue} new={created}')
 
         elif event_name == 'Bridge':
             # Asterisk 11: Bridge has Uniqueid1 and Uniqueid2
@@ -443,20 +479,46 @@ def process_ami_event(self, event: dict):
                 except Exception as e:
                     logger.debug(f'[AMI] QueueMemberPause error: {e}')
 
-        elif event_name == 'AgentConnect':
-            # Agent answered a call — set status to on_call
-            interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
-            if '/' in interface:
-                ext_num = interface.split('/')[1]
+        elif event_name == 'AgentCalled':
+            # Agent is being rung for a queue call — assign agent to the call record
+            member_name = event.get('MemberName', '')
+            linkedid    = event.get('Linkedid', '') or uniqueid
+            if member_name:
                 try:
-                    from apps.users.models import Extension
-                    from apps.users.services import update_user_status, _notify_status_change
                     ext_obj = Extension.objects.select_related('user').get(
-                        number=ext_num, is_active=True
+                        number=member_name, is_active=True
                     )
-                    update_user_status(str(ext_obj.user.id), 'on_call')
-                    _notify_status_change(ext_obj.user, 'on_call')
-                    logger.info(f'[AMI] Agent on call: {ext_num}')
+                    agent = ext_obj.user
+                    # Update call record with agent
+                    Call.objects.filter(uniqueid=linkedid, agent__isnull=True).update(agent=agent)
+                    logger.info(f'[AMI] Agent assigned to call: {member_name} → {linkedid}')
+                except Extension.DoesNotExist:
+                    logger.debug(f'[AMI] No agent for MemberName: {member_name}')
+                except Exception as e:
+                    logger.debug(f'[AMI] AgentCalled error: {e}')
+
+        elif event_name == 'AgentConnect':
+            # Agent answered a queue call — update call status + agent status
+            member_name = event.get('MemberName', '')
+            linkedid    = event.get('Linkedid', '') or uniqueid
+            if member_name:
+                try:
+                    ext_obj = Extension.objects.select_related('user').get(
+                        number=member_name, is_active=True
+                    )
+                    agent = ext_obj.user
+                    # Assign agent and mark answered
+                    Call.objects.filter(uniqueid=linkedid).update(
+                        agent=agent,
+                        status='answered',
+                        started_at=timezone.now(),
+                    )
+                    from apps.users.services import update_user_status, _notify_status_change
+                    update_user_status(str(agent.id), 'on_call')
+                    _notify_status_change(agent, 'on_call')
+                    logger.info(f'[AMI] AgentConnect: {member_name} answered {linkedid}')
+                except Extension.DoesNotExist:
+                    logger.debug(f'[AMI] No agent for MemberName: {member_name}')
                 except Exception as e:
                     logger.debug(f'[AMI] AgentConnect error: {e}')
 
