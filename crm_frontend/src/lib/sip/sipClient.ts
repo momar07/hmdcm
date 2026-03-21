@@ -45,11 +45,25 @@ export class SipClient {
 
   private _startRinging() {
     if (this._ringAudio) return;
-    const audio    = new Audio('/sounds/ringing.ogg');
-    audio.loop     = true;
-    audio.volume   = 0.7;
-    audio.play().catch(e => console.warn('[SIP] Ring audio blocked:', e));
-    this._ringAudio = audio;
+    try {
+      const audio      = new Audio('/sounds/ringing.mp3');
+      audio.loop       = true;
+      audio.volume     = 0.7;
+      // Force load before play
+      audio.load();
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => console.log('[SIP] 🔔 Ringing started'))
+          .catch(e  => {
+            console.warn('[SIP] Autoplay blocked — retrying after 100ms:', e.name);
+            setTimeout(() => audio.play().catch(() => {}), 100);
+          });
+      }
+      this._ringAudio = audio;
+    } catch (e) {
+      console.error('[SIP] Ring error:', e);
+    }
   }
 
   private _stopRinging() {

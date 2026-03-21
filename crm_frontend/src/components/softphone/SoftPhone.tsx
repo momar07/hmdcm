@@ -14,6 +14,26 @@ export function SoftPhone() {
   const [open, setOpen]   = useState(false);
   const [dialNum, setDialNum] = useState('');
 
+  // Unlock autoplay on first user interaction
+  useEffect(() => {
+    const unlock = () => {
+      const silent = new Audio('/sounds/ringing.mp3');
+      silent.volume = 0;
+      silent.play().then(() => {
+        silent.pause();
+        console.log('[SIP] Autoplay unlocked ✅');
+      }).catch(() => {});
+      document.removeEventListener('click', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+    document.addEventListener('click', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      document.removeEventListener('click', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
   // extension is stored as string (extension number) in AuthUser
   const extNumber = user?.extension as string | null;
 
