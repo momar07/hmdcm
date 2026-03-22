@@ -4,8 +4,8 @@ import { useState, useRef }                        from 'react';
 import { useQuery, useMutation, useQueryClient }   from '@tanstack/react-query';
 import { useRouter }                               from 'next/navigation';
 import {
-  Phone, Calendar, User, DollarSign,
-  LayoutGrid, List, RefreshCw,
+  Calendar, User, DollarSign,
+  List, RefreshCw, Plus, AlertCircle,
 } from 'lucide-react';
 import toast            from 'react-hot-toast';
 import { leadsApi }     from '@/lib/api/leads';
@@ -13,15 +13,28 @@ import { PageHeader }   from '@/components/ui/PageHeader';
 import { Button }       from '@/components/ui/Button';
 import type { Lead, LeadStage } from '@/types';
 
-// ── helpers ───────────────────────────────────────────────────
-function formatValue(v: number | null) {
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+function formatCurrency(v: number | null | undefined) {
   if (!v) return null;
   return new Intl.NumberFormat('en-US', {
     style: 'currency', currency: 'USD', maximumFractionDigits: 0,
   }).format(v);
 }
 
-// ── Lead Card ─────────────────────────────────────────────────
+function priorityBadge(p: string | undefined) {
+  switch (p) {
+    case 'High':   return 'bg-red-100 text-red-700';
+    case 'Medium': return 'bg-yellow-100 text-yellow-700';
+    case 'Low':    return 'bg-green-100 text-green-700';
+    default:       return 'bg-gray-100 text-gray-500';
+  }
+}
+
+// ─────────────────────────────────────────────
+// Lead Card
+// ─────────────────────────────────────────────
 function LeadCard({
   lead,
   onDragStart,
@@ -36,53 +49,49 @@ function LeadCard({
       draggable
       onDragStart={(e) => onDragStart(e, lead)}
       onClick={() => onClick(lead)}
-      className="bg-white rounded-lg border border-gray-200 shadow-sm p-3
+      className="group bg-white rounded-xl border border-gray-200 shadow-sm p-3.5
                  cursor-grab active:cursor-grabbing hover:shadow-md
-                 transition-all hover:border-blue-300 select-none"
+                 hover:border-blue-300 transition-all duration-150 select-none"
     >
-      {/* title */}
-      <p className="text-sm font-semibold text-gray-900 leading-tight mb-2 line-clamp-2">
+      {/* Title */}
+      <p className="text-sm font-semibold text-gray-900 leading-snug mb-2.5
+                    line-clamp-2 group-hover:text-blue-700 transition-colors">
         {lead.title}
       </p>
 
-      {/* customer */}
+      {/* Customer */}
       {lead.customer_name && (
-        <div className="flex items-center gap-1 text-xs text-gray-500 mb-1.5">
-          <User size={11} className="text-gray-400 flex-shrink-0" />
+        <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1.5">
+          <User size={11} className="text-gray-400 shrink-0" />
           <span className="truncate">{lead.customer_name}</span>
         </div>
       )}
 
-      {/* value */}
+      {/* Value */}
       {lead.value && (
-        <div className="flex items-center gap-1 text-xs text-green-600 font-medium mb-1.5">
-          <DollarSign size={11} className="flex-shrink-0" />
-          <span>{formatValue(lead.value)}</span>
+        <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold mb-1.5">
+          <DollarSign size={11} className="shrink-0" />
+          <span>{formatCurrency(lead.value)}</span>
         </div>
       )}
 
-      {/* followup */}
+      {/* Follow-up */}
       {lead.followup_date && (
-        <div className="flex items-center gap-1 text-xs text-orange-500 mb-1.5">
-          <Calendar size={11} className="flex-shrink-0" />
+        <div className="flex items-center gap-1.5 text-xs text-amber-600 mb-1.5">
+          <Calendar size={11} className="shrink-0" />
           <span>{new Date(lead.followup_date).toLocaleDateString()}</span>
         </div>
       )}
 
-      {/* footer */}
-      <div className="flex items-center justify-between mt-2 pt-2
-                      border-t border-gray-100">
-        {lead.assigned_name ? (
-          <span className="text-xs text-gray-400 truncate max-w-[100px]">
-            👤 {lead.assigned_name}
-          </span>
-        ) : (
-          <span className="text-xs text-gray-300">Unassigned</span>
-        )}
-        {lead.source && (
-          <span className="text-xs bg-gray-100 text-gray-500
-                           px-1.5 py-0.5 rounded-full">
-            {lead.source}
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-2.5 pt-2.5 border-t border-gray-100">
+        <span className="text-xs text-gray-400 truncate max-w-[110px]">
+          {lead.assigned_name ? `👤 ${lead.assigned_name}` : 'Unassigned'}
+        </span>
+        {lead.priority_name && (
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full
+                            ${priorityBadge(lead.priority_name)}`}>
+            {lead.priority_name}
           </span>
         )}
       </div>
@@ -90,15 +99,12 @@ function LeadCard({
   );
 }
 
-// ── Stage Column ──────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Stage Column
+// ─────────────────────────────────────────────
 function StageColumn({
-  stage,
-  leads,
-  onDragStart,
-  onDrop,
-  onDragOver,
-  onLeadClick,
-  isDragOver,
+  stage, leads, onDragStart, onDrop,
+  onDragOver, onLeadClick, isDragOver,
 }: {
   stage:       LeadStage;
   leads:       Lead[];
@@ -112,77 +118,82 @@ function StageColumn({
 
   return (
     <div
-      className={`flex flex-col min-w-[260px] max-w-[280px] rounded-xl
-        transition-colors
-        ${isDragOver
-          ? 'bg-blue-50 ring-2 ring-blue-300'
-          : 'bg-gray-50'}`}
-      onDrop={(e) => onDrop(e, stage.id)}
+      className={`flex flex-col w-[260px] shrink-0 rounded-2xl border
+                  transition-all duration-150
+                  ${isDragOver
+                    ? 'border-blue-400 bg-blue-50/70 shadow-lg shadow-blue-100/50'
+                    : 'border-gray-200 bg-gray-50'}`}
+      onDrop={(e)    => onDrop(e, stage.id)}
       onDragOver={onDragOver}
     >
-      {/* header */}
-      <div className="flex items-center justify-between px-3 py-2.5
-                      border-b border-gray-200">
-        <div className="flex items-center gap-2">
+      {/* Column Header */}
+      <div className="flex items-center justify-between px-3.5 py-3
+                      border-b border-gray-200 shrink-0 rounded-t-2xl
+                      bg-white/80">
+        <div className="flex items-center gap-2 min-w-0">
           <span
-            className="w-3 h-3 rounded-full flex-shrink-0"
+            className="w-2.5 h-2.5 rounded-full shrink-0"
             style={{ backgroundColor: stage.color }}
           />
           <span className="text-sm font-semibold text-gray-800 truncate">
             {stage.name}
           </span>
-          <span className="text-xs bg-white border border-gray-200
-                           text-gray-600 rounded-full px-1.5 py-0.5 font-medium">
+          <span className="shrink-0 text-xs bg-gray-100 text-gray-600
+                           border border-gray-200 rounded-full px-1.5 py-0.5
+                           font-semibold leading-none">
             {leads.length}
           </span>
         </div>
         {totalValue > 0 && (
-          <span className="text-xs text-green-600 font-medium">
-            {formatValue(totalValue)}
+          <span className="shrink-0 text-xs text-emerald-600 font-bold ml-1">
+            {formatCurrency(totalValue)}
           </span>
         )}
       </div>
 
-      {/* cards */}
-      <div className="flex flex-col gap-2 p-2 flex-1 min-h-[120px]
-                      overflow-y-auto max-h-[calc(100vh-220px)]">
-        {leads.map((lead) => (
-          <LeadCard
-            key={lead.id}
-            lead={lead}
-            onDragStart={onDragStart}
-            onClick={onLeadClick}
-          />
-        ))}
-        {leads.length === 0 && (
-          <div className={`flex items-center justify-center h-20
-                           rounded-lg border-2 border-dashed text-xs
+      {/* Cards List */}
+      <div className="flex flex-col gap-2 p-2.5 flex-1
+                      overflow-y-auto min-h-[80px] max-h-[calc(100vh-260px)]">
+        {leads.length === 0 ? (
+          <div className={`flex items-center justify-center h-20 rounded-xl
+                           border-2 border-dashed text-xs font-medium transition-all
                            ${isDragOver
-                             ? 'border-blue-300 text-blue-400'
+                             ? 'border-blue-400 text-blue-500 bg-blue-50'
                              : 'border-gray-200 text-gray-300'}`}>
-            {isDragOver ? 'Drop here' : 'No leads'}
+            {isDragOver ? '↓ Drop here' : 'No leads'}
           </div>
+        ) : (
+          leads.map((lead) => (
+            <LeadCard
+              key={lead.id}
+              lead={lead}
+              onDragStart={onDragStart}
+              onClick={onLeadClick}
+            />
+          ))
         )}
       </div>
     </div>
   );
 }
 
-// ── Main Pipeline Page ────────────────────────────────────────
+// ─────────────────────────────────────────────
+// Main Pipeline Page
+// ─────────────────────────────────────────────
 export default function PipelinePage() {
-  const router    = useRouter();
-  const qc        = useQueryClient();
-  const dragLead  = useRef<Lead | null>(null);
+  const router   = useRouter();
+  const qc       = useQueryClient();
+  const dragLead = useRef<Lead | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
 
-  // fetch all stages
+  /* Stages */
   const { data: stagesRaw } = useQuery({
     queryKey: ['lead-stages'],
     queryFn:  () => leadsApi.stages().then((r) => r.data as LeadStage[]),
   });
-  const stages = stagesRaw ?? [];
+  const stages = Array.isArray(stagesRaw) ? stagesRaw : [];
 
-  // fetch all active leads (up to 200)
+  /* Leads */
   const { data: leadsData, isLoading, isFetching } = useQuery({
     queryKey: ['leads-pipeline'],
     queryFn:  () =>
@@ -191,62 +202,70 @@ export default function PipelinePage() {
   });
   const allLeads: Lead[] = leadsData?.results ?? [];
 
-  // group leads by stage
+  /* Group by stage */
   const leadsByStage = stages.reduce<Record<string, Lead[]>>((acc, s) => {
     acc[s.id] = allLeads.filter((l) => l.stage === s.id);
     return acc;
   }, {});
-
-  // unassigned (no stage)
   const unstagedLeads = allLeads.filter((l) => !l.stage);
 
-  // move stage mutation
+  /* Move mutation */
   const moveMutation = useMutation({
     mutationFn: ({ leadId, stageId }: { leadId: string; stageId: string }) =>
       leadsApi.moveStage(leadId, stageId),
-    onSuccess: (_, vars) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['leads-pipeline'] });
-      toast.success('Lead moved ✅');
+      toast.success('Lead moved successfully');
     },
     onError: () => toast.error('Failed to move lead'),
   });
 
-  // drag handlers
+  /* Drag handlers */
   const handleDragStart = (e: React.DragEvent, lead: Lead) => {
     dragLead.current = lead;
     e.dataTransfer.effectAllowed = 'move';
   };
-
   const handleDrop = (e: React.DragEvent, stageId: string) => {
     e.preventDefault();
     setDragOverStage(null);
-    if (!dragLead.current) return;
-    if (dragLead.current.stage === stageId) return;
+    if (!dragLead.current || dragLead.current.stage === stageId) return;
     moveMutation.mutate({ leadId: dragLead.current.id, stageId });
     dragLead.current = null;
   };
-
   const handleDragOver = (e: React.DragEvent, stageId: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverStage(stageId);
   };
 
-  const handleDragLeave = () => setDragOverStage(null);
-
-  // summary stats
   const totalValue = allLeads.reduce((s, l) => s + (l.value ?? 0), 0);
 
   return (
     <div className="flex flex-col h-full">
+
+      {/* ── Header ── */}
       <PageHeader
         title="Lead Pipeline"
-        subtitle={`${allLeads.length} leads · ${formatValue(totalValue) ?? '$0'} total value`}
+        subtitle={
+          <span className="flex items-center gap-2.5 text-sm">
+            <span className="font-medium text-gray-700">
+              {allLeads.length} lead{allLeads.length !== 1 ? 's' : ''}
+            </span>
+            {totalValue > 0 && (
+              <>
+                <span className="text-gray-300">·</span>
+                <span className="font-semibold text-emerald-600">
+                  {formatCurrency(totalValue)} total
+                </span>
+              </>
+            )}
+            {isFetching && !isLoading && (
+              <RefreshCw size={12} className="animate-spin text-gray-400" />
+            )}
+          </span>
+        }
         actions={
           <div className="flex items-center gap-2">
-            {isFetching && !isLoading && (
-              <RefreshCw size={14} className="animate-spin text-gray-400" />
-            )}
             <Button
               variant="secondary" size="sm"
               icon={<List size={14} />}
@@ -256,41 +275,52 @@ export default function PipelinePage() {
             </Button>
             <Button
               variant="primary" size="sm"
-              icon={<LayoutGrid size={14} />}
+              icon={<Plus size={14} />}
               onClick={() => router.push('/leads/new')}
             >
-              + New Lead
+              New Lead
             </Button>
           </div>
         }
       />
 
-      {/* unstaged warning */}
+      {/* ── Unstaged warning ── */}
       {unstagedLeads.length > 0 && (
-        <div className="mb-3 px-3 py-2 bg-yellow-50 border border-yellow-200
-                        rounded-lg text-xs text-yellow-700 flex items-center gap-2">
-          ⚠️ {unstagedLeads.length} lead(s) have no stage assigned.
+        <div className="mb-4 flex items-center gap-2.5 px-4 py-2.5
+                        bg-amber-50 border border-amber-200 rounded-xl
+                        text-xs text-amber-700">
+          <AlertCircle size={14} className="shrink-0 text-amber-500" />
+          <span>
+            <strong>{unstagedLeads.length}</strong> lead(s) have no stage assigned.
+          </span>
           <button
-            className="underline hover:text-yellow-900"
+            className="underline underline-offset-2 hover:text-amber-900 font-semibold ml-auto"
             onClick={() => router.push('/leads')}
           >
-            View them
+            View in list →
           </button>
         </div>
       )}
 
-      {/* Kanban board */}
+      {/* ── Kanban Board ── */}
       {isLoading ? (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {Array.from({ length: 5 }).map((_, i) => (
+        <div className="flex gap-3 overflow-x-auto pb-4 pt-1">
+          {Array.from({ length: 6 }).map((_, i) => (
             <div key={i}
-              className="min-w-[260px] h-96 bg-gray-100 rounded-xl animate-pulse" />
+              className="w-[260px] shrink-0 h-72 bg-gray-100 rounded-2xl animate-pulse" />
           ))}
+        </div>
+      ) : stages.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center
+                        text-center py-20 text-gray-400">
+          <List size={40} className="mb-3 text-gray-200" />
+          <p className="font-semibold text-gray-500">No pipeline stages configured</p>
+          <p className="text-sm mt-1">Add stages from the admin panel first.</p>
         </div>
       ) : (
         <div
-          className="flex gap-4 overflow-x-auto pb-4 flex-1"
-          onDragLeave={handleDragLeave}
+          className="flex gap-3 overflow-x-auto pb-6 flex-1 items-start pt-1"
+          onDragLeave={() => setDragOverStage(null)}
         >
           {stages.map((stage) => (
             <StageColumn
@@ -306,6 +336,7 @@ export default function PipelinePage() {
           ))}
         </div>
       )}
+
     </div>
   );
 }

@@ -141,7 +141,11 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
         {visible.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + '/');
+          // Exact match for /leads to prevent overlap with /leads/pipeline
+          const active =
+            item.href === '/leads'
+              ? pathname === '/leads'
+              : pathname === item.href || pathname.startsWith(item.href + '/');
           return (
             <Link
               key={item.href}
