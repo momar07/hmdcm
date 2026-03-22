@@ -178,8 +178,7 @@ class CustomerHistoryView(APIView):
             if d is None:
                 return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
             if hasattr(d, 'tzinfo') and d.tzinfo is None:
-                import pytz
-                return pytz.utc.localize(d)
+                return d.replace(tzinfo=datetime.timezone.utc)
             return d
 
         timeline.sort(key=sort_key, reverse=True)
