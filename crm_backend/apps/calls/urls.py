@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import (CallViewSet, CallCompleteView, PendingCompletionsView,
+from .views import (
+    LinkCallToCustomerView,CallViewSet, CallCompleteView, PendingCompletionsView,
                     DispositionsListView, LeadStagesListView, ScreenPopView)
 
 router = DefaultRouter()

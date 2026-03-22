@@ -183,3 +183,41 @@ class LeadStagesListView(APIView):
             'is_won':    s.is_won,
             'is_closed': s.is_closed,
         } for s in stages])
+
+
+class LinkCallToCustomerView(APIView):
+    """POST /api/calls/link-call/ — attach an open call to a newly-created customer"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        uniqueid    = request.data.get('uniqueid')
+        customer_id = request.data.get('customer_id')
+
+        if not uniqueid or not customer_id:
+            return Response(
+                {'error': 'uniqueid and customer_id are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            from apps.customers.models import Customer
+            customer = Customer.objects.get(id=customer_id)
+        except Exception:
+            return Response({'error': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        updated = Call.objects.filter(uniqueid=uniqueid).update(customer=customer)
+
+        if updated == 0:
+            # Try matching by caller phone number as fallback
+            from apps.customers.models import CustomerPhone
+            phones = CustomerPhone.objects.filter(customer=customer).values_list('number', flat=True)
+            updated = Call.objects.filter(
+                caller__in=list(phones),
+                customer__isnull=True
+            ).order_by('-started_at').update(customer=customer)
+
+        return Response({
+            'linked': updated,
+            'customer_id': str(customer_id),
+            'uniqueid': uniqueid,
+        }, status=status.HTTP_200_OK)

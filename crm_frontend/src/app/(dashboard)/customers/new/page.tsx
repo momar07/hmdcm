@@ -1,7 +1,7 @@
 'use client';
 
-import { useState }    from 'react';
-import { useRouter }   from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react';
 import toast           from 'react-hot-toast';
@@ -13,7 +13,8 @@ import { Input }        from '@/components/ui/Input';
 interface PhoneRow { number: string; phone_type: string; is_primary: boolean }
 
 export default function NewCustomerPage() {
-  const router = useRouter();
+  const router       = useRouter();
+  const searchParams = useSearchParams();
 
   const [form, setForm] = useState({
     first_name: '', last_name: '', email: '',
@@ -24,10 +25,41 @@ export default function NewCustomerPage() {
     { number: '', phone_type: 'mobile', is_primary: true },
   ]);
 
+  // Pre-fill phone from URL ?phone=... (when coming from IncomingCallPopup)
+  useEffect(() => {
+    const phoneFromUrl = searchParams?.get('phone');
+    if (phoneFromUrl) {
+      setPhones([{ number: phoneFromUrl, phone_type: 'mobile', is_primary: true }]);
+    }
+  }, [searchParams]);
+
+  // Pending call uniqueid (to link call → customer after creation)
+  const pendingCallUniqueId = searchParams?.get('uniqueid') || '';
+
   const mutation = useMutation({
     mutationFn: () => customersApi.create({ ...form, phones } as any),
-    onSuccess:  (res) => {
+    onSuccess:  async (res) => {
       toast.success('Customer created!');
+
+      // If we came from an incoming call, link the call to the new customer
+      if (pendingCallUniqueId) {
+        try {
+          await fetch('/api/calls/link-call/', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${document.cookie.match(/access_token=([^;]+)/)?.[1] || ''}`,
+            },
+            body: JSON.stringify({
+              uniqueid:    pendingCallUniqueId,
+              customer_id: res.data.id,
+            }),
+          });
+        } catch (e) {
+          console.warn('Could not link call to customer:', e);
+        }
+      }
+
       router.push(`/customers/${res.data.id}`);
     },
     onError: (err: any) => {
