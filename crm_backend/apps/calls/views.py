@@ -51,9 +51,74 @@ class CallViewSet(viewsets.ModelViewSet):
         qs = Disposition.objects.filter(is_active=True).order_by('order')
         return Response(DispositionSerializer(qs, many=True).data)
 
-    @action(detail=True, methods=['post'], url_path='originate')
+    @action(detail=False, methods=['post'], url_path='originate')
     def originate(self, request, pk=None):
-        return Response({'message': 'Originate action placeholder.'})
+        """
+        POST /api/calls/originate/
+        body: { phone_number, customer_id?, lead_id? }
+        Triggers an AMI Originate — agent extension rings first,
+        then Asterisk dials the destination.
+        """
+        from django.conf import settings
+        phone  = request.data.get('phone_number', '').strip()
+        if not phone:
+            return Response({'error': 'phone_number is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get agent extension
+        try:
+            from apps.users.models import Extension
+            ext_obj = Extension.objects.get(user=request.user, is_active=True)
+            agent_ext = ext_obj.number
+        except Exception:
+            return Response({'error': 'No active extension for this agent'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # AMI Originate
+        try:
+            import socket, time
+            ami_host   = getattr(settings, 'AMI_HOST',   '192.168.2.222')
+            ami_port   = int(getattr(settings, 'AMI_PORT',   5038))
+            ami_user   = getattr(settings, 'AMI_USERNAME', 'admin')
+            ami_secret = getattr(settings, 'AMI_SECRET',   'admin')
+
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(10)
+            s.connect((ami_host, ami_port))
+            s.recv(1024)  # banner
+
+            # Login
+            s.sendall(
+                f'Action: Login\r\nUsername: {ami_user}\r\nSecret: {ami_secret}\r\n\r\n'
+                .encode()
+            )
+            time.sleep(0.3)
+            s.recv(1024)
+
+            # Originate — agent ext rings first, then dials phone
+            action_id = f'crm-{request.user.id}-{int(time.time())}'
+            cmd = (
+                f'Action: Originate\r\n'
+                f'ActionID: {action_id}\r\n'
+                f'Channel: PJSIP/{agent_ext}\r\n'
+                f'Exten: {phone}\r\n'
+                f'Context: from-internal\r\n'
+                f'Priority: 1\r\n'
+                f'CallerID: CRM <{agent_ext}>\r\n'
+                f'Timeout: 30000\r\n'
+                f'Async: true\r\n'
+                f'\r\n'
+            )
+            s.sendall(cmd.encode())
+            time.sleep(0.5)
+            resp = s.recv(2048).decode(errors='ignore')
+            s.close()
+
+            if 'Success' in resp or 'Queued' in resp:
+                return Response({'message': f'Dialing {phone} from ext {agent_ext}', 'action_id': action_id})
+            else:
+                return Response({'error': f'AMI response: {resp[:200]}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+        except Exception as e:
+            return Response({'error': f'AMI connection failed: {str(e)}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 # ── Screen Pop View ─────────────────────────────────────────────────────

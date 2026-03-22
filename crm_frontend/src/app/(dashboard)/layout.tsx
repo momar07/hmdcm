@@ -62,7 +62,7 @@ export default function DashboardLayout({
             const latest = pending[0];
             setDispModal({
               callId:       latest.id,
-              callerNumber: latest.caller_number ?? 'Unknown',
+              callerNumber: (latest as any).caller ?? (latest as any).caller_number ?? 'Unknown',
               customerName: (latest as any).customer_name ?? null,
               customerId:   (latest as any).customer   ?? null,
             });

@@ -131,8 +131,6 @@ def notify_call_ended(self, call_id: str, status: str):
 
     channel_layer = get_channel_layer()
 
-    import asyncio
-
     async def _push_ended():
         if call.agent_id:
             try:
@@ -144,10 +142,19 @@ def notify_call_ended(self, call_id: str, status: str):
             except Exception as exc:
                 logger.error(f'[CallEnded] Push failed: {exc}')
 
-    try:
-        asyncio.run(_push_ended())
-    except Exception as exc:
-        logger.error(f'[CallEnded] asyncio.run error: {exc}')
+    import threading
+    def _run_ended():
+        import asyncio
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_push_ended())
+        finally:
+            loop.close()
+
+    t = threading.Thread(target=_run_ended, daemon=True)
+    t.start()
+    t.join(timeout=5)
 
     return f'CallEnded notified: {call_id}'
 

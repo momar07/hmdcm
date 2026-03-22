@@ -16,6 +16,9 @@ import { Button }       from '@/components/ui/Button';
 import { StatusBadge }  from '@/components/ui/StatusBadge';
 import { Spinner }      from '@/components/ui/Spinner';
 import api              from '@/lib/api/axios';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState as useNoteState }    from 'react';
+import toast                           from 'react-hot-toast';
 
 function formatDuration(s: number) {
   if (!s) return '';
@@ -39,6 +42,24 @@ export default function CustomerDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
   const [tab, setTab] = useState<Tab>('timeline');
+  const [noteText, setNoteText]   = useNoteState('');
+  const [noteOpen, setNoteOpen]   = useNoteState(false);
+  const qc = useQueryClient();
+
+  const addNoteMutation = useMutation({
+    mutationFn: () => api.post('/notes/', {
+      content:     noteText,
+      customer:    id,
+      is_pinned:   false,
+    }),
+    onSuccess: () => {
+      toast.success('Note added ✅');
+      setNoteText('');
+      setNoteOpen(false);
+      qc.invalidateQueries({ queryKey: ['customer-history', id] });
+    },
+    onError: () => toast.error('Failed to add note'),
+  });
 
   const { data: customer, isLoading } = useQuery({
     queryKey: ['customer', id],
@@ -74,8 +95,14 @@ export default function CustomerDetailPage() {
         title={`${customer.first_name} ${customer.last_name}`}
         subtitle={customer.company || 'No company'}
         actions={
-          <Button variant="secondary" icon={<ArrowLeft size={16}/>}
-                  onClick={() => router.back()}>Back</Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" icon={<MessageSquare size={16}/>}
+                    onClick={() => setNoteOpen(!noteOpen)}>
+              Add Note
+            </Button>
+            <Button variant="secondary" icon={<ArrowLeft size={16}/>}
+                    onClick={() => router.back()}>Back</Button>
+          </div>
         }
       />
 
@@ -124,6 +151,34 @@ export default function CustomerDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Add Note Form */}
+      {noteOpen && (
+        <div className="bg-white rounded-xl border border-yellow-200 shadow-sm p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-700">📝 Add Note</p>
+          <textarea
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm
+                       resize-none focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            rows={3}
+            placeholder="Write a note about this customer..."
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+          />
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" size="sm" onClick={() => { setNoteOpen(false); setNoteText(''); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary" size="sm"
+              loading={addNoteMutation.isPending}
+              disabled={noteText.trim().length < 3}
+              onClick={() => addNoteMutation.mutate()}
+            >
+              Save Note
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
