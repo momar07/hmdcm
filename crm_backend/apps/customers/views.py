@@ -112,9 +112,30 @@ class CustomerHistoryView(APIView):
         timeline = []
 
         # ── Calls ────────────────────────────────────────────────────
-        calls = Call.objects.filter(customer_id=pk).select_related(
-            'agent', 'completion__disposition'
-        ).order_by('-started_at')[:50]
+        # Get customer's phone numbers for fallback matching
+        from apps.customers.models import CustomerPhone
+        customer_phones = list(
+            CustomerPhone.objects.filter(customer_id=pk).values_list('number', flat=True)
+        )
+
+        # Match by customer FK OR by caller phone number (handles unlinked calls)
+        from django.db.models import Q
+        calls_qs = Call.objects.filter(
+            Q(customer_id=pk) |
+            Q(caller__in=customer_phones, customer__isnull=True)
+        ).select_related('agent', 'completion__disposition').order_by('-started_at')[:50]
+
+        # Auto-link unlinked calls to this customer
+        from apps.customers.models import Customer as CustomerModel
+        try:
+            customer_obj = CustomerModel.objects.get(id=pk)
+            Call.objects.filter(
+                caller__in=customer_phones, customer__isnull=True
+            ).update(customer=customer_obj)
+        except Exception:
+            pass
+
+        calls = calls_qs
 
         for call in calls:
             disposition = None
