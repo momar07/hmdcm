@@ -1,4 +1,4 @@
-import api from "./index"
+import api from "./index";
 import type {
   PaginatedTickets, TicketDetail, TicketListItem,
   TicketCreatePayload, TicketUpdatePayload,
