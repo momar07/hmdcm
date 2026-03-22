@@ -45,4 +45,7 @@ export const callsApi = {
 
   dispositions: () =>
     api.get<Disposition[]>('/calls/dispositions/'),
+
+  linkCall: (uniqueid: string, customer_id: string) =>
+    api.post('/calls/link-call/', { uniqueid, customer_id }),
 };

@@ -6,6 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react';
 import toast           from 'react-hot-toast';
 import { customersApi } from '@/lib/api/customers';
+import { callsApi }    from '@/lib/api/calls';
 import { PageHeader }   from '@/components/ui/PageHeader';
 import { Button }       from '@/components/ui/Button';
 import { Input }        from '@/components/ui/Input';
@@ -44,19 +45,10 @@ export default function NewCustomerPage() {
       // If we came from an incoming call, link the call to the new customer
       if (pendingCallUniqueId) {
         try {
-          await fetch('/api/calls/link-call/', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${document.cookie.match(/access_token=([^;]+)/)?.[1] || ''}`,
-            },
-            body: JSON.stringify({
-              uniqueid:    pendingCallUniqueId,
-              customer_id: res.data.id,
-            }),
-          });
+          const linkRes = await callsApi.linkCall(pendingCallUniqueId, res.data.id);
+          console.log('[link-call] linked:', linkRes.data);
         } catch (e) {
-          console.warn('Could not link call to customer:', e);
+          console.warn('[link-call] Could not link call to customer:', e);
         }
       }
 
