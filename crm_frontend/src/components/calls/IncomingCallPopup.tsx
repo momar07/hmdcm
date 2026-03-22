@@ -329,7 +329,11 @@ export function IncomingCallPopup() {
 
             {/* Row 2: End Call */}
             <button
-              onClick={() => { actions?.hangup?.(); setVisible(false); }}
+              onClick={() => {
+                // hangup() sends SIP BYE to Asterisk — visible state
+                // will be set to false automatically when callStatus → idle
+                actions?.hangup?.();
+              }}
               className="w-full flex items-center justify-center gap-2
                          bg-red-500 hover:bg-red-600 active:scale-95
                          text-white rounded-xl py-3

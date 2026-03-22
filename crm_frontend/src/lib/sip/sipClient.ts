@@ -246,7 +246,23 @@ export class SipClient {
 
   hangup() {
     this._stopRinging();
-    try { this.session?.terminate(); } catch (_) {}
+    try {
+      if (this.session) {
+        // Send SIP BYE with proper status code
+        const s = (this.session as any).status;
+        // STATUS_CONFIRMED = 9 (active call), STATUS_WAITING_FOR_ACK = 6
+        if (s === 9 || s === 6) {
+          this.session.terminate({ status_code: 200, reason_phrase: 'Normal Clearing' });
+        } else if (s === 3 || s === 4) {
+          // Incoming not yet answered — send 486 Busy Here
+          this.session.terminate({ status_code: 486, reason_phrase: 'Busy Here' });
+        } else {
+          this.session.terminate();
+        }
+      }
+    } catch (e) {
+      console.warn('[SIP] hangup error:', e);
+    }
     this.session = null;
     const audio = document.getElementById('sip-remote-audio') as HTMLAudioElement;
     if (audio) { audio.srcObject = null; }
