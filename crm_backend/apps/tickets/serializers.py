@@ -128,7 +128,7 @@ class TicketListSerializer(serializers.ModelSerializer):
             "ticket_type", "category", "source",
             "status", "priority",
             "customer_id", "customer_name", "customer_email",
-            "phone_number", "asterisk_call_id", "queue",
+            "phone_number", "asterisk_call_id", "queue", "direction",
             "agent_id", "agent_name",
             "created_by_name",
             "sla_breached", "sla_response_breached",

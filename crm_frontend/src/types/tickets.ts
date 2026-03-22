@@ -103,6 +103,7 @@ export interface TicketListItem {
   customer_email        : string
   phone_number          : string
   asterisk_call_id      : string
+  direction             : "inbound" | "outbound" | "internal" | null
   queue                 : string
   agent_id              : string | null
   agent_name            : string
@@ -165,6 +166,7 @@ export interface TicketCreatePayload {
   asterisk_call_id?: string
   call?            : string | null
   queue?           : string
+  direction?       : "inbound" | "outbound" | "internal"
   sla_policy?      : string | null
   tag_ids?         : string[]
   meta?            : Record<string, unknown>

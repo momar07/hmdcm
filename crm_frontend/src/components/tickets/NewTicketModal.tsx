@@ -45,6 +45,7 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
       phone_number     : fromCall ? (incomingCall?.caller      ?? "") : "",
       queue            : fromCall ? (incomingCall?.queue       ?? "") : "",
       asterisk_call_id : fromCall ? (incomingCall?.uniqueid    ?? "") : "",
+      direction        : fromCall ? (incomingCall?.direction   ?? "inbound") : undefined,
     };
   }
 

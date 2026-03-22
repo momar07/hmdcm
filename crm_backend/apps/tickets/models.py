@@ -139,6 +139,12 @@ class Ticket(models.Model):
                     default=TicketSource.MANUAL,
                     db_index=True,
                   )
+    direction  = models.CharField(
+                    max_length=10,
+                    choices=[("inbound","Inbound"),("outbound","Outbound"),("internal","Internal")],
+                    null=True, blank=True,
+                    db_index=True,
+                )
 
     # ── Relationships ────────────────────────────────────────────
     customer   = models.ForeignKey(

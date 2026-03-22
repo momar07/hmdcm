@@ -82,6 +82,20 @@ export function TicketInfoPanel({ ticket }: Props) {
                 </span>
               </Row>
             )}
+            {ticket.direction && (
+              <Row label="Direction">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full
+                  text-xs font-medium border
+                  ${ticket.direction === 'inbound'
+                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                    : ticket.direction === 'outbound'
+                    ? 'bg-green-50 text-green-700 border-green-200'
+                    : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                  {ticket.direction === 'inbound'  ? '📲 Inbound'  :
+                   ticket.direction === 'outbound' ? '📤 Outbound' : '🔄 Internal'}
+                </span>
+              </Row>
+            )}
             <Row label="Category">
               {ticket.category || <span className="text-gray-400 italic">—</span>}
             </Row>
