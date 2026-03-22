@@ -39,6 +39,7 @@ class TicketNoteSerializer(serializers.ModelSerializer):
     author_name       = serializers.CharField(source="author.get_full_name", read_only=True)
     author_id         = serializers.UUIDField(source="author.id",            read_only=True)
     is_first_response = serializers.BooleanField(read_only=True)
+    ticket            = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         model  = TicketNote
