@@ -23,9 +23,10 @@ export function useTickets(initialFilters: TicketFilters = {}) {
     try {
       setLoading(true);
       setError(null);
-      const res: PaginatedTickets = await ticketsApi.list(filters);
-      setTickets(res.results);
-      setTotal(res.count);
+      const res = await ticketsApi.list(filters);
+      const data = res?.data ?? res as unknown as PaginatedTickets;
+      setTickets(data.results ?? []);
+      setTotal(data.count ?? 0);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to load tickets";
       setError(msg);
