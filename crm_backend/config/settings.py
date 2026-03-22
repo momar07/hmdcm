@@ -169,3 +169,25 @@ VICIDIAL_DB_PORT = env.int('VICIDIAL_DB_PORT', default=3306)
 VICIDIAL_DB_NAME = env('VICIDIAL_DB_NAME', default='asterisk')
 VICIDIAL_DB_USER = env('VICIDIAL_DB_USER', default='cron')
 VICIDIAL_DB_PASS = env('VICIDIAL_DB_PASS', default='1234')
+
+
+# ── Tickets SLA & automation tasks ───────────────────────────────
+CELERY_BEAT_SCHEDULE_TICKETS = {
+    "check-sla-breaches": {
+        "task":     "apps.tickets.tasks.check_sla_breaches",
+        "schedule": 300,          # every 5 minutes
+    },
+    "auto-close-resolved": {
+        "task":     "apps.tickets.tasks.auto_close_resolved_tickets",
+        "schedule": 86400,        # every 24 hours
+    },
+    "notify-escalated": {
+        "task":     "apps.tickets.tasks.notify_escalated_tickets",
+        "schedule": 1800,         # every 30 minutes
+    },
+}
+
+# Merge into main beat schedule if it exists
+if "CELERY_BEAT_SCHEDULE" not in dir():
+    CELERY_BEAT_SCHEDULE = {}
+CELERY_BEAT_SCHEDULE.update(CELERY_BEAT_SCHEDULE_TICKETS)
