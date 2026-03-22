@@ -36,17 +36,20 @@ export function IncomingCallPopup() {
 
     if (!incomingCall?.customer_id) {
       // ── Unknown caller ──────────────────────────────────────────
-      // Do NOT answer the SIP session — just terminate it cleanly,
-      // then open the new-customer form with the caller number & call uniqueid.
-      // The agent will create the customer, the call record will be linked,
-      // and the disposition modal will appear after page load.
-      try { actions?.hangup?.(); } catch (_) {}
+      // Answer the SIP call first so the caller is connected to audio.
+      // Then navigate to new-customer form — the SIP session stays alive
+      // in sipStore (it is NOT tied to the current page/component).
+      // After the agent creates the customer, the call gets linked.
+      actions?.answer();
       const caller   = incomingCall?.caller   || '';
       const uniqueid = incomingCall?.uniqueid  || '';
-      clearIncoming();
-      router.push(
-        `/customers/new?phone=${encodeURIComponent(caller)}&uniqueid=${encodeURIComponent(uniqueid)}`
-      );
+      // Small delay to let JsSIP complete the answer handshake
+      setTimeout(() => {
+        setVisible(false);
+        router.push(
+          `/customers/new?phone=${encodeURIComponent(caller)}&uniqueid=${encodeURIComponent(uniqueid)}`
+        );
+      }, 300);
     } else {
       // ── Known customer ───────────────────────────────────────────
       // Answer the SIP session normally; navigation happens via
@@ -57,7 +60,8 @@ export function IncomingCallPopup() {
 
   useEffect(() => {
     if (callStatus === 'incoming') {
-      setVisible(true);
+      // Only show popup if we have a real incoming call event
+      if (incomingCall) setVisible(true);
       try {
         const audio = new Audio('/sounds/ringing.mp3');
         audio.loop = true; audio.volume = 0.7;
@@ -70,8 +74,12 @@ export function IncomingCallPopup() {
     }
     if (callStatus === 'active') {
       clearCount(); stopRing(); setVisible(false);
-      if (incomingCall?.customer_id) router.push(`/customers/${incomingCall.customer_id}`);
-      clearIncoming();
+      // Only navigate to customer page if customer was already known
+      // (unknown caller case: agent already navigated to /customers/new)
+      if (incomingCall?.customer_id) {
+        router.push(`/customers/${incomingCall.customer_id}`);
+        clearIncoming();
+      }
     }
     if (callStatus === 'idle') {
       clearCount(); stopRing(); setVisible(false);
