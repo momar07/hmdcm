@@ -4,7 +4,7 @@ from .models import Followup
 
 
 def get_followups(user=None) -> QuerySet:
-    qs = Followup.objects.select_related('customer', 'lead', 'call', 'assigned_to')
+    qs = Followup.objects.select_related('lead', 'call', 'assigned_to')
     if user and user.role == 'agent':
         qs = qs.filter(assigned_to=user)
     elif user and user.role == 'supervisor':
@@ -17,4 +17,4 @@ def get_due_followups() -> QuerySet:
         status='pending',
         scheduled_at__lte=timezone.now(),
         reminder_sent=False
-    ).select_related('assigned_to', 'customer')
+    ).select_related('assigned_to')
