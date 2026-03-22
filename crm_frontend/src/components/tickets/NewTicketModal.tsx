@@ -1,24 +1,19 @@
 "use client";
-import React, { useState } from "react";
-import { X, Ticket } from "lucide-react";
-import { ticketsApi } from "@/lib/api/tickets";
+import React, { useState, useEffect } from "react";
+import { X, Ticket, Phone, Clock, Radio } from "lucide-react";
+import { ticketsApi }   from "@/lib/api/tickets";
+import { useCallStore } from "@/store";
+import { useSipStore }  from "@/store/sipStore";
 import type { TicketCreatePayload, TicketType } from "@/types/tickets";
 
 interface Props {
-  open            : boolean;
-  onClose         : () => void;
-  onCreated       : () => void;
-  defaultCustomerId?: string;
-  defaultCallId?  : string;
+  open               : boolean;
+  onClose            : () => void;
+  onCreated          : () => void;
+  defaultCustomerId? : string;
+  // kept for future recording attachment — pass call DB uuid when available
+  defaultCallId?     : string;
 }
-
-const INITIAL: TicketCreatePayload = {
-  title       : "",
-  description : "",
-  ticket_type : "inquiry",
-  source      : "manual",
-  priority    : "medium",
-};
 
 const TYPE_OPTIONS: { value: TicketType | "technical" | "billing"; label: string }[] = [
   { value: "complaint",  label: "Complaint" },
@@ -29,13 +24,42 @@ const TYPE_OPTIONS: { value: TicketType | "technical" | "billing"; label: string
 ];
 
 export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, defaultCallId }: Props) {
-  const [form,   setForm]   = useState<TicketCreatePayload>({
-    ...INITIAL,
-    customer : defaultCustomerId,
-    call     : defaultCallId,
-  });
+  const { incomingCall }    = useCallStore();
+  const { callStatus }      = useSipStore();
+
+  // Detect if there is an active call right now
+  const isCallActive = callStatus === "active" || callStatus === "holding";
+
+  // Build initial form — auto-fill from active call if present
+  function buildForm(): TicketCreatePayload {
+    const fromCall = isCallActive && incomingCall;
+    return {
+      title            : "",
+      description      : "",
+      ticket_type      : "inquiry",
+      priority         : "medium",
+      source           : fromCall ? "call"   : "manual",
+      customer         : defaultCustomerId,
+      call             : defaultCallId,
+      // call-center fields — filled from store when active
+      phone_number     : fromCall ? (incomingCall?.caller      ?? "") : "",
+      queue            : fromCall ? (incomingCall?.queue       ?? "") : "",
+      asterisk_call_id : fromCall ? (incomingCall?.uniqueid    ?? "") : "",
+    };
+  }
+
+  const [form,   setForm]   = useState<TicketCreatePayload>(buildForm);
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
+
+  // Re-build form every time modal opens
+  useEffect(() => {
+    if (open) {
+      setForm(buildForm());
+      setError(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   if (!open) return null;
 
@@ -51,7 +75,6 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
       await ticketsApi.create(form);
       onCreated();
       onClose();
-      setForm({ ...INITIAL });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to create ticket");
     } finally {
@@ -60,7 +83,7 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
 
         {/* Header */}
@@ -68,12 +91,52 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
           <div className="flex items-center gap-2">
             <Ticket className="h-5 w-5 text-blue-600" />
             <h2 className="text-base font-semibold text-gray-900">New Ticket</h2>
+            {isCallActive && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full
+                text-xs font-medium bg-green-100 text-green-700 border border-green-200 animate-pulse">
+                <Radio className="h-3 w-3" /> Live Call
+              </span>
+            )}
           </div>
           <button onClick={onClose}
             className="p-1 rounded-lg hover:bg-gray-100 transition-colors">
             <X className="h-5 w-5 text-gray-500" />
           </button>
         </div>
+
+        {/* Active Call Banner */}
+        {isCallActive && incomingCall && (
+          <div className="mx-5 mt-4 p-3 bg-green-50 border border-green-200 rounded-xl space-y-1.5">
+            <p className="text-xs font-semibold text-green-700">
+              📞 Active call data — auto-linked to this ticket
+            </p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-green-800">
+              {incomingCall.caller && (
+                <span className="flex items-center gap-1">
+                  <Phone className="h-3 w-3" />
+                  {incomingCall.caller}
+                </span>
+              )}
+              {incomingCall.queue && (
+                <span>
+                  Queue: <strong>{incomingCall.queue}</strong>
+                </span>
+              )}
+              <span>
+                Direction: <strong className="capitalize">{incomingCall.direction ?? "inbound"}</strong>
+              </span>
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {new Date().toLocaleTimeString("en-GB")}
+              </span>
+              {incomingCall.uniqueid && (
+                <span className="col-span-2 font-mono text-[10px] text-green-600 truncate">
+                  Asterisk ID: {incomingCall.uniqueid}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">

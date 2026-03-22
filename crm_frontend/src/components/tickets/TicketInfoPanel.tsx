@@ -67,6 +67,21 @@ export function TicketInfoPanel({ ticket }: Props) {
             <Row label="Source">
               <span className="capitalize">{ticket.source}</span>
             </Row>
+            {ticket.phone_number && (
+              <Row label="Caller Number">
+                <span className="font-mono flex items-center gap-1">
+                  <Phone className="h-3.5 w-3.5 text-gray-400" />
+                  {ticket.phone_number}
+                </span>
+              </Row>
+            )}
+            {ticket.asterisk_call_id && (
+              <Row label="Call ID">
+                <span className="font-mono text-xs text-gray-500 break-all">
+                  {ticket.asterisk_call_id}
+                </span>
+              </Row>
+            )}
             <Row label="Category">
               {ticket.category || <span className="text-gray-400 italic">—</span>}
             </Row>
