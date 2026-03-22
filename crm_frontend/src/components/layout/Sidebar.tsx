@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import clsx        from 'clsx';
 import {
   LayoutDashboard,
+  Ticket as TicketIcon,
   UserCircle,
   BookOpen,
   PhoneCall,
