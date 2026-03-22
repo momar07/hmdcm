@@ -33,6 +33,13 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
   // Build initial form — auto-fill from active call if present
   function buildForm(): TicketCreatePayload {
     const fromCall = isCallActive && incomingCall;
+    console.log('[NewTicketModal] buildForm:', {
+      isCallActive,
+      callStatus,
+      direction: incomingCall?.direction,
+      queue: incomingCall?.queue,
+      fromCall: !!fromCall,
+    });
     return {
       title            : "",
       description      : "",
