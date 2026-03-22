@@ -224,6 +224,15 @@ export class SipClient {
 
   answer() {
     if (!this.session) return;
+
+    // Guard: JsSIP status 5 = STATUS_ANSWERED (already answered or terminated)
+    // Valid statuses for answer() are: STATUS_INVITE_RECEIVED (3) or STATUS_WAITING_FOR_ANSWER (4)
+    const sessionStatus = (this.session as any).status;
+    if (sessionStatus !== undefined && sessionStatus !== 3 && sessionStatus !== 4) {
+      console.warn('[SIP] Cannot answer — invalid session status:', sessionStatus);
+      return;
+    }
+
     this.session.answer({
       mediaConstraints: { audio: true, video: false },
       pcConfig: {

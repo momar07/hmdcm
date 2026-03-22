@@ -33,14 +33,26 @@ export function IncomingCallPopup() {
 
   const handleAnswer = useCallback(() => {
     clearCount(); stopRing();
-    actions?.answer();
-    // If no customer matched — navigate to new customer form with caller pre-filled
+
     if (!incomingCall?.customer_id) {
-      const caller = incomingCall?.caller || '';
-      router.push(`/customers/new?phone=${encodeURIComponent(caller)}`);
+      // ── Unknown caller ──────────────────────────────────────────
+      // Do NOT answer the SIP session — just terminate it cleanly,
+      // then open the new-customer form with the caller number & call uniqueid.
+      // The agent will create the customer, the call record will be linked,
+      // and the disposition modal will appear after page load.
+      try { actions?.hangup?.(); } catch (_) {}
+      const caller   = incomingCall?.caller   || '';
+      const uniqueid = incomingCall?.uniqueid  || '';
       clearIncoming();
+      router.push(
+        `/customers/new?phone=${encodeURIComponent(caller)}&uniqueid=${encodeURIComponent(uniqueid)}`
+      );
+    } else {
+      // ── Known customer ───────────────────────────────────────────
+      // Answer the SIP session normally; navigation happens via
+      // the callStatus='active' useEffect once Asterisk confirms.
+      actions?.answer();
     }
-    // If customer matched — navigation happens via callStatus='active' effect
   }, [clearCount, stopRing, actions, incomingCall, clearIncoming, router]);
 
   useEffect(() => {
