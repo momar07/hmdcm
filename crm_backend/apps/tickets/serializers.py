@@ -164,7 +164,7 @@ class TicketCreateSerializer(serializers.ModelSerializer):
             "title", "description",
             "ticket_type", "category", "source", "priority",
             "customer", "agent",
-            "phone_number", "asterisk_call_id", "call", "queue",
+            "phone_number", "asterisk_call_id", "call", "queue", "direction",
             "sla_policy", "meta",
             "tag_ids",
         ]
