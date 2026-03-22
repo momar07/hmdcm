@@ -258,6 +258,31 @@ export class SipClient {
     const s    = (sess as any).status;
     console.log('[SIP] hangup() called — session status:', s);
 
+    // Fallback: if session.on("ended") doesn't fire within 3s, force idle
+    const fallbackTimer = setTimeout(() => {
+      console.warn('[SIP] hangup fallback triggered — session ended event never fired');
+      this.session = null;
+      this.onCallStatusChange('idle');
+    }, 3000);
+
+    // Override ended/failed to clear the fallback timer
+    const origEnded  = sess._events?.ended;
+    const origFailed = sess._events?.failed;
+
+    sess.once('ended', () => {
+      console.log('[SIP] session.ended fired after hangup ✅');
+      clearTimeout(fallbackTimer);
+      this.session = null;
+      this.onCallStatusChange('idle');
+    });
+
+    sess.once('failed', () => {
+      console.log('[SIP] session.failed fired after hangup');
+      clearTimeout(fallbackTimer);
+      this.session = null;
+      this.onCallStatusChange('idle');
+    });
+
     try {
       if (s === 9 || s === 6) {
         sess.terminate();
@@ -268,8 +293,10 @@ export class SipClient {
       }
     } catch (e) {
       console.warn('[SIP] hangup error:', e);
+      clearTimeout(fallbackTimer);
+      this.session = null;
+      this.onCallStatusChange('idle');
     }
-    // Let session.on('ended') null the session — ensures BYE is sent first
   }
 
   mute(enable: boolean)  { enable ? this.session?.mute()   : this.session?.unmute();  }
