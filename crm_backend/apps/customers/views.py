@@ -1,3 +1,5 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -90,3 +92,100 @@ class CustomerTagViewSet(viewsets.ModelViewSet):
     queryset           = CustomerTag.objects.all()
     serializer_class   = CustomerTagSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+
+class CustomerHistoryView(APIView):
+    """
+    GET /api/customers/<id>/history/
+    Returns a unified timeline: calls (with dispositions) + notes + leads
+    sorted by date descending.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        from apps.calls.models import Call, CallCompletion
+        from apps.notes.models import Note
+        from apps.leads.models import Lead
+        from django.utils.timezone import is_aware
+        import datetime
+
+        timeline = []
+
+        # ── Calls ────────────────────────────────────────────────────
+        calls = Call.objects.filter(customer_id=pk).select_related(
+            'agent', 'completion__disposition'
+        ).order_by('-started_at')[:50]
+
+        for call in calls:
+            disposition = None
+            note_text   = None
+            try:
+                disposition = call.completion.disposition.name
+                note_text   = call.completion.note
+            except Exception:
+                pass
+
+            timeline.append({
+                'type':        'call',
+                'id':          str(call.id),
+                'date':        call.started_at,
+                'direction':   call.direction,
+                'status':      call.status,
+                'caller':      call.caller,
+                'callee':      call.callee,
+                'duration':    call.duration,
+                'queue':       call.queue or '',
+                'agent_name':  call.agent.get_full_name() if call.agent else None,
+                'disposition': disposition,
+                'note':        note_text,
+            })
+
+        # ── Notes ─────────────────────────────────────────────────────
+        notes = Note.objects.filter(customer_id=pk).select_related('author').order_by('-created_at')[:50]
+        for note in notes:
+            timeline.append({
+                'type':       'note',
+                'id':         str(note.id),
+                'date':       note.created_at,
+                'content':    note.content,
+                'author':     note.author.get_full_name() if note.author else None,
+                'is_pinned':  note.is_pinned,
+                'call_id':    str(note.call_id) if note.call_id else None,
+                'lead_id':    str(note.lead_id) if note.lead_id else None,
+            })
+
+        # ── Leads ─────────────────────────────────────────────────────
+        leads = Lead.objects.filter(customer_id=pk).select_related(
+            'status', 'stage', 'assigned_to'
+        ).order_by('-created_at')[:20]
+        for lead in leads:
+            timeline.append({
+                'type':         'lead',
+                'id':           str(lead.id),
+                'date':         lead.created_at,
+                'title':        lead.title,
+                'status_name':  lead.status.name if lead.status else None,
+                'stage_name':   lead.stage.name  if lead.stage  else None,
+                'stage_color':  lead.stage.color if lead.stage  else None,
+                'assigned_to':  lead.assigned_to.get_full_name() if lead.assigned_to else None,
+                'value':        str(lead.value) if lead.value else None,
+                'source':       lead.source,
+            })
+
+        # ── Sort all by date descending ────────────────────────────────
+        def sort_key(item):
+            d = item.get('date')
+            if d is None:
+                return datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+            if hasattr(d, 'tzinfo') and d.tzinfo is None:
+                import pytz
+                return pytz.utc.localize(d)
+            return d
+
+        timeline.sort(key=sort_key, reverse=True)
+
+        return Response({
+            'count':   len(timeline),
+            'results': timeline,
+        })
+

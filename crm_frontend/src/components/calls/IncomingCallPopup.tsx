@@ -34,8 +34,14 @@ export function IncomingCallPopup() {
   const handleAnswer = useCallback(() => {
     clearCount(); stopRing();
     actions?.answer();
-    if (!incomingCall?.customer_id) clearIncoming();
-  }, [clearCount, stopRing, actions, incomingCall, clearIncoming]);
+    // If no customer matched — navigate to new customer form with caller pre-filled
+    if (!incomingCall?.customer_id) {
+      const caller = incomingCall?.caller || '';
+      router.push(`/customers/new?phone=${encodeURIComponent(caller)}`);
+      clearIncoming();
+    }
+    // If customer matched — navigation happens via callStatus='active' effect
+  }, [clearCount, stopRing, actions, incomingCall, clearIncoming, router]);
 
   useEffect(() => {
     if (callStatus === 'incoming') {
