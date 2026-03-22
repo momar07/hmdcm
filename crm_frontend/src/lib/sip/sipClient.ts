@@ -263,10 +263,14 @@ export class SipClient {
     } catch (e) {
       console.warn('[SIP] hangup error:', e);
     }
-    this.session = null;
+    // Don't null session here — let session.on('ended') handle cleanup
+    // so the SIP BYE is sent properly before we release the session
     const audio = document.getElementById('sip-remote-audio') as HTMLAudioElement;
     if (audio) { audio.srcObject = null; }
-    this.onCallStatusChange('idle');
+    // If session is already null or terminated, force idle
+    if (!this.session) {
+      this.onCallStatusChange('idle');
+    }
   }
 
   mute(enable: boolean)  { enable ? this.session?.mute()   : this.session?.unmute();  }

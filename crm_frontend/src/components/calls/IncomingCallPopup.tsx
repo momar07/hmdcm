@@ -151,7 +151,12 @@ export function IncomingCallPopup() {
       clearCount(); stopRing();
       setVisible(true); // stay visible as call-control
       if (incomingCall?.customer_id) {
-        router.push(`/customers/${incomingCall.customer_id}`);
+        // Only navigate if we're not already on a customer/call detail page
+        const currentPath = window.location.pathname;
+        const isOnDetailPage = currentPath.includes('/customers/') || currentPath.includes('/calls/');
+        if (!isOnDetailPage) {
+          router.push(`/customers/${incomingCall.customer_id}`);
+        }
       }
     }
 
