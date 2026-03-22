@@ -1,20 +1,24 @@
 'use client';
 
-import { useParams, useRouter }   from 'next/navigation';
-import { useQuery }                from '@tanstack/react-query';
-import { useState }                from 'react';
+import { useParams, useRouter }        from 'next/navigation';
+import { useQuery }                    from '@tanstack/react-query';
+import { useState }                    from 'react';
 import {
   ArrowLeft, Phone, Mail, Building2, MapPin,
   PhoneIncoming, PhoneOutgoing, PhoneMissed,
   FileText, MessageSquare, TrendingUp, Clock,
+  Ticket as TicketIcon, Plus,
 } from 'lucide-react';
 import { customersApi } from '@/lib/api/customers';
 import { callsApi }     from '@/lib/api/calls';
 import { leadsApi }     from '@/lib/api/leads';
+import { ticketsApi }   from '@/lib/api/tickets';
 import { PageHeader }   from '@/components/ui/PageHeader';
 import { Button }       from '@/components/ui/Button';
 import { StatusBadge }  from '@/components/ui/StatusBadge';
 import { Spinner }      from '@/components/ui/Spinner';
+import { NewTicketModal } from '@/components/tickets/NewTicketModal';
+import { PriorityBadge, StatusBadge as TicketStatusBadge } from '@/components/tickets/TicketBadge';
 import api              from '@/lib/api/axios';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState as useNoteState }    from 'react';
@@ -36,21 +40,22 @@ function timeAgo(dateStr: string) {
   return new Date(dateStr).toLocaleDateString();
 }
 
-type Tab = 'timeline' | 'calls' | 'leads';
+type Tab = 'timeline' | 'calls' | 'leads' | 'tickets';
 
 export default function CustomerDetailPage() {
   const { id }   = useParams<{ id: string }>();
   const router   = useRouter();
-  const [tab, setTab] = useState<Tab>('timeline');
-  const [noteText, setNoteText]   = useNoteState('');
-  const [noteOpen, setNoteOpen]   = useNoteState(false);
+  const [tab, setTab]               = useState<Tab>('timeline');
+  const [noteText, setNoteText]     = useNoteState('');
+  const [noteOpen, setNoteOpen]     = useNoteState(false);
+  const [ticketModal, setTicketModal] = useState(false);
   const qc = useQueryClient();
 
   const addNoteMutation = useMutation({
     mutationFn: () => api.post('/notes/', {
-      content:     noteText,
-      customer:    id,
-      is_pinned:   false,
+      content:   noteText,
+      customer:  id,
+      is_pinned: false,
     }),
     onSuccess: () => {
       toast.success('Note added ✅');
@@ -84,8 +89,16 @@ export default function CustomerDetailPage() {
     enabled:  !!id && tab === 'leads',
   });
 
+  const { data: ticketsData, isLoading: ticketsLoading, refetch: refetchTickets } = useQuery({
+    queryKey: ['customer-tickets', id],
+    queryFn:  () => ticketsApi.list({ customer: id, page_size: 50 }).then(r => r.data),
+    enabled:  !!id && tab === 'tickets',
+  });
+
   if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
   if (!customer) return <div className="text-center py-20 text-gray-400">Customer not found.</div>;
+
+  const ticketCount = ticketsData?.count ?? 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -99,6 +112,10 @@ export default function CustomerDetailPage() {
             <Button variant="secondary" icon={<MessageSquare size={16}/>}
                     onClick={() => setNoteOpen(!noteOpen)}>
               Add Note
+            </Button>
+            <Button variant="primary" icon={<TicketIcon size={16}/>}
+                    onClick={() => setTicketModal(true)}>
+              New Ticket
             </Button>
             <Button variant="secondary" icon={<ArrowLeft size={16}/>}
                     onClick={() => router.back()}>Back</Button>
@@ -186,13 +203,20 @@ export default function CustomerDetailPage() {
           { key: 'timeline', label: 'Timeline',  icon: <Clock size={14}/> },
           { key: 'calls',    label: 'Calls',     icon: <Phone size={14}/> },
           { key: 'leads',    label: 'Leads',     icon: <TrendingUp size={14}/> },
-        ] as { key: Tab; label: string; icon: React.ReactNode }[]).map(t => (
+          { key: 'tickets',  label: 'Tickets',   icon: <TicketIcon size={14}/>,
+            badge: ticketCount > 0 ? ticketCount : null },
+        ] as { key: Tab; label: string; icon: React.ReactNode; badge?: number | null }[]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all
               ${tab === t.key
                 ? 'bg-white text-gray-900 shadow-sm'
                 : 'text-gray-500 hover:text-gray-700'}`}>
             {t.icon}{t.label}
+            {t.badge != null && (
+              <span className="ml-0.5 px-1.5 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 font-semibold">
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -220,7 +244,9 @@ export default function CustomerDetailPage() {
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5
                   ${item.type === 'call'
                     ? item.status === 'no_answer' ? 'bg-red-50' : 'bg-blue-50'
-                    : item.type === 'note' ? 'bg-yellow-50' : 'bg-green-50'}`}>
+                    : item.type === 'note'   ? 'bg-yellow-50'
+                    : item.type === 'ticket' ? 'bg-purple-50'
+                    : 'bg-green-50'}`}>
                   {item.type === 'call' && item.status === 'no_answer'
                     ? <PhoneMissed size={14} className="text-red-500" />
                     : item.type === 'call' && item.direction === 'inbound'
@@ -229,11 +255,14 @@ export default function CustomerDetailPage() {
                     ? <PhoneOutgoing size={14} className="text-green-600" />
                     : item.type === 'note'
                     ? <MessageSquare size={14} className="text-yellow-600" />
+                    : item.type === 'ticket'
+                    ? <TicketIcon size={14} className="text-purple-600" />
                     : <TrendingUp size={14} className="text-green-600" />}
                 </div>
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
+
                   {/* Call */}
                   {item.type === 'call' && (
                     <>
@@ -277,13 +306,29 @@ export default function CustomerDetailPage() {
                         {item.is_pinned && (
                           <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">📌 Pinned</span>
                         )}
-                        {item.call_id && (
-                          <span className="text-xs text-gray-400">on a call</span>
-                        )}
                       </div>
                       <p className="mt-1 text-sm text-gray-700">{item.content}</p>
                       <p className="text-xs text-gray-400 mt-1">by {item.author}</p>
                     </>
+                  )}
+
+                  {/* Ticket in timeline */}
+                  {item.type === 'ticket' && (
+                    <div
+                      className="cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => router.push(`/tickets/${item.id}`)}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-gray-900">
+                          Ticket #{item.ticket_number}
+                        </span>
+                        {item.priority && <PriorityBadge priority={item.priority} />}
+                        {item.status  && <TicketStatusBadge status={item.status} />}
+                      </div>
+                      <p className="mt-0.5 text-sm text-gray-700">{item.title}</p>
+                      {item.category && (
+                        <p className="text-xs text-gray-400 mt-0.5">{item.category}</p>
+                      )}
+                    </div>
                   )}
 
                   {/* Lead */}
@@ -354,7 +399,7 @@ export default function CustomerDetailPage() {
                       <StatusBadge status={call.status} size="xs" />
                     </div>
                     <p className="text-xs text-gray-400 mt-0.5">
-                      {call.agent_name || 'No agent'} ·{' '}
+                      {call.agent_name || 'No agent'} ·{'  '}
                       {call.started_at ? new Date(call.started_at).toLocaleString() : ''}
                     </p>
                   </div>
@@ -410,6 +455,73 @@ export default function CustomerDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── TICKETS TAB ───────────────────────────────────────────────── */}
+      {tab === 'tickets' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">
+              All Tickets ({ticketsData?.count ?? 0})
+            </h3>
+            <Button variant="primary" size="sm" icon={<Plus size={14}/>}
+                    onClick={() => setTicketModal(true)}>
+              New Ticket
+            </Button>
+          </div>
+
+          {ticketsLoading && <div className="flex justify-center py-10"><Spinner /></div>}
+
+          {!ticketsLoading && !ticketsData?.results?.length && (
+            <div className="px-5 py-10 text-center">
+              <TicketIcon className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">No tickets yet for this customer.</p>
+              <button onClick={() => setTicketModal(true)}
+                className="mt-3 text-sm text-blue-600 hover:underline">
+                Create the first ticket →
+              </button>
+            </div>
+          )}
+
+          <div className="divide-y divide-gray-50">
+            {ticketsData?.results?.map((ticket: any) => (
+              <div key={ticket.id}
+                   className="px-5 py-4 flex items-start justify-between gap-4
+                     hover:bg-gray-50 cursor-pointer transition-colors"
+                   onClick={() => router.push(`/tickets/${ticket.id}`)}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-xs text-gray-400 font-mono">#{ticket.ticket_number}</span>
+                    <PriorityBadge priority={ticket.priority} />
+                    <TicketStatusBadge status={ticket.status} />
+                    {ticket.sla_breached && (
+                      <span className="text-xs text-red-600 font-medium">⚠ SLA</span>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 truncate">{ticket.title}</p>
+                  {ticket.category && (
+                    <p className="text-xs text-gray-400 mt-0.5">{ticket.category}</p>
+                  )}
+                </div>
+                <div className="text-xs text-gray-400 shrink-0 mt-0.5">
+                  {timeAgo(ticket.created_at)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* New Ticket Modal */}
+      <NewTicketModal
+        open={ticketModal}
+        onClose={() => setTicketModal(false)}
+        onCreated={() => {
+          setTicketModal(false);
+          refetchTickets();
+          if (tab !== 'tickets') setTab('tickets');
+        }}
+        defaultCustomerId={id}
+      />
 
     </div>
   );
