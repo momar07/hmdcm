@@ -6,7 +6,7 @@ import { TicketStatsCards } from "@/components/tickets/TicketStatsCards";
 import { TicketFiltersBar } from "@/components/tickets/TicketFiltersBar";
 import { TicketRow } from "@/components/tickets/TicketRow";
 import { NewTicketModal } from "@/components/tickets/NewTicketModal";
-import type { TicketStatus } from "@/types/tickets";
+import type { TicketStatus, TicketListItem } from "@/types/tickets";
 
 const STATUS_TABS: { label: string; value: TicketStatus | "" }[] = [
   { label: "All",         value: "" },

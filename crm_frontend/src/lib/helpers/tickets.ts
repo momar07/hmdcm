@@ -94,3 +94,47 @@ export function timeAgo(iso: string): string {
   const d = Math.floor(h / 24)
   return `${d}d ago`
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// FLAT LABEL MAPS — for component compatibility
+// ═══════════════════════════════════════════════════════════════════
+
+export const STATUS_LABELS: Record<TicketStatus, string> = {
+  open:        "Open",
+  in_progress: "In Progress",
+  pending:     "Pending",
+  resolved:    "Resolved",
+  closed:      "Closed",
+}
+
+export const PRIORITY_LABELS: Record<TicketPriority, string> = {
+  low:    "Low",
+  medium: "Medium",
+  high:   "High",
+  urgent: "Urgent",
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DATE HELPERS
+// ═══════════════════════════════════════════════════════════════════
+
+export function formatRelativeTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—"
+  const date  = new Date(dateStr)
+  const now   = new Date()
+  const diff  = Math.floor((now.getTime() - date.getTime()) / 1000) // seconds
+
+  if (diff < 60)                    return "just now"
+  if (diff < 3600)                  return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400)                 return `${Math.floor(diff / 3600)}h ago`
+  if (diff < 86400 * 7)             return `${Math.floor(diff / 86400)}d ago`
+  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+}
+
+export function formatDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—"
+  return new Date(dateStr).toLocaleString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  })
+}

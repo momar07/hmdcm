@@ -257,3 +257,18 @@ export interface TicketFilters {
   page?         : number
   page_size?    : number
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// ALIASES — for component compatibility
+// ═══════════════════════════════════════════════════════════════════
+
+/** Alias: TicketListItem → Ticket  (used in components) */
+export type Ticket = TicketListItem
+
+/** Generic paginated API response */
+export interface PaginatedResponse<T> {
+  count    : number
+  next     : string | null
+  previous : string | null
+  results  : T[]
+}
