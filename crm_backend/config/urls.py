@@ -14,6 +14,7 @@ urlpatterns = [
     path('api/leads/',       include('apps.leads.urls')),
     path('api/calls/',       include('apps.calls.urls')),
     path('api/followups/',   include('apps.followups.urls')),
+    path('api/tickets/', include('apps.tickets.urls')),
     path('api/notes/',       include('apps.notes.urls')),
     path('api/campaigns/',   include('apps.campaigns.urls')),
     path('api/reports/',     include('apps.reports.urls')),
