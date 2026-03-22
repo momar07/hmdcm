@@ -58,7 +58,7 @@ export default function TicketDetailPage() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
 
       {/* Header */}
-      <TicketDetailHeader ticket={ticket} saving={saving} onUpdate={update} />
+      <TicketDetailHeader ticket={ticket} saving={saving} onUpdate={async (p) => { await update(p); }} />
 
       {/* Body: main + sidebar */}
       <div className="flex flex-1 overflow-hidden" style={{ height: "calc(100vh - 73px)" }}>
