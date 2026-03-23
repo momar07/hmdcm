@@ -72,8 +72,14 @@ class Extension(TimeStampedModel):
     peer_name = models.CharField(max_length=100, blank=True, help_text='Asterisk peer name')
     is_active = models.BooleanField(default=True)
     secret    = models.CharField(max_length=100, blank=True)
+    queues    = models.ManyToManyField(
+                    'Queue',
+                    blank=True,
+                    related_name='members',
+                    help_text='Asterisk queues this agent belongs to',
+                )
 
-    # VICIdial integration fields
+    # VICIdial integration fields (kept for backwards compatibility)
     vicidial_user     = models.CharField(max_length=50,  blank=True,
                                          help_text='VICIdial username (usually same as extension number)')
     vicidial_pass     = models.CharField(max_length=100, blank=True,

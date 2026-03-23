@@ -381,6 +381,20 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
     ...(teamsData?.results ?? []).map((t) => ({ value: t.id, label: t.name })),
   ];
 
+  // Fetch available queues for the multi-select
+  const { data: queuesData } = useQuery({
+    queryKey: ['queues-all'],
+    queryFn:  () => usersApi.teams.list().then(() =>
+      fetch('/api/users/queues/', {
+        headers: { Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('crm_access_token') ?? '' : ''}` },
+      }).then((r) => r.json())
+    ),
+    staleTime: 60_000,
+  });
+  const availableQueues: { id: string; name: string; display_name: string }[] =
+    Array.isArray(queuesData?.results) ? queuesData.results :
+    Array.isArray(queuesData)          ? queuesData          : [];
+
   const [form, setForm] = useState({
     first_name:        user?.first_name                     ?? '',
     last_name:         user?.last_name                      ?? '',
@@ -392,6 +406,7 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
     is_active:         user?.is_active                      ?? true,
     sip_extension:     user?.extension?.number   ?? '',
     sip_secret:        user?.extension?.secret   ?? '',
+    queue_ids:         ((user?.extension as any)?.queue_ids ?? []) as string[],
   });
 
   const { mutate, isPending } = useMutation({
@@ -410,7 +425,8 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
       if (form.sip_extension.trim()) {
         const userId = isEdit ? user!.id : res.data.id;
         await usersApi.setExtension(userId, form.sip_extension.trim(), {
-          secret: form.sip_secret.trim(),
+          secret:    form.sip_secret.trim(),
+          queue_ids: form.queue_ids,
         });
       }
     },
@@ -471,6 +487,40 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
           onChange={set('sip_secret')}
         />
       )}
+      {/* Queue assignment — shown when extension is set */}
+      {form.sip_extension.trim() && availableQueues.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">
+            Queue Assignment
+          </label>
+          <div className="border border-gray-200 rounded-lg p-3 space-y-2 max-h-40 overflow-y-auto bg-gray-50">
+            {availableQueues.map((q) => (
+              <label key={q.id} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.queue_ids.includes(q.id)}
+                  onChange={(e) => {
+                    setForm((f) => ({
+                      ...f,
+                      queue_ids: e.target.checked
+                        ? [...f.queue_ids, q.id]
+                        : f.queue_ids.filter((id) => id !== q.id),
+                    }));
+                  }}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                />
+                <span className="text-sm text-gray-700">
+                  {q.display_name || q.name}
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            Agent will be added/removed from selected queues on status change.
+          </p>
+        </div>
+      )}
+
       {isEdit && (
         <Select label="Active"
           options={[{ value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }]}

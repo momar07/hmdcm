@@ -3,11 +3,23 @@ from .models import User, Extension, Queue
 
 
 class ExtensionSerializer(serializers.ModelSerializer):
+    queue_ids   = serializers.PrimaryKeyRelatedField(
+                      many=True,
+                      queryset=Queue.objects.filter(is_active=True),
+                      source='queues',
+                      required=False,
+                  )
+    queue_names = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model  = Extension
         fields = ['id', 'number', 'peer_name', 'is_active', 'secret',
+                  'queue_ids', 'queue_names',
                   'vicidial_user', 'vicidial_pass', 'vicidial_campaign', 'vicidial_ingroup']
         read_only_fields = ['id']
+
+    def get_queue_names(self, obj):
+        return list(obj.queues.values_list('name', flat=True))
 
 
 class UserListSerializer(serializers.ModelSerializer):

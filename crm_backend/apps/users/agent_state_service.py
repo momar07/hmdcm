@@ -106,10 +106,20 @@ def _get_ami_client() -> AmiClient:
     )
 
 
-def _get_queues() -> list[str]:
-    """Return list of queue names from the Queue model."""
+def _get_queues(user=None) -> list[str]:
+    """
+    Return queue names for a specific user (from their extension's queues M2M).
+    Falls back to all active queues if user has no extension or no queues assigned.
+    """
     from apps.users.models import Queue
-    return list(Queue.objects.filter(is_active=True).values_list('name', flat=True))
+    if user is not None:
+        ext = getattr(user, 'extension', None)
+        if ext and ext.is_active:
+            user_queues = list(ext.queues.filter(is_active=True).values_list('name', flat=True))
+            if user_queues:
+                return user_queues
+    # Fallback: no queues assigned — return empty (CRM-only status update)
+    return []
 
 
 def _get_interface(user) -> str | None:
@@ -152,7 +162,7 @@ def agent_go_available(user) -> dict:
     Returns { success, status, queues, message }
     """
     interface = _get_interface(user)
-    queues    = _get_queues()
+    queues    = _get_queues(user)
 
     if not interface:
         log.warning(f'[AgentState] No active extension for {user.email}')
@@ -200,7 +210,7 @@ def agent_go_break(user, reason: str = 'Break') -> dict:
     Returns { success, status, queues, message }
     """
     interface = _get_interface(user)
-    queues    = _get_queues()
+    queues    = _get_queues(user)
 
     if not interface or not queues:
         update_user_status(str(user.id), 'away')
@@ -231,7 +241,7 @@ def agent_go_offline(user) -> dict:
     Returns { success, status, queues, message }
     """
     interface = _get_interface(user)
-    queues    = _get_queues()
+    queues    = _get_queues(user)
 
     if not interface or not queues:
         update_user_status(str(user.id), 'offline')
@@ -260,7 +270,7 @@ def agent_sync_status(user) -> dict:
     Returns { success, status, message }
     """
     interface = _get_interface(user)
-    queues    = _get_queues()
+    queues    = _get_queues(user)
 
     if not interface:
         return {'success': False, 'status': user.status, 'message': 'No extension assigned'}

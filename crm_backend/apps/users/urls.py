@@ -9,5 +9,6 @@ router.register('', UserViewSet, basename='user')
 urlpatterns = [
     path('me/queue-status/', AgentQueueStatusView.as_view(), name='agent-queue-status'),
     path('live-agents/',     LiveAgentsView.as_view(),       name='live-agents'),
+    path('queues-list/',     QueuesListView.as_view(),        name='queues-list'),
     path('', include(router.urls)),
 ]

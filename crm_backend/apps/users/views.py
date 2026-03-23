@@ -85,9 +85,11 @@ class UserViewSet(viewsets.ModelViewSet):
         vicidial_campaign = request.data.get('vicidial_campaign', '').strip()
         vicidial_ingroup  = request.data.get('vicidial_ingroup',  '').strip()
 
+        queue_ids    = request.data.getlist('queue_ids', []) or request.data.get('queue_ids', [])
+
         defaults = {
             'number':    number,
-            'peer_name': peer_name or f'SIP/{number}',
+            'peer_name': peer_name or number,
             'is_active': True,
         }
         if secret:            defaults['secret']            = secret
@@ -100,10 +102,22 @@ class UserViewSet(viewsets.ModelViewSet):
             user=user,
             defaults=defaults,
         )
+
+        # Save queue assignments if provided
+        if queue_ids is not None:
+            from .models import Queue as QueueModel
+            valid_queues = QueueModel.objects.filter(id__in=queue_ids, is_active=True)
+            ext.queues.set(valid_queues)
+
         return Response({
             'success':   True,
             'created':   created,
-            'extension': {'id': str(ext.id), 'number': ext.number, 'peer_name': ext.peer_name},
+            'extension': {
+                'id':          str(ext.id),
+                'number':      ext.number,
+                'peer_name':   ext.peer_name,
+                'queue_names': list(ext.queues.values_list('name', flat=True)),
+            },
             'message':   f'Extension {number} {"assigned" if created else "updated"} for {user.get_full_name()}',
         })
 
@@ -198,3 +212,20 @@ class LiveAgentsView(APIView):
         }
 
         return Response({'agents': data, 'summary': summary})
+
+
+class QueuesListView(APIView):
+    """
+    GET /api/users/queues/
+    Returns all active queues — used by frontend queue assignment dropdown.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from .models import Queue as QueueModel
+        from .serializers import QueueSerializer
+        queues = QueueModel.objects.filter(is_active=True).order_by('name')
+        return Response({
+            'count':   queues.count(),
+            'results': QueueSerializer(queues, many=True).data,
+        })
