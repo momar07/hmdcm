@@ -7,6 +7,7 @@ from .views import (
     FollowupRateReportView,
     CampaignStatsReportView,
     SavedReportViewSet,
+    AgentAttendanceReportView,
 )
 
 router = DefaultRouter()
@@ -14,6 +15,7 @@ router.register(r'saved', SavedReportViewSet, basename='saved-report')
 
 urlpatterns = [
     path('agents/',           AgentReportView.as_view(),        name='report-agents'),
+    path('agents/attendance/', AgentAttendanceReportView.as_view(), name='report-attendance'),
     path('calls/summary/',    CallSummaryReportView.as_view(),   name='report-calls-summary'),
     path('leads/pipeline/',   LeadPipelineReportView.as_view(),  name='report-lead-pipeline'),
     path('followups/rate/',   FollowupRateReportView.as_view(),  name='report-followup-rate'),

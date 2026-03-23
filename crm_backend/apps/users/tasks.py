@@ -1,5 +1,4 @@
 import logging
-import time
 from celery import shared_task
 
 log = logging.getLogger(__name__)
@@ -12,8 +11,6 @@ def complete_login_sequence(self, user_id: str, session_id: str):
     After QueueAdd + LOGIN break, wait 5 seconds then unpause and set available.
     """
     try:
-        time.sleep(5)
-
         from apps.users.models import User, AgentBreak
         from apps.users.agent_state_service import _get_interface, _get_queues, _run_ami, _notify
         from apps.users.services import update_user_status

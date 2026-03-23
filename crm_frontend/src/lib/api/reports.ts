@@ -15,4 +15,11 @@ export const reportsApi = {
 
   campaignStats: (campaign_id?: string) =>
     api.get('/reports/campaigns/stats/', { params: { campaign_id } }),
+
+  agentAttendance: (params?: {
+    date_from?: string;
+    date_to?:   string;
+    agent_id?:  string;
+  }) =>
+    api.get('/reports/agents/attendance/', { params }),
 };
