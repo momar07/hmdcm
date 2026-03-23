@@ -531,7 +531,7 @@ export default function FollowupsPage() {
               key={f.id} f={f}
               completing={completing} cancelling={cancelling}
               callingId={callingId}
-              onCallStart={id => handleCallStart(id)}
+              onCallStart={(id, callId) => handleCallStart(id, callId)}
               onPostCallOpen={fu => setPostCall(fu)}
               onComplete={id  => completeMutation.mutate(id)}
               onCancel={id    => cancelMutation.mutate(id)}
