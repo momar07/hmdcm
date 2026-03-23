@@ -2,7 +2,8 @@
 
 import { useState, useEffect }       from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Phone, Shield, Bell, Layers, Save, RefreshCw } from 'lucide-react';
+import { Settings, Phone, Shield, Bell, Layers, Save, RefreshCw, ListChecks, Plus, Trash2, Pencil } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import clsx                           from 'clsx';
 import toast                          from 'react-hot-toast';
 import PipelineStagesSettings         from '@/components/settings/PipelineStagesSettings';
@@ -13,14 +14,15 @@ import { Spinner }                    from '@/components/ui/Spinner';
 import { settingsApi, SystemSetting } from '@/lib/api/settings';
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
-type Tab = 'general' | 'telephony' | 'security' | 'notifications' | 'pipeline';
+type Tab = 'general' | 'telephony' | 'security' | 'notifications' | 'pipeline' | 'queues';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'general',       label: 'General',       icon: <Settings size={16} /> },
   { id: 'telephony',     label: 'Telephony',     icon: <Phone    size={16} /> },
   { id: 'security',      label: 'Security',      icon: <Shield   size={16} /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell     size={16} /> },
-  { id: 'pipeline',      label: 'Pipeline',      icon: <Layers   size={16} /> },
+  { id: 'pipeline',      label: 'Pipeline',      icon: <Layers      size={16} /> },
+  { id: 'queues',        label: 'Queues',        icon: <ListChecks  size={16} /> },
 ];
 
 // ── Default values shown when the key doesn't exist in DB yet ────────────────
@@ -104,6 +106,7 @@ export default function SettingsPage() {
           {activeTab === 'security'      && <SecuritySettings      map={settingsMap} />}
           {activeTab === 'notifications' && <NotificationSettings  map={settingsMap} />}
           {activeTab === 'pipeline'      && <PipelineStagesSettings />}
+          {activeTab === 'queues'        && <QueuesSettings />}
         </div>
       </div>
     </div>
@@ -387,6 +390,229 @@ function NotificationSettings({ map }: { map: Record<string, SystemSetting> }) {
           Save
         </Button>
       </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Queues tab — full CRUD for Asterisk queues
+// ─────────────────────────────────────────────────────────────────────────────
+interface AsteriskQueue {
+  id:           string;
+  name:         string;
+  display_name: string;
+  strategy:     string;
+  description:  string;
+  is_active:    boolean;
+}
+
+const EMPTY_QUEUE: Omit<AsteriskQueue, 'id'> = {
+  name:         '',
+  display_name: '',
+  strategy:     'ringall',
+  description:  '',
+  is_active:    true,
+};
+
+const STRATEGY_OPTIONS = [
+  { value: 'ringall',      label: 'Ring All'       },
+  { value: 'leastrecent',  label: 'Least Recent'   },
+  { value: 'fewestcalls',  label: 'Fewest Calls'   },
+  { value: 'random',       label: 'Random'         },
+  { value: 'rrmemory',     label: 'Round Robin'    },
+  { value: 'linear',       label: 'Linear'         },
+];
+
+function QueuesSettings() {
+  const qc                          = useQueryClient();
+  const [editQueue, setEditQueue]   = useState<AsteriskQueue | null>(null);
+  const [showForm,  setShowForm]    = useState(false);
+  const [form,      setForm]        = useState<Omit<AsteriskQueue, 'id'>>(EMPTY_QUEUE);
+  const [saving,    setSaving]      = useState(false);
+
+  const { data, isLoading } = useQuery<{ count: number; results: AsteriskQueue[] }>({
+    queryKey: ['queues-settings'],
+    queryFn:  () =>
+      import('@/lib/api/axios').then((m) =>
+        m.default.get('/users/queues-list/').then((r) => r.data)
+      ),
+    staleTime: 30_000,
+  });
+
+  const queues = data?.results ?? [];
+
+  const openCreate = () => {
+    setEditQueue(null);
+    setForm(EMPTY_QUEUE);
+    setShowForm(true);
+  };
+
+  const openEdit = (q: AsteriskQueue) => {
+    setEditQueue(q);
+    setForm({
+      name:         q.name,
+      display_name: q.display_name,
+      strategy:     q.strategy,
+      description:  q.description,
+      is_active:    q.is_active,
+    });
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim()) { toast.error('Queue number is required.'); return; }
+    setSaving(true);
+    try {
+      const ax = (await import('@/lib/api/axios')).default;
+      if (editQueue) {
+        await ax.patch(`/users/queues/${editQueue.id}/`, form);
+        toast.success('Queue updated.');
+      } else {
+        await ax.post('/users/queues/', form);
+        toast.success('Queue created.');
+      }
+      qc.invalidateQueries({ queryKey: ['queues-settings'] });
+      qc.invalidateQueries({ queryKey: ['queues-all'] });
+      setShowForm(false);
+    } catch {
+      toast.error('Failed to save queue.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (q: AsteriskQueue) => {
+    if (!confirm(`Delete queue "${q.display_name || q.name}"?`)) return;
+    try {
+      const ax = (await import('@/lib/api/axios')).default;
+      await ax.delete(`/users/queues/${q.id}/`);
+      toast.success('Queue deleted.');
+      qc.invalidateQueries({ queryKey: ['queues-settings'] });
+      qc.invalidateQueries({ queryKey: ['queues-all'] });
+    } catch {
+      toast.error('Failed to delete queue.');
+    }
+  };
+
+  const set = (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  if (isLoading) return <div className="flex justify-center py-8"><Spinner /></div>;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold text-gray-900">Asterisk Queues</h2>
+        <Button variant="primary" size="sm" icon={<Plus size={14} />} onClick={openCreate}>
+          Add Queue
+        </Button>
+      </div>
+
+      <p className="text-sm text-gray-500">
+        Define Asterisk/Issabel queues here. Agents can then be assigned to queues via their user profile.
+      </p>
+
+      {queues.length === 0 ? (
+        <div className="text-center py-10 text-gray-400 text-sm border border-dashed border-gray-200 rounded-xl">
+          No queues yet. Click <strong>Add Queue</strong> to create your first queue.
+        </div>
+      ) : (
+        <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Queue Number</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Display Name</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Strategy</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Status</th>
+                <th className="px-4 py-3 w-20"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {queues.map((q) => (
+                <tr key={q.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-3 font-mono font-medium text-blue-600">{q.name}</td>
+                  <td className="px-4 py-3 text-gray-700">{q.display_name || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 capitalize">{q.strategy}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+                      ${q.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                      {q.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1 justify-end">
+                      <button onClick={() => openEdit(q)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                        <Pencil size={14} />
+                      </button>
+                      <button onClick={() => handleDelete(q)}
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Create / Edit form inline */}
+      {showForm && (
+        <div className="border border-blue-200 rounded-xl p-5 bg-blue-50 space-y-4">
+          <h3 className="text-sm font-semibold text-blue-800">
+            {editQueue ? `Edit Queue — ${editQueue.name}` : 'New Queue'}
+          </h3>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Queue Number *"
+              placeholder="600"
+              value={form.name}
+              onChange={set('name')}
+              disabled={!!editQueue}
+            />
+            <Input
+              label="Display Name"
+              placeholder="Arabic Queue"
+              value={form.display_name}
+              onChange={set('display_name')}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Strategy"
+              options={STRATEGY_OPTIONS}
+              value={form.strategy}
+              onChange={set('strategy')}
+            />
+            <Select
+              label="Status"
+              options={[
+                { value: 'true',  label: 'Active'   },
+                { value: 'false', label: 'Inactive' },
+              ]}
+              value={String(form.is_active)}
+              onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === 'true' }))}
+            />
+          </div>
+          <Input
+            label="Description"
+            placeholder="Optional description"
+            value={form.description}
+            onChange={set('description')}
+          />
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button variant="primary" icon={<Save size={14} />} loading={saving} onClick={handleSave}>
+              {editQueue ? 'Save Changes' : 'Create Queue'}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
