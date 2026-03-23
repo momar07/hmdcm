@@ -279,6 +279,16 @@ export default function CustomerDetailPage() {
                         {item.duration > 0 && (
                           <span className="text-xs text-gray-400 font-mono">{formatDuration(item.duration)}</span>
                         )}
+                        {item.followup_id && (
+                          <button
+                            onClick={() => router.push(`/followups?highlight=${item.followup_id}`)}
+                            className="inline-flex items-center gap-1 text-xs text-purple-600
+                                       hover:text-purple-800 hover:underline font-medium transition-colors"
+                          >
+                            <Clock size={10} />
+                            {item.followup_title ?? 'Follow-up'}
+                          </button>
+                        )}
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
                         {item.agent_name ? `Agent: ${item.agent_name}` : 'No agent assigned'}

@@ -146,19 +146,32 @@ class CustomerHistoryView(APIView):
             except Exception:
                 pass
 
-            timeline.append({
-                'type':        'call',
-                'id':          str(call.id),
-                'date':        call.started_at,
-                'direction':   call.direction,
-                'status':      call.status,
-                'caller':      call.caller,
-                'callee':      call.callee,
-                'duration':    call.duration,
-                'queue':       call.queue or '',
-                'agent_name':  call.agent.get_full_name() if call.agent else None,
-                'disposition': disposition,
-                'note':        note_text,
+            # Resolve followup linked to this call
+        followup_id    = None
+        followup_title = None
+        try:
+            fu = call.followups.filter(status='pending').first()                  or call.followups.first()
+            if fu:
+                followup_id    = str(fu.id)
+                followup_title = fu.title
+        except Exception:
+            pass
+
+        timeline.append({
+                'type':           'call',
+                'id':             str(call.id),
+                'date':           call.started_at,
+                'direction':      call.direction,
+                'status':         call.status,
+                'caller':         call.caller,
+                'callee':         call.callee,
+                'duration':       call.duration,
+                'queue':          call.queue or '',
+                'agent_name':     call.agent.get_full_name() if call.agent else None,
+                'disposition':    disposition,
+                'note':           note_text,
+                'followup_id':    followup_id,
+                'followup_title': followup_title,
             })
 
         # ── Notes ─────────────────────────────────────────────────────
