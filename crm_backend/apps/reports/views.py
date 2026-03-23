@@ -86,10 +86,9 @@ class AgentAttendanceReportView(APIView):
         date_to    = parse_date(request.query_params.get('date_to',   '')) or today
         agent_id   = request.query_params.get('agent_id')
 
-        # Convert to datetime range (aware)
-        tz        = timezone.get_current_timezone()
-        dt_from   = timezone.make_aware(datetime.datetime.combine(date_from, datetime.time.min), tz)
-        dt_to     = timezone.make_aware(datetime.datetime.combine(date_to,   datetime.time.max), tz)
+        # USE_TZ=False — use naive datetimes for filtering
+        dt_from = datetime.datetime.combine(date_from, datetime.time.min)
+        dt_to   = datetime.datetime.combine(date_to,   datetime.time.max)
 
         sessions_qs = AgentSession.objects.filter(
             login_at__range=(dt_from, dt_to)
