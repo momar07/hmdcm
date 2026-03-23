@@ -332,27 +332,27 @@ def _do_unpause(user_id: str, session_id: str):
     Runs in a background thread 5 seconds after login.
     Unpauses agent in all queues and sets status to available.
     """
-    try:
-        # CRITICAL: close stale DB connections — threads don't inherit Django's connection
-        from django.db import close_old_connections
-        close_old_connections()
+    # CRITICAL: threads need their own DB connection in Django
+    from django.db import connections, close_old_connections
+    close_old_connections()
 
+    try:
         from apps.users.models import User, AgentBreak
-        from apps.users.services import update_user_status
         from django.utils import timezone
 
-        user      = User.objects.select_related('extension').get(pk=user_id)
+        # Force fresh DB connection for this thread
+        user = User.objects.using('default').select_related('extension').get(pk=user_id)
         interface = _get_interface(user)
         queues    = _get_queues(user)
 
-        # Close the LOGIN break
-        AgentBreak.objects.filter(
-            agent_id  = user_id,
-            reason    = 'LOGIN',
+        # Close the LOGIN break record
+        AgentBreak.objects.using('default').filter(
+            agent_id          = user_id,
+            reason            = 'LOGIN',
             break_end__isnull = True,
         ).update(break_end=timezone.now())
 
-        # Unpause in Asterisk
+        # Unpause in Asterisk queues
         if interface and queues:
             actions = [
                 ('QueuePause', {
@@ -364,14 +364,24 @@ def _do_unpause(user_id: str, session_id: str):
             ]
             _run_ami(actions)
             log.info(f'[LoginSeq] {user.email} unpaused in queues: {queues}')
+        else:
+            log.info(f'[LoginSeq] {user.email} — no queues/interface, CRM-only update')
 
-        # Update CRM status
-        update_user_status(user_id, 'available')
+        # Update CRM status directly via queryset (thread-safe)
+        from apps.users.models import User as UserModel
+        UserModel.objects.using('default').filter(pk=user_id).update(status='available')
+        log.info(f'[LoginSeq] {user.email} → status=available saved in DB')
+
+        # Refresh user object for _notify
+        user.refresh_from_db()
         _notify(user, 'available')
         log.info(f'[LoginSeq] {user.email} → available (login sequence complete)')
 
     except Exception as e:
-        log.error(f'[LoginSeq] _do_unpause error for user {user_id}: {e}')
+        log.error(f'[LoginSeq] _do_unpause error for user {user_id}: {e}', exc_info=True)
+    finally:
+        # Always close connections opened by this thread
+        close_old_connections()
 
 
 def agent_on_login(user, request=None) -> dict:
