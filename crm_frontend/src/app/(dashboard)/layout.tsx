@@ -99,8 +99,6 @@ export default function DashboardLayout({
   // ringKey ref — no longer needs a separate effect
   useEffect(() => {}, [ringKey]);
 
-  if (!hydrated) return null;
-  if (!isAuthenticated) return null;
 
   // Unlock audio on first user interaction (Chrome Autoplay Policy)
   useEffect(() => {
@@ -114,6 +112,10 @@ export default function DashboardLayout({
       window.removeEventListener('touchend', unlock);
     };
   }, []);
+
+  if (!hydrated) return null;
+  if (!isAuthenticated) return null;
+
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
