@@ -81,7 +81,7 @@ class AgentAttendanceReportView(APIView):
         import datetime
 
         # Date range
-        today      = timezone.localdate()
+        today      = datetime.date.today()  # USE_TZ=False — avoid timezone.localdate()
         date_from  = parse_date(request.query_params.get('date_from', '')) or today
         date_to    = parse_date(request.query_params.get('date_to',   '')) or today
         agent_id   = request.query_params.get('agent_id')
