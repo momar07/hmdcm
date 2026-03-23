@@ -91,8 +91,11 @@ class CallEventConsumer(AsyncWebsocketConsumer):
         }))
 
     async def agent_status_update(self, event):
+        """Forward agent status update — used by both supervisors and the agent themselves."""
         await self.send(text_data=json.dumps({
-            'type':     'agent_status',
-            'agent_id': event.get('agent_id'),
-            'status':   event.get('status'),
+            'type':       'agent_status_update',
+            'agent_id':   event.get('agent_id'),
+            'agent_name': event.get('agent_name'),
+            'status':     event.get('status'),
+            'extension':  event.get('extension'),
         }))

@@ -80,9 +80,14 @@ export default function DashboardLayout({
       setIncomingCall(null);          // clear first
       setRingKey(k => k + 1);        // trigger effect below
     }
-    if (event.type === 'agent_status') {
-      const s = (event as any).status;
-      if (s) setStatus(s);
+    if (event.type === 'agent_status' || event.type === 'agent_status_update') {
+      const s = (event as any).status ?? (event as any).payload?.status;
+      // Only update OUR OWN status — ignore other agents' updates
+      const { user: currentUser } = useAuthStore.getState();
+      const evtAgentId = (event as any).agent_id;
+      if (s && (!evtAgentId || evtAgentId === currentUser?.id)) {
+        setStatus(s as any);
+      }
     }
   });
 

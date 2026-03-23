@@ -515,17 +515,20 @@ def _notify(user, new_status: str):
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
         channel_layer = get_channel_layer()
+        payload = {
+            'type':       'agent_status_update',
+            'agent_id':   str(user.id),
+            'agent_name': user.get_full_name(),
+            'status':     new_status,
+            'extension':  getattr(getattr(user, 'extension', None), 'number', None),
+        }
+        # Send to the agent's personal group (so they see their own status update)
         async_to_sync(channel_layer.group_send)(
-            'supervisors',
-            {
-                'type': 'agent_status_update',
-                'payload': {
-                    'agent_id':   str(user.id),
-                    'agent_name': user.get_full_name(),
-                    'status':     new_status,
-                    'extension':  getattr(getattr(user, 'extension', None), 'number', None),
-                }
-            }
+            f'agent_{user.id}', payload
+        )
+        # Also send to supervisors group
+        async_to_sync(channel_layer.group_send)(
+            'supervisors', payload
         )
     except Exception as e:
         log.error(f'[AgentState] WebSocket notify error: {e}')
