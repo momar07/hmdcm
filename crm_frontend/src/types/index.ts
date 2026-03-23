@@ -291,9 +291,11 @@ export interface CallEndedEvent {
 }
 
 export interface AgentStatusEvent {
-  type:     'agent_status';
-  agent_id: string;
-  status:   AgentStatus;
+  type:       'agent_status' | 'agent_status_update';
+  agent_id:   string;
+  agent_name?: string;
+  status:     AgentStatus;
+  extension?:  string | null;
 }
 
 export interface FollowupReminderEvent {
@@ -308,7 +310,8 @@ export type WSEvent =
   | IncomingCallEvent
   | CallEndedEvent
   | AgentStatusEvent
-  | FollowupReminderEvent;
+  | FollowupReminderEvent
+  | { type: string; [key: string]: unknown };  // catch-all for future events
 
 // ── Pagination ────────────────────────────────────────────────────────────
 export interface PaginatedResponse<T> {
