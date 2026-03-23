@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef }                        from 'react';
+import { useState, useRef, useEffect }                        from 'react';
 import { useQuery, useMutation, useQueryClient }   from '@tanstack/react-query';
 import {
   CheckCircle, XCircle, Clock, Calendar,
@@ -383,16 +383,25 @@ export default function FollowupsPage() {
   const callStatus    = useSipStore(s => s.callStatus);
   const prevStatusRef = useRef<string>('idle');
 
-  const lastEndCauseGlobal = useSipStore(s => s.lastEndCause);
+  // Capture end cause in a ref via the raw CustomEvent — more reliable than store timing
+  const endCauseRef = useRef<string>('ended');
+  useEffect(() => {
+    const handler = (e: Event) => {
+      endCauseRef.current = (e as CustomEvent<string>).detail ?? 'ended';
+    };
+    window.addEventListener('sip:endcause', handler);
+    return () => window.removeEventListener('sip:endcause', handler);
+  }, []);
 
   if (prevStatusRef.current !== 'idle' && callStatus === 'idle') {
     const f      = callingFollowupRef.current;
     const callId = activeCallIdRef.current;
-    const cause  = lastEndCauseGlobal ?? 'ended';
+    const cause  = endCauseRef.current ?? 'ended';
     if (callId) {
       callsApi.endWebrtcCall(callId, { end_cause: cause }).catch(() => {});
       activeCallIdRef.current = null;
     }
+    endCauseRef.current = 'ended'; // reset for next call
     if (f) {
       setTimeout(() => {
         setPostCall(f);
