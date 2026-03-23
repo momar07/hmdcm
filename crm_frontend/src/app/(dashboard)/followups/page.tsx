@@ -190,8 +190,8 @@ function FollowupCard({
   const handleCall = () => {
     if (!f.customer_phone) return toast.error('No phone number available');
     if (!sipActions)       return toast.error('SoftPhone not connected');
-    (sipActions as any).call?.(f.customer_phone)
-      ?? toast.error('Call action not available');
+    if (!sipActions.call)  return toast.error('Call action not available');
+    sipActions.call(f.customer_phone);
   };
 
   return (

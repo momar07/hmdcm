@@ -6,6 +6,7 @@ interface SipActions {
   hangup:     () => void;
   toggleMute: () => void;
   toggleHold: () => void;
+  call:       (target: string) => void;
 }
 
 interface SipStore {

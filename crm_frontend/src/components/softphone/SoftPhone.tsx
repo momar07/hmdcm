@@ -68,7 +68,7 @@ export function SoftPhone() {
 
   // Register actions in store so IncomingCallPopup can call them
   useEffect(() => {
-    registerActions({ answer, hangup, toggleMute, toggleHold });
+    registerActions({ answer, hangup, toggleMute, toggleHold, call });
   }, [answer, hangup, toggleMute, toggleHold]);
 
   // Status colours
