@@ -79,7 +79,6 @@ class UserViewSet(viewsets.ModelViewSet):
 
         # SIP secret (optional)
         secret = request.data.get('secret', '').strip()
-        if secret: defaults['secret'] = secret
 
         # VICIdial fields (optional)
         vicidial_user     = request.data.get('vicidial_user',     '').strip()
@@ -92,6 +91,7 @@ class UserViewSet(viewsets.ModelViewSet):
             'peer_name': peer_name or f'SIP/{number}',
             'is_active': True,
         }
+        if secret:            defaults['secret']            = secret
         if vicidial_user:     defaults['vicidial_user']     = vicidial_user
         if vicidial_pass:     defaults['vicidial_pass']     = vicidial_pass
         if vicidial_campaign: defaults['vicidial_campaign'] = vicidial_campaign
