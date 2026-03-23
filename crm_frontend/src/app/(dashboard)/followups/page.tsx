@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import toast                  from 'react-hot-toast';
 import { followupsApi }       from '@/lib/api/followups';
+import { callsApi }           from '@/lib/api/calls';
 import { PageHeader }         from '@/components/ui/PageHeader';
 import { Button }             from '@/components/ui/Button';
 import { Select }             from '@/components/ui/Select';
@@ -221,7 +222,7 @@ function FollowupCard({
   completing:     string | null;
   cancelling:     string | null;
   callingId:      string | null;
-  onCallStart:    (id: string) => void;
+  onCallStart:    (id: string, callId?: string | null) => void;
   onPostCallOpen: (f: Followup) => void;
 }) {
   const { label, overdue } = formatDate(f.scheduled_at);
@@ -248,11 +249,22 @@ function FollowupCard({
     return `${m}:${sec}`;
   };
 
-  const handleCall = () => {
+  const handleCall = async () => {
     if (!f.customer_phone) return toast.error('No phone number available');
     if (!sipActions)       return toast.error('SoftPhone not connected');
     if (!sipActions.call)  return toast.error('Call action not available');
-    onCallStart(f.id);
+    let callId: string | null = null;
+    try {
+      const res = await callsApi.startWebrtcCall({
+        customer_phone: f.customer_phone,
+        customer_id:    f.customer_id   ?? undefined,
+        lead_id:        f.lead          ? String(f.lead) : undefined,
+      });
+      callId = res.data.call_id;
+    } catch {
+      // non-blocking — still dial even if DB write fails
+    }
+    onCallStart(f.id, callId);
     sipActions.call(f.customer_phone);
   };
 
@@ -365,13 +377,22 @@ export default function FollowupsPage() {
   const [completing,   setCompleting]   = useState<string | null>(null);
   const [cancelling,   setCancelling]   = useState<string | null>(null);
   const [callingId,    setCallingId]    = useState<string | null>(null);
-  const callingFollowupRef              = useRef<Followup | null>(null);
+  const callingFollowupRef  = useRef<Followup | null>(null);
+  const activeCallIdRef     = useRef<string | null>(null);
 
   const callStatus    = useSipStore(s => s.callStatus);
   const prevStatusRef = useRef<string>('idle');
 
+  const lastEndCauseGlobal = useSipStore(s => s.lastEndCause);
+
   if (prevStatusRef.current !== 'idle' && callStatus === 'idle') {
-    const f = callingFollowupRef.current;
+    const f      = callingFollowupRef.current;
+    const callId = activeCallIdRef.current;
+    const cause  = lastEndCauseGlobal ?? 'ended';
+    if (callId) {
+      callsApi.endWebrtcCall(callId, { end_cause: cause }).catch(() => {});
+      activeCallIdRef.current = null;
+    }
     if (f) {
       setTimeout(() => {
         setPostCall(f);
@@ -382,8 +403,9 @@ export default function FollowupsPage() {
   }
   prevStatusRef.current = callStatus;
 
-  const handleCallStart = (id: string) => {
+  const handleCallStart = (id: string, callId?: string | null) => {
     setCallingId(id);
+    activeCallIdRef.current = callId ?? null;
     const f = results.find(x => x.id === id) ?? null;
     callingFollowupRef.current = f;
   };

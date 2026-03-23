@@ -48,4 +48,17 @@ export const callsApi = {
 
   linkCall: (uniqueid: string, customer_id: string) =>
     api.post('/calls/link-call/', { uniqueid, customer_id }),
+
+  // WebRTC call tracking
+  startWebrtcCall: (data: {
+    customer_phone: string;
+    customer_id?:   string | null;
+    lead_id?:       string | null;
+    followup_id?:   string | null;
+  }) => api.post<{ call_id: string; caller: string; callee: string; customer_id: string | null }>('/calls/start-webrtc-call/', data),
+
+  endWebrtcCall: (call_id: string, data: {
+    end_cause: string;
+    duration?: number;
+  }) => api.patch(`/calls/end-webrtc-call/${call_id}/`, data),
 };

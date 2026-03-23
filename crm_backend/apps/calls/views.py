@@ -286,3 +286,135 @@ class LinkCallToCustomerView(APIView):
             'customer_id': str(customer_id),
             'uniqueid': uniqueid,
         }, status=status.HTTP_200_OK)
+
+
+# ── WebRTC Call Tracking ──────────────────────────────────────────────────
+
+class StartWebrtcCallView(APIView):
+    """
+    POST /api/calls/start-webrtc-call/
+    Called by the frontend the moment the agent fires a WebRTC/JsSIP outbound call.
+    Creates the Call record immediately so it appears in the timeline and calls page.
+    body: { customer_phone, customer_id?, lead_id?, followup_id? }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from django.utils import timezone as tz
+        from apps.customers.models import Customer, CustomerPhone
+
+        phone       = (request.data.get('customer_phone') or '').strip()
+        customer_id = request.data.get('customer_id')
+        lead_id     = request.data.get('lead_id')
+
+        if not phone:
+            return Response({'error': 'customer_phone is required'}, status=400)
+
+        # Resolve agent extension
+        caller = ''
+        try:
+            from apps.users.models import Extension
+            ext = Extension.objects.get(user=request.user, is_active=True)
+            caller = ext.number
+        except Exception:
+            caller = str(request.user.id)[:8]
+
+        # Resolve customer
+        customer = None
+        if customer_id:
+            try:
+                customer = Customer.objects.get(pk=customer_id)
+            except Customer.DoesNotExist:
+                pass
+
+        if not customer:
+            digits = ''.join(c for c in phone if c.isdigit())
+            suffix = digits[-9:] if len(digits) >= 9 else digits
+            phone_obj = CustomerPhone.objects.select_related('customer').filter(
+                normalized__endswith=suffix
+            ).first()
+            if phone_obj:
+                customer = phone_obj.customer
+
+        # Resolve lead
+        lead = None
+        if lead_id:
+            try:
+                from apps.leads.models import Lead
+                lead = Lead.objects.get(pk=lead_id)
+            except Exception:
+                pass
+
+        from .models import Call
+        import uuid as _uuid
+        call = Call.objects.create(
+            uniqueid   = f'webrtc-{_uuid.uuid4().hex[:12]}',
+            caller     = caller,
+            callee     = phone,
+            direction  = 'outbound',
+            status     = 'ringing',
+            customer   = customer,
+            agent      = request.user,
+            lead       = lead,
+            started_at = tz.now(),
+        )
+
+        return Response({
+            'call_id':     str(call.id),
+            'caller':      caller,
+            'callee':      phone,
+            'customer_id': str(customer.id) if customer else None,
+            'message':     'Call record created.',
+        }, status=201)
+
+
+class EndWebrtcCallView(APIView):
+    """
+    PATCH /api/calls/{call_id}/end-webrtc-call/
+    Called by the frontend when the WebRTC call ends (idle).
+    Updates status and duration.
+    body: { end_cause: 'ended'|'busy'|'no_answer'|'failed'|'cancel', duration? }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, call_id):
+        from django.utils import timezone as tz
+        from .models import Call
+
+        try:
+            call = Call.objects.get(pk=call_id, agent=request.user)
+        except Call.DoesNotExist:
+            return Response({'error': 'Call not found'}, status=404)
+
+        end_cause = (request.data.get('end_cause') or 'ended').lower()
+        duration  = int(request.data.get('duration') or 0)
+
+        # Map JsSIP end cause → Call status
+        if 'busy' in end_cause:
+            final_status = 'busy'
+        elif 'no_answer' in end_cause or 'no answer' in end_cause or 'unavailable' in end_cause:
+            final_status = 'no_answer'
+        elif 'cancel' in end_cause or 'reject' in end_cause or 'forbidden' in end_cause:
+            final_status = 'no_answer'
+        elif 'failed' in end_cause or 'error' in end_cause:
+            final_status = 'failed'
+        else:
+            # 'ended' or 'Normal Clearing' = the call was actually answered
+            final_status = 'answered'
+
+        # Calculate duration from started_at if not provided
+        if duration == 0 and call.started_at and final_status == 'answered':
+            delta    = (tz.now() - call.started_at).total_seconds()
+            duration = max(0, int(delta))
+
+        call.status   = final_status
+        call.ended_at = tz.now()
+        call.duration = duration
+        call.save(update_fields=['status', 'ended_at', 'duration'])
+
+        return Response({
+            'call_id': str(call.id),
+            'status':  final_status,
+            'duration': duration,
+            'message': 'Call record updated.',
+        })
