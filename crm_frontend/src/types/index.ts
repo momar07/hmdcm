@@ -8,7 +8,7 @@ export interface AuthUser {
   last_name:  string;
   full_name:  string;
   role:       Role;
-  extension:  string | null;
+  extension:  Extension | null;
   team_id:    string | null;
 }
 
