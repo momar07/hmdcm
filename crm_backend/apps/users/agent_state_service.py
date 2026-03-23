@@ -1,0 +1,318 @@
+"""
+Agent State Service — Issabel/Asterisk AMI (PJSIP)
+Manages agent availability across all configured queues.
+
+Queues are read from the Queue model (managed via Settings page).
+AMI connection reuses settings from SystemSetting (ami_host, ami_port, etc.)
+"""
+import json
+import logging
+import socket
+import time
+
+from apps.users.services import update_user_status
+
+log = logging.getLogger(__name__)
+
+
+# ── AMI low-level client ─────────────────────────────────────────────────────
+
+class AmiClient:
+    """Minimal synchronous AMI client for queue management commands."""
+
+    def __init__(self, host: str, port: int, username: str, secret: str, timeout: int = 5):
+        self.host     = host
+        self.port     = port
+        self.username = username
+        self.secret   = secret
+        self.timeout  = timeout
+        self._sock    = None
+
+    def connect(self):
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.settimeout(self.timeout)
+        self._sock.connect((self.host, self.port))
+        banner = self._recv()
+        log.debug(f'[AMI] connected — {banner.strip()}')
+
+    def login(self):
+        self._send(
+            f'Action: Login\r\n'
+            f'Username: {self.username}\r\n'
+            f'Secret: {self.secret}\r\n'
+            f'\r\n'
+        )
+        resp = self._recv()
+        if 'Success' not in resp:
+            raise ConnectionError(f'AMI login failed: {resp}')
+        log.debug('[AMI] logged in')
+
+    def send_action(self, action: str, fields: dict) -> str:
+        """Send an AMI action and return the raw response."""
+        msg = f'Action: {action}\r\n'
+        for k, v in fields.items():
+            msg += f'{k}: {v}\r\n'
+        msg += '\r\n'
+        self._send(msg)
+        return self._recv()
+
+    def logoff(self):
+        try:
+            self._send('Action: Logoff\r\n\r\n')
+        except Exception:
+            pass
+        finally:
+            try:
+                self._sock.close()
+            except Exception:
+                pass
+
+    def _send(self, msg: str):
+        self._sock.sendall(msg.encode())
+
+    def _recv(self) -> str:
+        chunks = []
+        self._sock.settimeout(self.timeout)
+        try:
+            while True:
+                chunk = self._sock.recv(4096)
+                if not chunk:
+                    break
+                chunks.append(chunk.decode(errors='replace'))
+                if b'\r\n\r\n' in chunk or b'\n\n' in chunk:
+                    break
+        except socket.timeout:
+            pass
+        return ''.join(chunks)
+
+
+# ── Config helpers ────────────────────────────────────────────────────────────
+
+def _get_ami_client() -> AmiClient:
+    """Build AmiClient from SystemSetting rows."""
+    from apps.settings_core.models import SystemSetting
+
+    def _s(key, default):
+        try:
+            return SystemSetting.objects.get(key=key).value
+        except SystemSetting.DoesNotExist:
+            return default
+
+    return AmiClient(
+        host     = _s('ami_host',     '127.0.0.1'),
+        port     = int(_s('ami_port', '5038')),
+        username = _s('ami_username', 'admin'),
+        secret   = _s('ami_secret',   'admin'),
+    )
+
+
+def _get_queues() -> list[str]:
+    """Return list of queue names from the Queue model."""
+    from apps.users.models import Queue
+    return list(Queue.objects.filter(is_active=True).values_list('name', flat=True))
+
+
+def _get_interface(user) -> str | None:
+    """Return PJSIP/peer_name for the user's extension, or None."""
+    ext = getattr(user, 'extension', None)
+    if not ext or not ext.is_active:
+        return None
+    peer = ext.peer_name.strip() if ext.peer_name else ext.number
+    return f'PJSIP/{peer}'
+
+
+def _run_ami(actions: list[tuple[str, dict]]) -> list[str]:
+    """
+    Connect to AMI, run a list of (action_name, fields) tuples,
+    disconnect, and return responses.
+    """
+    client = _get_ami_client()
+    responses = []
+    try:
+        client.connect()
+        client.login()
+        for action, fields in actions:
+            resp = client.send_action(action, fields)
+            log.info(f'[AMI] {action} {fields} → {resp.strip()[:120]}')
+            responses.append(resp)
+            time.sleep(0.1)   # small gap between commands
+    except Exception as e:
+        log.error(f'[AMI] Error: {e}')
+        responses.append(str(e))
+    finally:
+        client.logoff()
+    return responses
+
+
+# ── Public service functions ─────────────────────────────────────────────────
+
+def agent_go_available(user) -> dict:
+    """
+    Add agent to all active queues and unpause them.
+    Returns { success, status, queues, message }
+    """
+    interface = _get_interface(user)
+    queues    = _get_queues()
+
+    if not interface:
+        log.warning(f'[AgentState] No active extension for {user.email}')
+        update_user_status(str(user.id), 'available')
+        _notify(user, 'available')
+        return {'success': True, 'status': 'available', 'queues': [], 'message': 'No extension — CRM status updated only'}
+
+    if not queues:
+        log.warning('[AgentState] No active queues configured')
+        update_user_status(str(user.id), 'available')
+        _notify(user, 'available')
+        return {'success': True, 'status': 'available', 'queues': [], 'message': 'No queues configured — CRM status updated only'}
+
+    ext        = user.extension
+    member     = user.get_full_name() or interface
+    penalty    = '0'
+
+    actions = []
+    for q in queues:
+        actions.append(('QueueAdd', {
+            'Queue':      q,
+            'Interface':  interface,
+            'MemberName': member,
+            'Penalty':    penalty,
+            'Paused':     'false',
+        }))
+        # Unpause in case agent was previously paused
+        actions.append(('QueuePause', {
+            'Queue':     q,
+            'Interface': interface,
+            'Paused':    'false',
+        }))
+
+    responses = _run_ami(actions)
+    update_user_status(str(user.id), 'available')
+    _notify(user, 'available')
+
+    log.info(f'[AgentState] {user.email} → available across queues: {queues}')
+    return {'success': True, 'status': 'available', 'queues': queues, 'message': f'Added to queues: {", ".join(queues)}'}
+
+
+def agent_go_break(user, reason: str = 'Break') -> dict:
+    """
+    Pause agent in all active queues.
+    Returns { success, status, queues, message }
+    """
+    interface = _get_interface(user)
+    queues    = _get_queues()
+
+    if not interface or not queues:
+        update_user_status(str(user.id), 'away')
+        _notify(user, 'away')
+        return {'success': True, 'status': 'away', 'queues': [], 'message': 'CRM status updated only'}
+
+    actions = [
+        ('QueuePause', {
+            'Queue':     q,
+            'Interface': interface,
+            'Paused':    'true',
+            'Reason':    reason,
+        })
+        for q in queues
+    ]
+
+    _run_ami(actions)
+    update_user_status(str(user.id), 'away')
+    _notify(user, 'away')
+
+    log.info(f'[AgentState] {user.email} → break ({reason}) across queues: {queues}')
+    return {'success': True, 'status': 'away', 'queues': queues, 'message': f'Paused in queues: {", ".join(queues)}'}
+
+
+def agent_go_offline(user) -> dict:
+    """
+    Remove agent from all active queues.
+    Returns { success, status, queues, message }
+    """
+    interface = _get_interface(user)
+    queues    = _get_queues()
+
+    if not interface or not queues:
+        update_user_status(str(user.id), 'offline')
+        _notify(user, 'offline')
+        return {'success': True, 'status': 'offline', 'queues': [], 'message': 'CRM status updated only'}
+
+    actions = [
+        ('QueueRemove', {
+            'Queue':     q,
+            'Interface': interface,
+        })
+        for q in queues
+    ]
+
+    _run_ami(actions)
+    update_user_status(str(user.id), 'offline')
+    _notify(user, 'offline')
+
+    log.info(f'[AgentState] {user.email} → offline, removed from queues: {queues}')
+    return {'success': True, 'status': 'offline', 'queues': queues, 'message': f'Removed from queues: {", ".join(queues)}'}
+
+
+def agent_sync_status(user) -> dict:
+    """
+    Query Issabel QueueStatus for this agent and sync CRM DB.
+    Returns { success, status, message }
+    """
+    interface = _get_interface(user)
+    queues    = _get_queues()
+
+    if not interface:
+        return {'success': False, 'status': user.status, 'message': 'No extension assigned'}
+
+    # Use first queue for status check
+    queue = queues[0] if queues else None
+    fields = {'Interface': interface}
+    if queue:
+        fields['Queue'] = queue
+
+    responses = _run_ami([('QueueStatus', fields)])
+    raw = ' '.join(responses)
+
+    # Parse Paused and InCall flags from AMI response
+    paused  = 'Paused: 1' in raw
+    in_call = 'Status: 1' in raw or 'Status: 2' in raw   # 1=not_in_use, 2=in_use
+
+    if 'in_use' in raw.lower() or 'Status: 2' in raw:
+        mapped = 'on_call'
+    elif paused:
+        mapped = 'away'
+    elif 'not_in_use' in raw.lower() or 'Status: 1' in raw:
+        mapped = 'available'
+    else:
+        mapped = 'offline'
+
+    update_user_status(str(user.id), mapped)
+    _notify(user, mapped)
+
+    log.info(f'[AgentState] sync {user.email} → {mapped}')
+    return {'success': True, 'status': mapped, 'message': f'Synced from Issabel: {mapped}'}
+
+
+# ── Internal helpers ─────────────────────────────────────────────────────────
+
+def _notify(user, new_status: str):
+    """Push status update to supervisors via WebSocket."""
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            'supervisors',
+            {
+                'type': 'agent_status_update',
+                'payload': {
+                    'agent_id':   str(user.id),
+                    'agent_name': user.get_full_name(),
+                    'status':     new_status,
+                    'extension':  getattr(getattr(user, 'extension', None), 'number', None),
+                }
+            }
+        )
+    except Exception as e:
+        log.error(f'[AgentState] WebSocket notify error: {e}')

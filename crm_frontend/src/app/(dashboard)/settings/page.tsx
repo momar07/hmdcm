@@ -35,6 +35,8 @@ const DEFAULTS: Record<string, string> = {
   ami_username:          'admin',
   ami_secret:            'admin',
   recording_base_url:    'http://192.168.2.222/recordings',
+  asterisk_queues:       '',
+  asterisk_queue_penalty:'0',
   // security
   session_timeout_hours: '8',
   max_login_attempts:    '5',
@@ -214,7 +216,7 @@ function GeneralSettings({ map }: { map: Record<string, SystemSetting> }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Telephony tab
 // ─────────────────────────────────────────────────────────────────────────────
-const TELEPHONY_KEYS = ['ami_host', 'ami_port', 'ami_username', 'ami_secret', 'recording_base_url'];
+const TELEPHONY_KEYS = ['ami_host', 'ami_port', 'ami_username', 'ami_secret', 'recording_base_url', 'asterisk_queues', 'asterisk_queue_penalty'];
 
 function TelephonySettings({ map }: { map: Record<string, SystemSetting> }) {
   const { draft, setDraft, saving, save } = useSaveSettings(TELEPHONY_KEYS, map, 'telephony');
@@ -272,6 +274,36 @@ function TelephonySettings({ map }: { map: Record<string, SystemSetting> }) {
         value={draft.recording_base_url ?? ''}
         onChange={(e) => setDraft((d) => ({ ...d, recording_base_url: e.target.value }))}
       />
+
+      <div className="border-t border-gray-100 pt-4 mt-2">
+        <h3 className="text-sm font-semibold text-gray-700 mb-3">Queue Management</h3>
+        <Input
+          label="Asterisk Queues"
+          placeholder="600, 601, 700"
+          value={
+            (() => {
+              try { return JSON.parse(draft.asterisk_queues || '[]').join(', '); }
+              catch { return draft.asterisk_queues ?? ''; }
+            })()
+          }
+          onChange={(e) => {
+            const raw = e.target.value;
+            const arr = raw.split(',').map((s) => s.trim()).filter(Boolean);
+            setDraft((d) => ({ ...d, asterisk_queues: JSON.stringify(arr) }));
+          }}
+          helperText="Comma-separated queue numbers. Agents will be added/removed from all of these queues."
+        />
+        <div className="mt-3">
+          <Input
+            label="Queue Penalty"
+            type="number"
+            placeholder="0"
+            value={draft.asterisk_queue_penalty ?? '0'}
+            onChange={(e) => setDraft((d) => ({ ...d, asterisk_queue_penalty: e.target.value }))}
+            helperText="0 = highest priority. Higher number = lower priority."
+          />
+        </div>
+      </div>
 
       <div className="pt-2 flex gap-2">
         <Button

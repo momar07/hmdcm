@@ -135,6 +135,7 @@ class AgentQueueStatusView(APIView):
     def post(self, request):
         user           = request.user
         new_status     = request.data.get('status', '').strip()
+        reason         = request.data.get('reason', 'Break')
         VALID_STATUSES = ['available', 'away', 'offline', 'on_call', 'busy']
 
         if new_status not in VALID_STATUSES:
@@ -143,14 +144,25 @@ class AgentQueueStatusView(APIView):
                 status=400,
             )
 
+        from apps.users.agent_state_service import (
+            agent_go_available,
+            agent_go_break,
+            agent_go_offline,
+        )
         from apps.users.services import update_user_status
-        update_user_status(str(user.id), new_status)
 
-        return Response({
-            'success': True,
-            'status':  new_status,
-            'message': f'Status updated to {new_status}',
-        })
+        if new_status == 'available':
+            result = agent_go_available(user)
+        elif new_status == 'away':
+            result = agent_go_break(user, reason=reason)
+        elif new_status == 'offline':
+            result = agent_go_offline(user)
+        else:
+            # on_call / busy — set by AMI events, not manually
+            update_user_status(str(user.id), new_status)
+            result = {'success': True, 'status': new_status, 'message': f'Status set to {new_status}'}
+
+        return Response(result)
 
 class LiveAgentsView(APIView):
     """
