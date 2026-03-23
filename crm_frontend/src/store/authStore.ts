@@ -40,9 +40,16 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: async () => {
+        // Always clear local session regardless of API response
         try {
           const refresh = session.getRefreshToken();
-          if (refresh) await authApi.logout(refresh);
+          if (refresh) {
+            try {
+              await authApi.logout(refresh);
+            } catch {
+              // Token already blacklisted or invalid — ignore and proceed
+            }
+          }
         } finally {
           session.clear();
           set({ user: null, isAuthenticated: false });
