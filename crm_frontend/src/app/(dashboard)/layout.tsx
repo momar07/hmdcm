@@ -76,11 +76,13 @@ export default function DashboardLayout({
   // WS event arrives → set directly without null-clear race condition
   useWebSocket((event: WSEvent) => {
     if (event.type === 'incoming_call') {
-      // Store event ref for dedup
-      const prev = lastEventRef.current;
-      lastEventRef.current = event;
+      // Only show popup for agents with SIP extension — not admin/supervisor
+      const { user: currentUser } = useAuthStore.getState();
+      const hasExtension = !!(currentUser as any)?.extension;
+      const isAgent      = currentUser?.role === 'agent';
+      if (!isAgent || !hasExtension) return;   // ← skip for admin/supervisor
 
-      // Always set — let popup handle duplicates via uniqueid
+      lastEventRef.current = event;
       setIncomingCall(event as any);
       setRingKey(k => k + 1);
     }
