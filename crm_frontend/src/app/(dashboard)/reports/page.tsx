@@ -18,8 +18,9 @@ import { Select }      from '@/components/ui/Select';
 import clsx            from 'clsx';
 import {
   PhoneCall, PhoneIncoming, PhoneOff, Clock,
-  LogIn, LogOut, Coffee, Users,
+  LogIn, LogOut, Coffee, Users, Download,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -40,11 +41,64 @@ function today(): string {
 }
 
 // ── Attendance tab ────────────────────────────────────────────────────────────
-function AttendanceReport() {
-  const [dateFrom, setDateFrom] = useState(today());
-  const [dateTo,   setDateTo]   = useState(today());
-  const [expanded, setExpanded] = useState<string | null>(null);
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
+function exportToExcel(summary: any[], sessions: any[], dateFrom: string, dateTo: string) {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Summary
+  const summaryRows = summary.map((s: any) => ({
+    'Agent':          s.agent_name,
+    'Email':          s.agent_email,
+    'Sessions':       s.total_sessions,
+    'Login Time':     fmtSecs(s.total_login_seconds),
+    'Active Time':    fmtSecs(s.total_active_seconds),
+    'Break Time':     fmtSecs(s.total_break_seconds),
+    'Total Breaks':   s.total_breaks,
+  }));
+  const ws1 = XLSX.utils.json_to_sheet(summaryRows);
+  ws1['!cols'] = [{ wch: 25 }, { wch: 30 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Summary');
+
+  // Sheet 2: Sessions
+  const sessionRows: any[] = [];
+  sessions.forEach((s: any) => {
+    sessionRows.push({
+      'Agent':          s.agent_name,
+      'Email':          s.agent_email,
+      'Login':          s.login_at ? new Date(s.login_at).toLocaleString() : '—',
+      'Logout':         s.logout_at ? new Date(s.logout_at).toLocaleString() : 'Active',
+      'Duration':       fmtSecs(s.session_duration_seconds),
+      'Break Count':    s.break_count,
+      'Break Time':     fmtSecs(s.total_break_seconds),
+      'Type':           'SESSION',
+    });
+    s.breaks?.forEach((b: any) => {
+      sessionRows.push({
+        'Agent':        '',
+        'Email':        '',
+        'Login':        b.break_start ? new Date(b.break_start).toLocaleString() : '—',
+        'Logout':       b.break_end   ? new Date(b.break_end).toLocaleString()   : 'Ongoing',
+        'Duration':     fmtSecs(b.duration_seconds),
+        'Break Count':  '',
+        'Break Time':   '',
+        'Type':         `  ↳ ${b.reason}`,
+      });
+    });
+  });
+  const ws2 = XLSX.utils.json_to_sheet(sessionRows);
+  ws2['!cols'] = [{ wch: 22 }, { wch: 28 }, { wch: 20 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Sessions');
+
+  XLSX.writeFile(wb, `attendance_${dateFrom}_${dateTo}.xlsx`);
+}
+
+function AttendanceReport() {
+  const [dateFrom,  setDateFrom]  = useState(today());
+  const [dateTo,    setDateTo]    = useState(today());
+  const [expanded,  setExpanded]  = useState<string | null>(null);
+  const [pageSize,  setPageSize]  = useState(25);
+  const [page,      setPage]      = useState(1);
   const [searchParams, setSearchParams] = useState<{from: string; to: string} | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -53,11 +107,22 @@ function AttendanceReport() {
                       date_from: searchParams!.from,
                       date_to:   searchParams!.to,
                     }).then((r) => r.data),
-    enabled:  !!searchParams,   // runs when user clicks Search
+    enabled:  !!searchParams,
   });
 
   const summary  = data?.summary  ?? [];
   const sessions = data?.sessions ?? [];
+
+  // Pagination
+  const totalPages   = Math.ceil(sessions.length / pageSize);
+  const pagedSessions = sessions.slice((page - 1) * pageSize, page * pageSize);
+
+  // Reset page when search changes
+  const handleSearch = () => {
+    setPage(1);
+    setExpanded(null);
+    setSearchParams({ from: dateFrom, to: dateTo });
+  };
 
   return (
     <div className="space-y-5">
@@ -77,12 +142,19 @@ function AttendanceReport() {
           onChange={(e) => setDateTo(e.target.value)}
           className="w-44"
         />
-        <div className="pb-0.5">
-          <Button variant="primary"
-            onClick={() => setSearchParams({ from: dateFrom, to: dateTo })}
-            loading={isLoading}>
+        <div className="pb-0.5 flex gap-2">
+          <Button variant="primary" onClick={handleSearch} loading={isLoading}>
             Search
           </Button>
+          {data && (
+            <Button
+              variant="secondary"
+              onClick={() => exportToExcel(summary, sessions, dateFrom, dateTo)}
+            >
+              <Download size={14} className="mr-1.5" />
+              Export Excel
+            </Button>
+          )}
         </div>
       </div>
 
@@ -125,35 +197,18 @@ function AttendanceReport() {
             </div>
             <DataTable
               columns={[
-                {
-                  key: 'agent_name', header: 'Agent',
-                  render: (a: any) => <p className="font-medium text-gray-900">{a.agent_name}</p>,
-                },
-                {
-                  key: 'total_sessions', header: 'Sessions',
-                  render: (a: any) => <span className="font-mono text-sm">{a.total_sessions}</span>,
-                  width: '90px',
-                },
-                {
-                  key: 'total_login_seconds', header: 'Login Time',
-                  render: (a: any) => <span className="font-mono text-sm text-blue-600">{fmtSecs(a.total_login_seconds)}</span>,
-                  width: '110px',
-                },
-                {
-                  key: 'total_active_seconds', header: 'Active Time',
-                  render: (a: any) => <span className="font-mono text-sm text-green-600">{fmtSecs(a.total_active_seconds)}</span>,
-                  width: '110px',
-                },
-                {
-                  key: 'total_break_seconds', header: 'Break Time',
-                  render: (a: any) => <span className="font-mono text-sm text-yellow-600">{fmtSecs(a.total_break_seconds)}</span>,
-                  width: '110px',
-                },
-                {
-                  key: 'total_breaks', header: 'Breaks',
-                  render: (a: any) => <span className="font-mono text-sm">{a.total_breaks}</span>,
-                  width: '80px',
-                },
+                { key: 'agent_name', header: 'Agent',
+                  render: (a: any) => <p className="font-medium text-gray-900">{a.agent_name}</p> },
+                { key: 'total_sessions', header: 'Sessions',
+                  render: (a: any) => <span className="font-mono text-sm">{a.total_sessions}</span>, width: '90px' },
+                { key: 'total_login_seconds', header: 'Login Time',
+                  render: (a: any) => <span className="font-mono text-sm text-blue-600">{fmtSecs(a.total_login_seconds)}</span>, width: '110px' },
+                { key: 'total_active_seconds', header: 'Active Time',
+                  render: (a: any) => <span className="font-mono text-sm text-green-600">{fmtSecs(a.total_active_seconds)}</span>, width: '110px' },
+                { key: 'total_break_seconds', header: 'Break Time',
+                  render: (a: any) => <span className="font-mono text-sm text-yellow-600">{fmtSecs(a.total_break_seconds)}</span>, width: '110px' },
+                { key: 'total_breaks', header: 'Breaks',
+                  render: (a: any) => <span className="font-mono text-sm">{a.total_breaks}</span>, width: '80px' },
               ]}
               data={summary}
               keyField="agent_id"
@@ -162,18 +217,36 @@ function AttendanceReport() {
             />
           </div>
 
-          {/* Session detail — expandable */}
+          {/* Session detail — paginated + expandable */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="text-sm font-semibold text-gray-700">Session Details</h3>
+            {/* Header with page-size selector */}
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-700">
+                Session Details
+                <span className="ml-2 text-xs font-normal text-gray-400">
+                  ({sessions.length} total)
+                </span>
+              </h3>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span>Rows per page:</span>
+                <select
+                  className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                >
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+
             <div className="divide-y divide-gray-100">
-              {sessions.length === 0 && (
+              {pagedSessions.length === 0 && (
                 <p className="text-center text-gray-400 text-sm py-8">No sessions found.</p>
               )}
-              {sessions.map((s: any) => (
+              {pagedSessions.map((s: any) => (
                 <div key={s.session_id}>
-                  {/* Session row */}
                   <button
                     className="w-full flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition-colors text-left"
                     onClick={() => setExpanded(expanded === s.session_id ? null : s.session_id)}
@@ -204,7 +277,6 @@ function AttendanceReport() {
                     </span>
                   </button>
 
-                  {/* Break details */}
                   {expanded === s.session_id && s.breaks.length > 0 && (
                     <div className="bg-yellow-50 border-t border-yellow-100 px-8 py-3">
                       <p className="text-xs font-semibold text-yellow-700 mb-2">Break Log</p>
@@ -229,6 +301,53 @@ function AttendanceReport() {
                 </div>
               ))}
             </div>
+
+            {/* Pagination controls */}
+            {totalPages > 1 && (
+              <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                <span>
+                  Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sessions.length)} of {sessions.length}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => setPage(1)}
+                    className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                  >«</button>
+                  <button
+                    disabled={page === 1}
+                    onClick={() => setPage(p => p - 1)}
+                    className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                  >‹</button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+                    const p = start + i;
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => setPage(p)}
+                        className={clsx(
+                          'px-2.5 py-1 rounded border text-xs',
+                          p === page
+                            ? 'bg-blue-600 border-blue-600 text-white font-semibold'
+                            : 'border-gray-200 hover:bg-gray-50'
+                        )}
+                      >{p}</button>
+                    );
+                  })}
+                  <button
+                    disabled={page === totalPages}
+                    onClick={() => setPage(p => p + 1)}
+                    className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                  >›</button>
+                  <button
+                    disabled={page === totalPages}
+                    onClick={() => setPage(totalPages)}
+                    className="px-2 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                  >»</button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
