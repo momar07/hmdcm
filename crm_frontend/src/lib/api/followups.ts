@@ -38,4 +38,14 @@ export const followupsApi = {
 
   delete: (id: string) =>
     api.delete(`/followups/${id}/`),
+
+  // ── NEW ──────────────────────────────────────────────────────────
+  logAction: (
+    id: string,
+    data: {
+      action_type:   'call' | 'whatsapp';
+      note?:         string;
+      call_uniqueid?: string;
+    },
+  ) => api.post(`/followups/${id}/log-action/`, data),
 };
