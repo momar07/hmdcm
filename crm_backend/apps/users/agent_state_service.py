@@ -333,11 +333,9 @@ def _do_unpause(user_id: str, session_id: str):
     Unpauses agent in all queues and sets status to available.
     """
     try:
-        import django
-        from django.apps import apps as django_apps
-        # Ensure Django is set up (needed for threads)
-        if not django_apps.ready:
-            django.setup()
+        # CRITICAL: close stale DB connections — threads don't inherit Django's connection
+        from django.db import close_old_connections
+        close_old_connections()
 
         from apps.users.models import User, AgentBreak
         from apps.users.services import update_user_status
