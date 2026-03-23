@@ -247,7 +247,7 @@ export default function PipelinePage() {
       <PageHeader
         title="Lead Pipeline"
         subtitle={
-          <span className="flex items-center gap-2.5 text-sm">
+          (<span className="flex items-center gap-2.5 text-sm">
             <span className="font-medium text-gray-700">
               {allLeads.length} lead{allLeads.length !== 1 ? 's' : ''}
             </span>
@@ -262,7 +262,7 @@ export default function PipelinePage() {
             {isFetching && !isLoading && (
               <RefreshCw size={12} className="animate-spin text-gray-400" />
             )}
-          </span>
+          </span>) as any
         }
         actions={
           <div className="flex items-center gap-2">

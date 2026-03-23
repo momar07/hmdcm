@@ -2,19 +2,21 @@
 
 import { useState }   from 'react';
 import { useQuery }   from '@tanstack/react-query';
-import { Settings, Phone, Shield, Bell } from 'lucide-react';
+import { Settings, Phone, Shield, Bell, Layers } from 'lucide-react';
+import PipelineStagesSettings from '@/components/settings/PipelineStagesSettings';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button }     from '@/components/ui/Button';
 import { Input }      from '@/components/ui/Input';
 import clsx           from 'clsx';
 
-type Tab = 'general' | 'telephony' | 'security' | 'notifications';
+type Tab = 'general' | 'telephony' | 'security' | 'notifications' | 'pipeline';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'general',       label: 'General',       icon: <Settings size={16} /> },
   { id: 'telephony',     label: 'Telephony',     icon: <Phone    size={16} /> },
   { id: 'security',      label: 'Security',      icon: <Shield   size={16} /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell     size={16} /> },
+  { id: 'pipeline',      label: 'Pipeline',      icon: <Layers   size={16} /> },
 ];
 
 export default function SettingsPage() {
@@ -51,6 +53,7 @@ export default function SettingsPage() {
           {activeTab === 'telephony'     && <TelephonySettings />}
           {activeTab === 'security'      && <SecuritySettings />}
           {activeTab === 'notifications' && <NotificationSettings />}
+          {activeTab === 'pipeline'      && <PipelineStagesSettings />}
         </div>
       </div>
     </div>

@@ -49,4 +49,23 @@ export const leadsApi = {
 
   moveStage: (leadId: string, stageId: string) =>
     api.patch(`/leads/${leadId}/move-stage/`, { stage_id: stageId }),
+
+  // ── Stage CRUD (for Settings page) ──────────────────────────
+  createStage: (data: { name: string; color: string; order: number; is_won?: boolean; is_closed?: boolean }) =>
+    api.post('/leads/stages/', data),
+
+  updateStage: (id: string, data: Partial<{ name: string; color: string; order: number; is_active: boolean; is_won: boolean; is_closed: boolean }>) =>
+    api.patch(`/leads/stages/${id}/`, data),
+
+  deleteStage: (id: string) =>
+    api.delete(`/leads/stages/${id}/`),
+
+  reorderStages: async (orderedIds: string[]) => {
+    // PATCH each stage with its new order index
+    return Promise.all(
+      orderedIds.map((id, index) =>
+        api.patch(`/leads/stages/${id}/`, { order: index + 1 })
+      )
+    );
+  },
 };

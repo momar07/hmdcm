@@ -18,7 +18,7 @@ class LeadStage(BaseModel):
         ('lost',              'Lost'),
     ]
     name       = models.CharField(max_length=100)
-    slug       = models.CharField(max_length=50, choices=STAGE_CHOICES, unique=True)
+    slug       = models.CharField(max_length=50, unique=True, blank=True)
     order      = models.PositiveIntegerField(default=0)
     color      = models.CharField(max_length=20, default='#6b7280')
     is_closed  = models.BooleanField(default=False)  # Won أو Lost
@@ -28,6 +28,19 @@ class LeadStage(BaseModel):
     class Meta:
         db_table = 'lead_stages'
         ordering = ['order']
+
+    def save(self, *args, **kwargs):
+        if not self.slug and self.name:
+            import re
+            self.slug = re.sub(r'[^a-z0-9]+', '_', self.name.lower()).strip('_')
+            # Ensure uniqueness
+            base = self.slug
+            n = 1
+            from apps.leads.models import LeadStage
+            while LeadStage.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{base}_{n}"
+                n += 1
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
