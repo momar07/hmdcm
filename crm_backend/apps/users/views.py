@@ -7,8 +7,7 @@ from .models import User, Queue
 from .serializers import (UserListSerializer, UserDetailSerializer,
                           UserCreateSerializer, UserUpdateSerializer, QueueSerializer)
 from .selectors import get_all_users, get_active_queues
-from .services import (create_user, update_user_status,
-                       agent_queue_login, agent_queue_pause, agent_queue_logoff)
+from .services import create_user, update_user_status
 from apps.common.permissions import IsAdmin, IsSupervisor
 
 class UserViewSet(viewsets.ModelViewSet):
