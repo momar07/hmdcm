@@ -210,12 +210,13 @@ class LiveAgentsView(APIView):
         for u in agents:
             ext = getattr(u, 'extension', None)
             data.append({
-                'id':        str(u.id),
-                'name':      u.get_full_name(),
-                'email':     u.email,
-                'role':      u.role,
-                'status':    u.status,
-                'extension': ext.number if ext else None,
+                'id':           str(u.id),
+                'name':         u.get_full_name(),
+                'email':        u.email,
+                'role':         u.role,
+                'status':       u.status,
+                'status_since': u.status_since.isoformat() if u.status_since else None,
+                'extension':    ext.number if ext else None,
             })
 
         summary = {

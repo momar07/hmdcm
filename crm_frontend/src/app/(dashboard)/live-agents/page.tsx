@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef }              from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQuery, useQueryClient }       from '@tanstack/react-query';
 import { Phone, Coffee, WifiOff, Wifi }   from 'lucide-react';
 import { agentStatusApi }                 from '@/lib/api/users';
@@ -9,12 +9,13 @@ import { useAuthStore }                   from '@/store';
 
 // ── Types ─────────────────────────────────────────────────────
 interface AgentRow {
-  id:        string;
-  name:      string;
-  email:     string;
-  role:      string;
-  status:    string;
-  extension: string | null;
+  id:           string;
+  name:         string;
+  email:        string;
+  role:         string;
+  status:       string;
+  status_since: string | null;
+  extension:    string | null;
 }
 
 interface LiveData {
@@ -77,8 +78,34 @@ function SummaryCard({ label, value, color }: {
 }
 
 // ── Agent Row ─────────────────────────────────────────────────
+// ── Duration Timer Hook ──────────────────────────────────────────────────
+function useDuration(since: string | null): string {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!since) { setElapsed(0); return; }
+    const calc = () => {
+      const diff = Math.floor((Date.now() - new Date(since).getTime()) / 1000);
+      setElapsed(Math.max(0, diff));
+    };
+    calc();
+    const t = setInterval(calc, 1000);
+    return () => clearInterval(t);
+  }, [since]);
+
+  if (elapsed === 0) return '';
+  const h = Math.floor(elapsed / 3600);
+  const m = Math.floor((elapsed % 3600) / 60);
+  const s = elapsed % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2,'0')}m ${String(s).padStart(2,'0')}s`;
+  if (m > 0) return `${m}m ${String(s).padStart(2,'0')}s`;
+  return `${s}s`;
+}
+
+// ── Agent Row ─────────────────────────────────────────────────────────
 function AgentCard({ agent }: { agent: AgentRow }) {
-  const cfg = STATUS_CFG[agent.status] ?? STATUS_CFG.offline;
+  const cfg      = STATUS_CFG[agent.status] ?? STATUS_CFG.offline;
+  const duration = useDuration(agent.status_since);
   return (
     <div className={`flex items-center gap-4 px-4 py-3 rounded-xl
                      border border-gray-100 shadow-sm transition-all ${cfg.row}`}>
@@ -110,10 +137,15 @@ function AgentCard({ agent }: { agent: AgentRow }) {
         </span>
       )}
 
-      {/* Status */}
-      <div className="flex items-center gap-1.5 shrink-0">
-        {cfg.icon}
-        <span className="text-xs font-medium text-gray-700">{cfg.label}</span>
+      {/* Status + Duration */}
+      <div className="flex flex-col items-end gap-0.5 shrink-0">
+        <div className="flex items-center gap-1.5">
+          {cfg.icon}
+          <span className="text-xs font-medium text-gray-700">{cfg.label}</span>
+        </div>
+        {duration && (
+          <span className="text-xs font-mono text-gray-400">{duration}</span>
+        )}
       </div>
     </div>
   );
@@ -183,11 +215,11 @@ export default function LiveAgentsPage() {
     available: 0, on_call: 0, away: 0, offline: 0, total: 0,
   };
 
-  // group by status priority
-  const ORDER  = ['on_call', 'available', 'busy', 'away', 'offline'];
-  const agents = [...(data?.agents ?? [])].sort(
-    (a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status)
-  );
+  // group by status priority — hide offline agents
+  const ORDER  = ['on_call', 'available', 'busy', 'away'];
+  const agents = [...(data?.agents ?? [])]
+    .filter((a) => a.status !== 'offline')
+    .sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status));
 
   return (
     <div>

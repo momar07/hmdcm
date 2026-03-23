@@ -41,7 +41,8 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     first_name = models.CharField(max_length=100)
     last_name  = models.CharField(max_length=100)
     role       = models.CharField(max_length=20, choices=ROLE_CHOICES, default='agent', db_index=True)
-    status     = models.CharField(max_length=20, choices=STATUS_CHOICES, default='offline')
+    status       = models.CharField(max_length=20, choices=STATUS_CHOICES, default='offline')
+    status_since = models.DateTimeField(null=True, blank=True, help_text='When the current status started')
     avatar     = models.ImageField(upload_to='avatars/', null=True, blank=True)
     phone      = models.CharField(max_length=20, blank=True)
     team       = models.ForeignKey('teams.Team', null=True, blank=True,

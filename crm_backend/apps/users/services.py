@@ -12,7 +12,8 @@ def create_user(email, first_name, last_name, role, password, team=None, phone='
 
 
 def update_user_status(user_id, status: str):
-    User.objects.filter(pk=user_id).update(status=status)
+    from django.utils import timezone
+    User.objects.filter(pk=user_id).update(status=status, status_since=timezone.now())
 
 
 def assign_extension(user_id, number: str, peer_name: str = '', secret: str = ''):
