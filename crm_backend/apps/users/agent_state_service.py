@@ -373,50 +373,39 @@ def agent_on_login(user, request=None) -> dict:
     _run_ami(remove_actions)
     log.info(f'[Login] {user.email} — removed from queues (clean slate)')
 
-    # Step 2: Add to all queues
-    add_actions = []
-    member = user.get_full_name() or interface
-    for q in queues:
-        add_actions.append(('QueueAdd', {
+    # Step 2: Add to all queues already paused — atomic, no race condition window
+    member      = user.get_full_name() or interface
+    add_actions = [
+        ('QueueAdd', {
             'Queue':      q,
             'Interface':  interface,
             'MemberName': member,
             'Penalty':    '0',
-            'Paused':     'false',
-        }))
-    _run_ami(add_actions)
-    log.info(f'[Login] {user.email} — added to queues: {queues}')
-
-    # Step 3: Pause with LOGIN reason
-    pause_actions = [
-        ('QueuePause', {
-            'Queue':     q,
-            'Interface': interface,
-            'Paused':    'true',
-            'Reason':    'LOGIN',
+            'Paused':     'true',   # joined already paused
         })
         for q in queues
     ]
-    _run_ami(pause_actions)
+    _run_ami(add_actions)
+    log.info(f'[Login] {user.email} — added to queues paused: {queues}')
 
-    # Step 4: Create LOGIN break record
+    # Step 3: Create LOGIN break record
     AgentBreak.objects.create(
         session = session,
         agent   = user,
         reason  = 'LOGIN',
     )
 
-    # Step 5: Update CRM status to away (LOGIN break)
+    # Step 4: Update CRM status to away (LOGIN break)
     update_user_status(str(user.id), 'away')
     _notify(user, 'away')
 
-    # Step 6: Fire Celery task — will unpause after 5 seconds
+    # Step 5: Fire Celery task — will unpause after 5 seconds
     from apps.users.tasks import complete_login_sequence
     complete_login_sequence.apply_async(
         args=[str(user.id), str(session.id)],
         countdown=5,
     )
-    log.info(f'[Login] {user.email} — LOGIN break started, will unpause in 5s')
+    log.info(f'[Login] {user.email} — added paused, will unpause in 5s')
 
     return {
         'success':    True,
