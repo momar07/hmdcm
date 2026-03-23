@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet, QueueViewSet, AgentQueueStatusView, LiveAgentsView
+from .views import UserViewSet, QueueViewSet, AgentQueueStatusView, LiveAgentsView, QueuesListView
 
 router = DefaultRouter()
 router.register('queues', QueueViewSet, basename='queue')
