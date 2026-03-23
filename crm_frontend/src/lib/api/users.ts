@@ -18,7 +18,8 @@ export const usersApi = {
     api.post(`/users/${id}/reset-password/`, { new_password: password }),
 
   setExtension: (id: string, number: string, extra?: {
-    secret?:            string;
+    secret?:    string;
+    queue_ids?: string[];
   }) =>
     api.post(`/users/${id}/set-extension/`, { number, ...extra }),
 
