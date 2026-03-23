@@ -14,7 +14,6 @@ import {
   Megaphone,
   BarChart2,
   Users,
-  UsersRound,
   Settings,
   LogOut,
   ChevronLeft,
@@ -87,11 +86,6 @@ const NAV_ITEMS: NavItem[] = [
     href: '/users', label: 'Users',
     icon: <Users size={18} />,
     roles: ['admin'],
-  },
-  {
-    href: '/teams', label: 'Teams',
-    icon: <UsersRound size={18} />,
-    roles: ['admin', 'supervisor'],
   },
   {
     href: '/settings', label: 'Settings',
