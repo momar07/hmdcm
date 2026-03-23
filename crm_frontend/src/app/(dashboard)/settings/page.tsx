@@ -46,8 +46,9 @@ const DEFAULTS: Record<string, string> = {
 };
 
 // ── Helper: build a map  { key -> SystemSetting }  from the API list ─────────
-function toMap(list: SystemSetting[]): Record<string, SystemSetting> {
-  return Object.fromEntries(list.map((s) => [s.key, s]));
+function toMap(list: SystemSetting[] | unknown): Record<string, SystemSetting> {
+  const arr = Array.isArray(list) ? list : [];
+  return Object.fromEntries(arr.map((s) => [s.key, s]));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -10,12 +10,20 @@ export interface SystemSetting {
   updated_at:  string;
 }
 
+interface PaginatedSettings {
+  count:   number;
+  results: SystemSetting[];
+}
+
 export const settingsApi = {
   /** Return all settings (admin only) */
   list: () =>
-    api.get<SystemSetting[]>('/settings/'),
+    api.get<PaginatedSettings>('/settings/?page_size=100').then((r) => ({
+      ...r,
+      data: Array.isArray(r.data) ? r.data : (r.data?.results ?? []),
+    })),
 
-  /** Bulk-upsert: POST each changed key individually via PATCH by id */
+  /** Update an existing setting by id */
   update: (id: string, value: string) =>
     api.patch<SystemSetting>(`/settings/${id}/`, { value }),
 
