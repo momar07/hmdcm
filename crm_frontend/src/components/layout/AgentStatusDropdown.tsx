@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect }      from 'react';
-import { useMutation, useQuery }    from '@tanstack/react-query';
+import { useState, useEffect, useRef } from 'react';
+import { useMutation, useQuery }       from '@tanstack/react-query';
 import toast                        from 'react-hot-toast';
 import { ChevronDown, Loader2 }     from 'lucide-react';
 import { agentStatusApi }           from '@/lib/api/users';
@@ -31,20 +31,29 @@ const ACTIONS: {
 export function AgentStatusDropdown() {
   const { user }              = useAuthStore();
   const { status, setStatus } = useAgentStatusStore();
-  const [open, setOpen]       = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [open, setOpen]         = useState(false);
+  const [mounted, setMounted]   = useState(false);
+  const [fastPoll, setFastPoll] = useState(false);
+  const fastPollTimer           = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Sync status from server on mount
+  // Sync status from server — fast poll (1s) right after login, then slow (10s)
   useQuery({
     queryKey: ['my-status'],
     queryFn:  async () => {
       const { data } = await agentStatusApi.get();
-      if (data?.status) setStatus(data.status as AgentStatus);
+      if (data?.status) {
+        setStatus(data.status as AgentStatus);
+        // stop fast polling once we hit 'available'
+        if (data.status === 'available' && fastPoll) {
+          setFastPoll(false);
+          if (fastPollTimer.current) clearTimeout(fastPollTimer.current);
+        }
+      }
       return data;
     },
-    refetchInterval: 30_000,
+    refetchInterval: fastPoll ? 1_000 : 10_000,
     enabled: mounted,
   });
 
@@ -57,6 +66,18 @@ export function AgentStatusDropdown() {
     },
     onError: () => toast.error('Failed to update status'),
   });
+
+  // Start fast polling on mount (login just happened) — stop after 15s max
+  useEffect(() => {
+    if (!mounted) return;
+    setFastPoll(true);
+    fastPollTimer.current = setTimeout(() => {
+      setFastPoll(false);
+    }, 15_000);
+    return () => {
+      if (fastPollTimer.current) clearTimeout(fastPollTimer.current);
+    };
+  }, [mounted]);
 
   if (!mounted || !user || !['agent', 'supervisor'].includes(user.role)) return null;
 
