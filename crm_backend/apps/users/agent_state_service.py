@@ -200,6 +200,13 @@ def agent_go_available(user) -> dict:
     update_user_status(str(user.id), 'available')
     _notify(user, 'available')
 
+    # Close any open break record
+    from apps.users.models import AgentBreak
+    from django.utils import timezone
+    AgentBreak.objects.filter(
+        agent=user, break_end__isnull=True
+    ).update(break_end=timezone.now())
+
     log.info(f'[AgentState] {user.email} → available across queues: {queues}')
     return {'success': True, 'status': 'available', 'queues': queues, 'message': f'Added to queues: {", ".join(queues)}'}
 
@@ -230,6 +237,17 @@ def agent_go_break(user, reason: str = 'Break') -> dict:
     _run_ami(actions)
     update_user_status(str(user.id), 'away')
     _notify(user, 'away')
+
+    # Create break record linked to active session
+    from apps.users.models import AgentBreak, AgentSession
+    active_session = AgentSession.objects.filter(
+        agent=user, logout_at__isnull=True
+    ).order_by('-login_at').first()
+    AgentBreak.objects.create(
+        session = active_session,
+        agent   = user,
+        reason  = reason,
+    )
 
     log.info(f'[AgentState] {user.email} → break ({reason}) across queues: {queues}')
     return {'success': True, 'status': 'away', 'queues': queues, 'message': f'Paused in queues: {", ".join(queues)}'}
@@ -303,6 +321,154 @@ def agent_sync_status(user) -> dict:
     log.info(f'[AgentState] sync {user.email} → {mapped}')
     return {'success': True, 'status': mapped, 'message': f'Synced from Issabel: {mapped}'}
 
+
+
+
+# ── Login / Logout sequences ─────────────────────────────────────────────────
+
+def agent_on_login(user, request=None) -> dict:
+    """
+    Full login sequence:
+    1. Check if agent is already in queues → remove if so
+    2. QueueAdd to all assigned queues
+    3. QueuePause (LOGIN break, 5s)
+    4. Create AgentSession record
+    5. Create AgentBreak (LOGIN) record
+    6. Fire Celery task to unpause after 5s
+    Returns immediately — unpause happens in background.
+    """
+    from apps.users.models import AgentSession, AgentBreak
+    from apps.users.services import update_user_status
+
+    interface = _get_interface(user)
+    queues    = _get_queues(user)
+
+    # Get login IP if request provided
+    login_ip = None
+    if request:
+        x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
+        login_ip    = x_forwarded.split(',')[0] if x_forwarded else request.META.get('REMOTE_ADDR')
+
+    # Create session record
+    session = AgentSession.objects.create(
+        agent    = user,
+        login_ip = login_ip,
+    )
+    log.info(f'[Login] Session created for {user.email} — id={session.id}')
+
+    if not interface or not queues:
+        # No extension or no queues — CRM-only login
+        update_user_status(str(user.id), 'available')
+        _notify(user, 'available')
+        log.info(f'[Login] {user.email} — no extension/queues, CRM-only available')
+        return {
+            'success':    True,
+            'status':     'available',
+            'session_id': str(session.id),
+            'message':    'Logged in (no queues assigned)',
+        }
+
+    # Step 1: Remove from queues if already member (clean slate)
+    remove_actions = [('QueueRemove', {'Queue': q, 'Interface': interface}) for q in queues]
+    _run_ami(remove_actions)
+    log.info(f'[Login] {user.email} — removed from queues (clean slate)')
+
+    # Step 2: Add to all queues
+    add_actions = []
+    member = user.get_full_name() or interface
+    for q in queues:
+        add_actions.append(('QueueAdd', {
+            'Queue':      q,
+            'Interface':  interface,
+            'MemberName': member,
+            'Penalty':    '0',
+            'Paused':     'false',
+        }))
+    _run_ami(add_actions)
+    log.info(f'[Login] {user.email} — added to queues: {queues}')
+
+    # Step 3: Pause with LOGIN reason
+    pause_actions = [
+        ('QueuePause', {
+            'Queue':     q,
+            'Interface': interface,
+            'Paused':    'true',
+            'Reason':    'LOGIN',
+        })
+        for q in queues
+    ]
+    _run_ami(pause_actions)
+
+    # Step 4: Create LOGIN break record
+    AgentBreak.objects.create(
+        session = session,
+        agent   = user,
+        reason  = 'LOGIN',
+    )
+
+    # Step 5: Update CRM status to away (LOGIN break)
+    update_user_status(str(user.id), 'away')
+    _notify(user, 'away')
+
+    # Step 6: Fire Celery task — will unpause after 5 seconds
+    from apps.users.tasks import complete_login_sequence
+    complete_login_sequence.apply_async(
+        args=[str(user.id), str(session.id)],
+        countdown=5,
+    )
+    log.info(f'[Login] {user.email} — LOGIN break started, will unpause in 5s')
+
+    return {
+        'success':    True,
+        'status':     'away',
+        'session_id': str(session.id),
+        'message':    'Login sequence started — will be available in 5 seconds',
+    }
+
+
+def agent_on_logout(user) -> dict:
+    """
+    Full logout sequence:
+    1. If on break → close break record
+    2. QueueRemove from all queues
+    3. Close active AgentSession
+    4. Set CRM status offline
+    """
+    from apps.users.models import AgentSession, AgentBreak
+    from apps.users.services import update_user_status
+    from django.utils import timezone
+
+    interface = _get_interface(user)
+    queues    = _get_queues(user)
+
+    # Close any open break records
+    now = timezone.now()
+    AgentBreak.objects.filter(
+        agent=user,
+        break_end__isnull=True,
+    ).update(break_end=now)
+
+    # Remove from all queues
+    if interface and queues:
+        remove_actions = [('QueueRemove', {'Queue': q, 'Interface': interface}) for q in queues]
+        _run_ami(remove_actions)
+        log.info(f'[Logout] {user.email} removed from queues: {queues}')
+
+    # Close active session
+    AgentSession.objects.filter(
+        agent=user,
+        logout_at__isnull=True,
+    ).update(logout_at=now)
+
+    update_user_status(str(user.id), 'offline')
+    _notify(user, 'offline')
+    log.info(f'[Logout] {user.email} → offline, session closed')
+
+    return {
+        'success': True,
+        'status':  'offline',
+        'message': 'Logged out and removed from all queues',
+    }
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
 

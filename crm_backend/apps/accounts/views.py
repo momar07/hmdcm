@@ -8,13 +8,42 @@ from .serializers import CustomTokenObtainPairSerializer, ChangePasswordSerializ
 
 class LoginView(TokenObtainPairView):
     permission_classes = [permissions.AllowAny]
-    serializer_class = CustomTokenObtainPairSerializer
+    serializer_class   = CustomTokenObtainPairSerializer
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        if response.status_code == 200:
+            # Trigger agent login sequence for agents and supervisors
+            try:
+                from rest_framework_simplejwt.tokens import AccessToken
+                token_str = response.data.get('access', '')
+                token     = AccessToken(token_str)
+                user_id   = str(token.get('user_id', ''))
+                from apps.users.models import User
+                user = User.objects.select_related('extension').get(pk=user_id)
+                if user.role in ('agent', 'supervisor'):
+                    from apps.users.agent_state_service import agent_on_login
+                    agent_on_login(user, request=request)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f'[Login] agent_on_login failed: {e}')
+        return response
 
 
 class LogoutView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        # Trigger agent logout sequence before blacklisting token
+        try:
+            user = request.user
+            if user.role in ('agent', 'supervisor'):
+                from apps.users.agent_state_service import agent_on_logout
+                agent_on_logout(user)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f'[Logout] agent_on_logout failed: {e}')
+
         try:
             refresh_token = request.data.get('refresh')
             token = RefreshToken(refresh_token)

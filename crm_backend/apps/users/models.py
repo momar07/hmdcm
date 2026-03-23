@@ -137,3 +137,49 @@ class Queue(TimeStampedModel):
 
     def __str__(self):
         return self.name
+
+
+class AgentSession(models.Model):
+    """Tracks each agent login/logout session."""
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    agent      = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sessions')
+    login_at   = models.DateTimeField(auto_now_add=True)
+    logout_at  = models.DateTimeField(null=True, blank=True)
+    login_ip   = models.GenericIPAddressField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'agent_sessions'
+        ordering = ['-login_at']
+
+    def __str__(self):
+        return f'{self.agent.get_full_name()} — {self.login_at}'
+
+    @property
+    def duration_seconds(self):
+        if self.logout_at and self.login_at:
+            return int((self.logout_at - self.login_at).total_seconds())
+        return None
+
+
+class AgentBreak(models.Model):
+    """Tracks each break taken during an agent session."""
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session     = models.ForeignKey(AgentSession, on_delete=models.CASCADE,
+                                    related_name='breaks', null=True, blank=True)
+    agent       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='breaks')
+    break_start = models.DateTimeField(auto_now_add=True)
+    break_end   = models.DateTimeField(null=True, blank=True)
+    reason      = models.CharField(max_length=100, default='Break')
+
+    class Meta:
+        db_table = 'agent_breaks'
+        ordering = ['-break_start']
+
+    def __str__(self):
+        return f'{self.agent.get_full_name()} — {self.reason} @ {self.break_start}'
+
+    @property
+    def duration_seconds(self):
+        if self.break_end and self.break_start:
+            return int((self.break_end - self.break_start).total_seconds())
+        return None
