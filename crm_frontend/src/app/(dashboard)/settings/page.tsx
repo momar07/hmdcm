@@ -3,7 +3,6 @@
 import { useState, useEffect }       from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Settings, Phone, Shield, Bell, Layers, Save, RefreshCw, ListChecks, Plus, Trash2, Pencil } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 import clsx                           from 'clsx';
 import toast                          from 'react-hot-toast';
 import PipelineStagesSettings         from '@/components/settings/PipelineStagesSettings';
@@ -496,7 +495,7 @@ function QueuesSettings() {
   };
 
   const set = (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>): void =>
       setForm((f) => ({ ...f, [k]: e.target.value }));
 
   if (isLoading) return <div className="flex justify-center py-8"><Spinner /></div>;
