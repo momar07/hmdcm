@@ -19,6 +19,7 @@ export interface IncomingCallInfo {
 type StatusCb     = (s: SipStatus) => void;
 type CallStatusCb = (s: CallStatus) => void;
 type IncomingCb   = (info: IncomingCallInfo) => void;
+type EndCauseCb   = (cause: string) => void;
 
 export class SipClient {
   private ua:      JsSIP.UA | null = null;
@@ -28,17 +29,20 @@ export class SipClient {
   private onStatusChange:     StatusCb;
   private onCallStatusChange: CallStatusCb;
   private onIncoming:         IncomingCb;
+  private onEndCause:         EndCauseCb;
 
   constructor(
     config:             SipConfig,
     onStatusChange:     StatusCb,
     onCallStatusChange: CallStatusCb,
     onIncoming:         IncomingCb,
+    onEndCause:         EndCauseCb,
   ) {
     this.config             = config;
     this.onStatusChange     = onStatusChange;
     this.onCallStatusChange = onCallStatusChange;
     this.onIncoming         = onIncoming;
+    this.onEndCause         = onEndCause;
   }
 
   private _ringAudio: HTMLAudioElement | null = null;
@@ -141,15 +145,17 @@ export class SipClient {
           this.onCallStatusChange('active');
           setTimeout(() => this._reattachStream(session), 500);
         });
-        session.on('ended',  () => {
+        session.on('ended',  (e: any) => {
           this._stopRinging();
           this.session = null;
+          this.onEndCause('ended');
           this.onCallStatusChange('idle');
         });
         session.on('failed', (e: any) => {
           console.error('[SIP] Call failed:', e.cause);
           this._stopRinging();
           this.session = null;
+          this.onEndCause(e?.cause ?? 'failed');
           this.onCallStatusChange('idle');
         });
       } else {
@@ -159,8 +165,16 @@ export class SipClient {
           this.onCallStatusChange('active');
           setTimeout(() => this._reattachStream(session), 500);
         });
-        session.on('ended',  () => { this.session = null; this.onCallStatusChange('idle'); });
-        session.on('failed', () => { this.session = null; this.onCallStatusChange('idle'); });
+        session.on('ended',  (e: any) => {
+          this.session = null;
+          this.onEndCause('ended');
+          this.onCallStatusChange('idle');
+        });
+        session.on('failed', (e: any) => {
+          this.session = null;
+          this.onEndCause(e?.cause ?? 'failed');
+          this.onCallStatusChange('idle');
+        });
       }
     });
 

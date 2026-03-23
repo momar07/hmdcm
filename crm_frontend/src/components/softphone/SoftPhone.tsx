@@ -18,9 +18,20 @@ export function SoftPhone() {
   const {
     setSipStatus, setCallStatus,
     setMuted, setOnHold, setCallTimer,
-    registerActions,
+    registerActions, setLastEndCause,
     callStatus, isMuted, isOnHold, callTimer,
   } = useSipStore();
+
+  // Listen for end cause events from SipClient
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const cause = (e as CustomEvent).detail as string;
+      setLastEndCause(cause);
+      setTimeout(() => setLastEndCause(null), 4000);
+    };
+    window.addEventListener('sip:endcause', handler);
+    return () => window.removeEventListener('sip:endcause', handler);
+  }, [setLastEndCause]);
 
   // Unlock autoplay on first user interaction
   useEffect(() => {

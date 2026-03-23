@@ -192,7 +192,18 @@ function FollowupCard({
   const sipActions         = useSipStore(s => s.actions);
   const callStatus         = useSipStore(s => s.callStatus);
   const callTimer          = useSipStore(s => s.callTimer);
+  const lastEndCause       = useSipStore(s => s.lastEndCause);
   const isThisCard         = callingId === f.id;
+
+  const endCauseBanner = (isThisCard && lastEndCause) ? (() => {
+    const c = lastEndCause.toLowerCase();
+    if (c === 'ended')                                return { emoji: '✅', label: 'Call Ended',  bg: 'bg-gray-50  border-gray-200',    text: 'text-gray-600'   };
+    if (c.includes('no_answer') || c === 'no answer') return { emoji: '📵', label: 'No Answer',  bg: 'bg-red-50   border-red-200',      text: 'text-red-600'    };
+    if (c.includes('busy'))                           return { emoji: '🔴', label: 'Busy',        bg: 'bg-orange-50 border-orange-200', text: 'text-orange-600' };
+    if (c.includes('cancel'))                         return { emoji: '↩️', label: 'Cancelled',  bg: 'bg-gray-50  border-gray-200',    text: 'text-gray-500'   };
+    if (c.includes('reject'))                         return { emoji: '❌', label: 'Rejected',   bg: 'bg-red-50   border-red-200',      text: 'text-red-600'    };
+    return { emoji: '❌', label: `Failed (${lastEndCause})`, bg: 'bg-red-50 border-red-200', text: 'text-red-600' };
+  })() : null;
 
   const formatTime = (s: number) => {
     const m   = Math.floor(s / 60).toString().padStart(2, '0');
@@ -274,7 +285,7 @@ function FollowupCard({
         </div>
       )}
 
-      {/* Call Status Banner */}
+      {/* Call Status Banner — live */}
       {statusBanner && (
         <div className={`flex items-center justify-between gap-2 px-3 py-2
                          rounded-lg border text-xs font-semibold
@@ -289,6 +300,14 @@ function FollowupCard({
               <XCircle size={11} /> Hangup
             </button>
           )}
+        </div>
+      )}
+
+      {/* End Cause Banner — fades after 4s */}
+      {!statusBanner && endCauseBanner && (
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border
+                         text-xs font-semibold ${endCauseBanner.bg} ${endCauseBanner.text}`}>
+          <span>{endCauseBanner.emoji} {endCauseBanner.label}</span>
         </div>
       )}
 

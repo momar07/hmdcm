@@ -34,6 +34,9 @@ export function useSip(config: SipConfig | null) {
       setSipStatus,
       setCallStatus,
       (info) => setIncoming(info),
+      (cause) => {
+        window.dispatchEvent(new CustomEvent('sip:endcause', { detail: cause }));
+      },
     );
 
     clientRef.current = client;

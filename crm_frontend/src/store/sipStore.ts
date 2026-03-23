@@ -10,28 +10,31 @@ interface SipActions {
 }
 
 interface SipStore {
-  sipStatus:  SipStatus;
-  callStatus: CallStatus;
-  isMuted:    boolean;
-  isOnHold:   boolean;
-  callTimer:  number;
-  actions:    SipActions | null;
+  sipStatus:   SipStatus;
+  callStatus:  CallStatus;
+  isMuted:     boolean;
+  isOnHold:    boolean;
+  callTimer:   number;
+  actions:     SipActions | null;
+  lastEndCause: string | null;
 
-  setSipStatus:  (s: SipStatus)  => void;
-  setCallStatus: (s: CallStatus) => void;
-  setMuted:      (v: boolean)    => void;
-  setOnHold:     (v: boolean)    => void;
-  setCallTimer:  (v: number)     => void;
+  setSipStatus:    (s: SipStatus)  => void;
+  setCallStatus:   (s: CallStatus) => void;
+  setMuted:        (v: boolean)    => void;
+  setOnHold:       (v: boolean)    => void;
+  setCallTimer:    (v: number)     => void;
   registerActions: (a: SipActions) => void;
+  setLastEndCause: (c: string | null) => void;
 }
 
 export const useSipStore = create<SipStore>()((set) => ({
-  sipStatus:  'disconnected',
-  callStatus: 'idle',
-  isMuted:    false,
-  isOnHold:   false,
-  callTimer:  0,
-  actions:    null,
+  sipStatus:    'disconnected',
+  callStatus:   'idle',
+  isMuted:      false,
+  isOnHold:     false,
+  callTimer:    0,
+  actions:      null,
+  lastEndCause: null,
 
   setSipStatus:    (s) => set({ sipStatus: s }),
   setCallStatus:   (s) => set({ callStatus: s }),
@@ -39,4 +42,5 @@ export const useSipStore = create<SipStore>()((set) => ({
   setOnHold:       (v) => set({ isOnHold: v }),
   setCallTimer:    (v) => set({ callTimer: v }),
   registerActions: (a) => set({ actions: a }),
+  setLastEndCause: (c) => set({ lastEndCause: c }),
 }));
