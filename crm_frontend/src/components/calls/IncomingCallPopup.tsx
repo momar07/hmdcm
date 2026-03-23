@@ -132,37 +132,48 @@ export function IncomingCallPopup() {
     clearIncoming();
   }, [actions, clearIncoming]);
 
-  /* ── React to callStatus ──────────────────────────────── */
+  /* ── Keep a ref to incomingCall to avoid stale closure ── */
+  const incomingCallRef = useRef(incomingCall);
+  useEffect(() => { incomingCallRef.current = incomingCall; }, [incomingCall]);
+
+  /* ── Show popup as soon as incomingCall is set (WS event) ── */
   useEffect(() => {
-    if (callStatus === 'incoming') {
-      if (incomingCall) setVisible(true);
+    if (incomingCall && callStatus !== 'active') {
+      setVisible(true);
       try {
+        // Stop any previous ring first
+        if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
         const audio = new Audio('/sounds/ringing.mp3');
         audio.loop = true; audio.volume = 0.7;
         audio.play().catch(() => {});
         audioRef.current = audio;
       } catch {}
-      clearCount();
-      countRef.current = setInterval(() => {}, 1000);
-      return () => { clearCount(); stopRing(); };
+    }
+  }, [incomingCall]);
+
+  /* ── React to callStatus ──────────────────────────────── */
+  useEffect(() => {
+    if (callStatus === 'incoming') {
+      // SIP ringing — show popup if not already visible
+      if (incomingCallRef.current) setVisible(true);
+      else setVisible(true); // show even without WS data yet
     }
 
     if (callStatus === 'active') {
       clearCount(); stopRing();
       setVisible(true); // stay visible as call-control
-      if (incomingCall?.customer_id) {
-        // Only navigate if we're not already on a customer/call detail page
+      const call = incomingCallRef.current;
+      if (call?.customer_id) {
         const currentPath = window.location.pathname;
         const isOnDetailPage = currentPath.includes('/customers/') || currentPath.includes('/calls/');
         if (!isOnDetailPage) {
-          router.push(`/customers/${incomingCall.customer_id}`);
+          router.push(`/customers/${call.customer_id}`);
         }
       }
     }
 
     if (callStatus === 'idle') {
       clearCount(); stopRing(); setVisible(false);
-      // clearIncoming handled by layout after disposition modal
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callStatus]);

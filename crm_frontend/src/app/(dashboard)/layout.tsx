@@ -73,16 +73,19 @@ export default function DashboardLayout({
     prevCallStatus.current = callStatus;
   }, [callStatus]);
 
-  // Step 1: WS event arrives → save it + clear store + bump ringKey
+  // WS event arrives → set directly without null-clear race condition
   useWebSocket((event: WSEvent) => {
     if (event.type === 'incoming_call') {
+      // Store event ref for dedup
+      const prev = lastEventRef.current;
       lastEventRef.current = event;
-      setIncomingCall(null);          // clear first
-      setRingKey(k => k + 1);        // trigger effect below
+
+      // Always set — let popup handle duplicates via uniqueid
+      setIncomingCall(event as any);
+      setRingKey(k => k + 1);
     }
     if (event.type === 'agent_status' || event.type === 'agent_status_update') {
       const s = (event as any).status ?? (event as any).payload?.status;
-      // Only update OUR OWN status — ignore other agents' updates
       const { user: currentUser } = useAuthStore.getState();
       const evtAgentId = (event as any).agent_id;
       if (s && (!evtAgentId || evtAgentId === currentUser?.id)) {
@@ -91,12 +94,8 @@ export default function DashboardLayout({
     }
   });
 
-  // Step 2: ringKey changed → set the real event (runs after null render)
-  useEffect(() => {
-    if (ringKey > 0 && lastEventRef.current) {
-      setIncomingCall(lastEventRef.current as any);
-    }
-  }, [ringKey]);
+  // ringKey ref — no longer needs a separate effect
+  useEffect(() => {}, [ringKey]);
 
   if (!hydrated) return null;
   if (!isAuthenticated) return null;
