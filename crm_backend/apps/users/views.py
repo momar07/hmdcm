@@ -85,7 +85,8 @@ class UserViewSet(viewsets.ModelViewSet):
         vicidial_campaign = request.data.get('vicidial_campaign', '').strip()
         vicidial_ingroup  = request.data.get('vicidial_ingroup',  '').strip()
 
-        queue_ids    = request.data.getlist('queue_ids', []) or request.data.get('queue_ids', [])
+        raw_ids   = request.data.get('queue_ids', [])
+        queue_ids = raw_ids if isinstance(raw_ids, list) else []
 
         defaults = {
             'number':    number,
