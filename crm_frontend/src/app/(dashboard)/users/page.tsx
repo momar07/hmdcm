@@ -384,10 +384,8 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
   // Fetch available queues for the multi-select
   const { data: queuesData } = useQuery({
     queryKey: ['queues-all'],
-    queryFn:  () => usersApi.teams.list().then(() =>
-      fetch('/api/users/queues/', {
-        headers: { Authorization: `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('crm_access_token') ?? '' : ''}` },
-      }).then((r) => r.json())
+    queryFn:  () => import('@/lib/api/axios').then((m) =>
+      m.default.get('/users/queues-list/').then((r) => r.data)
     ),
     staleTime: 60_000,
   });
