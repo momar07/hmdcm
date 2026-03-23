@@ -45,11 +45,15 @@ function AttendanceReport() {
   const [dateTo,   setDateTo]   = useState(today());
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['report-attendance', dateFrom, dateTo],
-    queryFn:  () => reportsApi.agentAttendance({ date_from: dateFrom, date_to: dateTo })
-                              .then((r) => r.data),
-    enabled:  false,   // only run when user clicks Search
+  const [searchParams, setSearchParams] = useState<{from: string; to: string} | null>(null);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['report-attendance', searchParams?.from, searchParams?.to],
+    queryFn:  () => reportsApi.agentAttendance({
+                      date_from: searchParams!.from,
+                      date_to:   searchParams!.to,
+                    }).then((r) => r.data),
+    enabled:  !!searchParams,   // runs when user clicks Search
   });
 
   const summary  = data?.summary  ?? [];
@@ -74,7 +78,9 @@ function AttendanceReport() {
           className="w-44"
         />
         <div className="pb-0.5">
-          <Button variant="primary" onClick={() => refetch()} loading={isLoading}>
+          <Button variant="primary"
+            onClick={() => setSearchParams({ from: dateFrom, to: dateTo })}
+            loading={isLoading}>
             Search
           </Button>
         </div>
@@ -227,7 +233,7 @@ function AttendanceReport() {
         </>
       )}
 
-      {!isLoading && !data && (
+      {!isLoading && !searchParams && (
         <div className="text-center py-16 text-gray-400 text-sm">
           Select a date range and click <strong>Search</strong> to load attendance data.
         </div>
