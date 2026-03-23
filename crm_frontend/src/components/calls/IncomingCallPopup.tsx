@@ -51,8 +51,37 @@ function TransferModal({
 
 /* ─────────────────────────────────────────────────────────
    Singleton audio manager — ONE instance globally
+   With Chrome Autoplay Policy unlock via AudioContext
 ───────────────────────────────────────────────────────── */
 let _globalAudio: HTMLAudioElement | null = null;
+let _audioUnlocked = false;
+
+// Call this on any user interaction to unlock audio
+export function unlockAudio() {
+  if (_audioUnlocked) return;
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Create silent buffer and play it to unlock
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+    ctx.resume().then(() => {
+      _audioUnlocked = true;
+      ctx.close();
+    }).catch(() => {});
+
+    // Also create and immediately pause a real audio element
+    const silent = new Audio('/sounds/ringing.mp3');
+    silent.volume = 0;
+    silent.play().then(() => {
+      silent.pause();
+      silent.currentTime = 0;
+      _audioUnlocked = true;
+    }).catch(() => {});
+  } catch {}
+}
 
 function startRing() {
   stopRing(); // always stop old one first
@@ -60,7 +89,15 @@ function startRing() {
     _globalAudio = new Audio('/sounds/ringing.mp3');
     _globalAudio.loop   = true;
     _globalAudio.volume = 0.7;
-    _globalAudio.play().catch(() => {});
+    const playPromise = _globalAudio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        // Chrome blocked autoplay — try via user interaction fallback
+        console.warn('[Ring] Autoplay blocked:', err.message);
+        // Store intent — will play on next user interaction
+        _globalAudio = null;
+      });
+    }
   } catch {}
 }
 

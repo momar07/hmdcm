@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter }           from 'next/navigation';
 import { Sidebar }             from '@/components/layout/Sidebar';
 import { Topbar }              from '@/components/layout/Topbar';
-import { IncomingCallPopup }   from '@/components/calls/IncomingCallPopup';
+import { IncomingCallPopup, unlockAudio } from '@/components/calls/IncomingCallPopup';
 import { DispositionModal }   from '@/components/calls/DispositionModal';
 import { SoftPhone }           from '@/components/softphone/SoftPhone';
 import { useAuthStore, useCallStore, useAgentStatusStore } from '@/store';
@@ -101,6 +101,19 @@ export default function DashboardLayout({
 
   if (!hydrated) return null;
   if (!isAuthenticated) return null;
+
+  // Unlock audio on first user interaction (Chrome Autoplay Policy)
+  useEffect(() => {
+    const unlock = () => { unlockAudio(); };
+    window.addEventListener('click',    unlock, { once: true });
+    window.addEventListener('keydown',  unlock, { once: true });
+    window.addEventListener('touchend', unlock, { once: true });
+    return () => {
+      window.removeEventListener('click',    unlock);
+      window.removeEventListener('keydown',  unlock);
+      window.removeEventListener('touchend', unlock);
+    };
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
