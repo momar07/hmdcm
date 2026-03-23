@@ -15,6 +15,7 @@ import { Select }          from '@/components/ui/Select';
 import { StatusBadge }     from '@/components/ui/StatusBadge';
 import { Modal }           from '@/components/ui/Modal';
 import { useSipStore }     from '@/store/sipStore';
+import { useRef }              from 'react';
 import type { Followup }   from '@/types';
 
 // ── helpers ───────────────────────────────────────────────────────────────
@@ -174,6 +175,7 @@ function RescheduleModal({ followup, onClose }: { followup: Followup; onClose: (
 // ── Followup Card ─────────────────────────────────────────────────────────
 function FollowupCard({
   f, onComplete, onCancel, onReschedule, onWhatsApp, completing, cancelling,
+  callingId, onCallStart,
 }: {
   f:            Followup;
   onComplete:   (id: string) => void;
@@ -182,17 +184,61 @@ function FollowupCard({
   onWhatsApp:   (f: Followup) => void;
   completing:   string | null;
   cancelling:   string | null;
+  callingId:    string | null;
+  onCallStart:  (id: string) => void;
 }) {
   const { label, overdue } = formatDate(f.scheduled_at);
   const isPending          = f.status === 'pending';
   const sipActions         = useSipStore(s => s.actions);
+  const callStatus         = useSipStore(s => s.callStatus);
+  const callTimer          = useSipStore(s => s.callTimer);
+  const isThisCard         = callingId === f.id;
+
+  const formatTime = (s: number) => {
+    const m   = Math.floor(s / 60).toString().padStart(2, '0');
+    const sec = (s % 60).toString().padStart(2, '0');
+    return `${m}:${sec}`;
+  };
 
   const handleCall = () => {
     if (!f.customer_phone) return toast.error('No phone number available');
     if (!sipActions)       return toast.error('SoftPhone not connected');
     if (!sipActions.call)  return toast.error('Call action not available');
+    onCallStart(f.id);
     sipActions.call(f.customer_phone);
   };
+
+  // Status banner config
+  const statusBanner = isThisCard ? (() => {
+    switch (callStatus) {
+      case 'ringing':
+        return {
+          bg:    'bg-yellow-50 border-yellow-200',
+          text:  'text-yellow-700',
+          emoji: '📞',
+          label: 'Ringing...',
+          showHangup: true,
+        };
+      case 'active':
+        return {
+          bg:    'bg-green-50 border-green-200',
+          text:  'text-green-700',
+          emoji: '🔴',
+          label: `In Call  ${formatTime(callTimer)}`,
+          showHangup: true,
+        };
+      case 'holding':
+        return {
+          bg:    'bg-blue-50 border-blue-200',
+          text:  'text-blue-700',
+          emoji: '⏸',
+          label: `On Hold  ${formatTime(callTimer)}`,
+          showHangup: true,
+        };
+      default:
+        return null;
+    }
+  })() : null;
 
   return (
     <div className={`bg-white rounded-xl border shadow-sm p-4 flex flex-col gap-3
@@ -225,6 +271,24 @@ function FollowupCard({
               <p className="text-xs text-gray-500 font-mono">{f.customer_phone}</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Call Status Banner */}
+      {statusBanner && (
+        <div className={`flex items-center justify-between gap-2 px-3 py-2
+                         rounded-lg border text-xs font-semibold
+                         ${statusBanner.bg} ${statusBanner.text}`}>
+          <span>{statusBanner.emoji} {statusBanner.label}</span>
+          {statusBanner.showHangup && sipActions && (
+            <button
+              onClick={() => sipActions.hangup()}
+              className="flex items-center gap-1 bg-red-500 hover:bg-red-600
+                         text-white rounded-md px-2 py-0.5 text-xs transition-colors"
+            >
+              <XCircle size={11} /> Hangup
+            </button>
+          )}
         </div>
       )}
 
@@ -307,6 +371,15 @@ export default function FollowupsPage() {
   const [whatsapping,  setWhatsapping]  = useState<Followup | null>(null);
   const [completing,   setCompleting]   = useState<string | null>(null);
   const [cancelling,   setCancelling]   = useState<string | null>(null);
+  const [callingId,    setCallingId]    = useState<string | null>(null);
+
+  // Auto-clear callingId when call goes idle
+  const callStatus = useSipStore(s => s.callStatus);
+  const prevCallStatus = useRef<string>('idle');
+  if (prevCallStatus.current !== 'idle' && callStatus === 'idle') {
+    if (callingId) setTimeout(() => setCallingId(null), 3000);
+  }
+  prevCallStatus.current = callStatus;
 
   const { data, isLoading, isFetching } = useQuery({
     queryKey: ['followups', statusFilter, typeFilter, page],
@@ -432,6 +505,8 @@ export default function FollowupsPage() {
             <FollowupCard
               key={f.id} f={f}
               completing={completing} cancelling={cancelling}
+              callingId={callingId}
+              onCallStart={id => setCallingId(id)}
               onComplete={id  => completeMutation.mutate(id)}
               onCancel={id    => cancelMutation.mutate(id)}
               onReschedule={fu => setRescheduling(fu)}
