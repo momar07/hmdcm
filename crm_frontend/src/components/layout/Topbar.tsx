@@ -40,7 +40,7 @@ export function Topbar() {
         {user?.extension && (
           <span className="hidden sm:inline-flex text-xs font-medium
                            bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg">
-            Ext: {user.extension}
+            Ext: {user.extension?.number}
           </span>
         )}
 
