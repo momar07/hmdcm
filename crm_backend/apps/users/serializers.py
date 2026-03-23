@@ -5,7 +5,7 @@ from .models import User, Extension, Queue
 class ExtensionSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Extension
-        fields = ['id', 'number', 'peer_name', 'is_active',
+        fields = ['id', 'number', 'peer_name', 'is_active', 'secret',
                   'vicidial_user', 'vicidial_pass', 'vicidial_campaign', 'vicidial_ingroup']
         read_only_fields = ['id']
 

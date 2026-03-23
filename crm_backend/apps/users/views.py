@@ -77,6 +77,10 @@ class UserViewSet(viewsets.ModelViewSet):
         if existing:
             return Response({'error': f'Extension {number} is already assigned to {existing.user.get_full_name()}.'}, status=400)
 
+        # SIP secret (optional)
+        secret = request.data.get('secret', '').strip()
+        if secret: defaults['secret'] = secret
+
         # VICIdial fields (optional)
         vicidial_user     = request.data.get('vicidial_user',     '').strip()
         vicidial_pass     = request.data.get('vicidial_pass',     '').strip()

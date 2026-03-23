@@ -390,11 +390,8 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
     phone:             user?.phone                          ?? '',
     team:              (user?.team as unknown as string)    ?? '',
     is_active:         user?.is_active                      ?? true,
-    sip_extension:     user?.extension?.number              ?? '',
-    vicidial_user:     user?.extension?.vicidial_user       ?? '',
-    vicidial_pass:     user?.extension?.vicidial_pass       ?? '',
-    vicidial_campaign: user?.extension?.vicidial_campaign   ?? '',
-    vicidial_ingroup:  user?.extension?.vicidial_ingroup    ?? '',
+    sip_extension:     user?.extension?.number   ?? '',
+    sip_secret:        user?.extension?.secret   ?? '',
   });
 
   const { mutate, isPending } = useMutation({
@@ -412,10 +409,7 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
 
       if (form.sip_extension.trim()) {
         await usersApi.setExtension(res.data.id, form.sip_extension.trim(), {
-          vicidial_user:     form.vicidial_user.trim()     || form.sip_extension.trim(),
-          vicidial_pass:     form.vicidial_pass.trim()     || form.sip_extension.trim(),
-          vicidial_campaign: form.vicidial_campaign.trim(),
-          vicidial_ingroup:  form.vicidial_ingroup.trim(),
+          secret: form.sip_secret.trim(),
         });
       }
     },
@@ -468,20 +462,13 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
         </div>
       </div>
       {form.sip_extension.trim() && (
-        <div className="border border-blue-100 rounded-xl p-4 bg-blue-50 space-y-3">
-          <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">VICIdial Settings</p>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="VICIdial User"     placeholder={form.sip_extension || '300'}
-                   value={form.vicidial_user}     onChange={set('vicidial_user')} />
-            <Input label="VICIdial Password" type="password" placeholder="VICIdial login password"
-                   value={form.vicidial_pass}     onChange={set('vicidial_pass')} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Campaign ID" placeholder="2000" value={form.vicidial_campaign} onChange={set('vicidial_campaign')} />
-            <Input label="Ingroup ID"  placeholder="901"  value={form.vicidial_ingroup}  onChange={set('vicidial_ingroup')} />
-          </div>
-          <p className="text-xs text-blue-500">Leave empty to use defaults from system settings</p>
-        </div>
+        <Input
+          label="SIP Password"
+          type="password"
+          placeholder="Issabel/Asterisk SIP secret"
+          value={form.sip_secret}
+          onChange={set('sip_secret')}
+        />
       )}
       {isEdit && (
         <Select label="Active"

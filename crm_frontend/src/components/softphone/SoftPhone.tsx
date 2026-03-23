@@ -40,12 +40,14 @@ export function SoftPhone() {
     };
   }, []);
 
-  const extNumber = user?.extension as string | null;
+  const extNumber   = user?.extension?.number   ?? null;
+  const sipSecret   = user?.extension?.secret   ?? null;
 
-  const sipConfig = extNumber ? {
+  // Only connect if both extension number AND sip secret are set
+  const sipConfig = (extNumber && sipSecret) ? {
     wsUrl:       'ws://192.168.2.222:8088/ws',
     sipUri:      `sip:${extNumber}@192.168.2.222`,
-    password:    'sip123456',
+    password:    sipSecret,
     displayName: user?.full_name ?? extNumber,
   } : null;
 
