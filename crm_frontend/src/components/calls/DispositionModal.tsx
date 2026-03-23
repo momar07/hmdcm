@@ -182,14 +182,50 @@ export function DispositionModal({
                   <Calendar size={14} className="inline mr-1" />
                   Follow-up Date {requireFollowup && <span className="text-red-500">*</span>}
                 </label>
-                <input
-                  type="datetime-local"
-                  value={followupDate}
-                  onChange={e => setFollowupDate(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5
-                             text-sm focus:outline-none focus:ring-2
-                             focus:ring-blue-300 focus:border-transparent"
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Date */}
+                  <div className="relative">
+                    <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    <input
+                      type="date"
+                      value={followupDate ? followupDate.split('T')[0] : ''}
+                      min={new Date().toISOString().split('T')[0]}
+                      onChange={e => {
+                        const datePart = e.target.value;
+                        const timePart = followupDate ? followupDate.split('T')[1] : '09:00';
+                        setFollowupDate(datePart ? `${datePart}T${timePart ?? '09:00'}` : '');
+                      }}
+                      className="w-full pl-8 pr-3 py-2.5 border border-gray-200 rounded-xl
+                                 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300
+                                 focus:border-transparent text-gray-700"
+                    />
+                  </div>
+                  {/* Time */}
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none">🕐</span>
+                    <input
+                      type="time"
+                      value={followupDate ? followupDate.split('T')[1]?.slice(0,5) : '09:00'}
+                      onChange={e => {
+                        const timePart = e.target.value;
+                        const datePart = followupDate ? followupDate.split('T')[0] : new Date().toISOString().split('T')[0];
+                        setFollowupDate(`${datePart}T${timePart}`);
+                      }}
+                      className="w-full pl-8 pr-3 py-2.5 border border-gray-200 rounded-xl
+                                 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300
+                                 focus:border-transparent text-gray-700"
+                    />
+                  </div>
+                </div>
+                {/* Preview */}
+                {followupDate && (
+                  <p className="text-xs text-blue-600 mt-1.5 font-medium">
+                    📅 {new Date(followupDate).toLocaleString('en-GB', {
+                      weekday: 'short', day: '2-digit', month: 'short',
+                      year: 'numeric', hour: '2-digit', minute: '2-digit',
+                    })}
+                  </p>
+                )}
               </div>
             )}
           </div>
