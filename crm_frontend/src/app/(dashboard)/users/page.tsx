@@ -408,7 +408,8 @@ function UserForm({ user, onClose }: { user?: User; onClose: () => void }) {
         : await usersApi.create(payload as Parameters<typeof usersApi.create>[0]);
 
       if (form.sip_extension.trim()) {
-        await usersApi.setExtension(res.data.id, form.sip_extension.trim(), {
+        const userId = isEdit ? user!.id : res.data.id;
+        await usersApi.setExtension(userId, form.sip_extension.trim(), {
           secret: form.sip_secret.trim(),
         });
       }
