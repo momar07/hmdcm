@@ -161,11 +161,20 @@ export default function LiveAgentsPage() {
     return () => ws.close();
   }, [qc]);
 
-  // only admin/supervisor
-  if (user && !['admin', 'supervisor'].includes(user.role)) {
+  // Agent sees only themselves — show simplified single-agent view
+  if (user && user.role === 'agent') {
+    const me = data?.agents?.find((a) => a.id === user.id);
+    const cfg = STATUS_CFG[me?.status ?? 'offline'] ?? STATUS_CFG.offline;
     return (
-      <div className="flex items-center justify-center h-64 text-gray-400">
-        Access restricted to admins and supervisors.
+      <div>
+        <PageHeader title="My Status" subtitle="Your current queue status" />
+        {me ? (
+          <div className="max-w-sm">
+            <AgentCard agent={me} />
+          </div>
+        ) : (
+          <div className="text-gray-400 text-sm">Loading...</div>
+        )}
       </div>
     );
   }

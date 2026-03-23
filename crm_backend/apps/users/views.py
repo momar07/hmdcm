@@ -187,10 +187,24 @@ class LiveAgentsView(APIView):
 
     def get(self, request):
         from .models import Extension
-        agents = User.objects.filter(
-            role__in=['agent', 'supervisor'],
-            is_active=True,
-        ).prefetch_related('extension')
+        user = request.user
+
+        # Agent sees only themselves
+        if user.role == 'agent':
+            agents = User.objects.filter(pk=user.pk)
+        # Supervisor sees their team only
+        elif user.role == 'supervisor' and user.team_id:
+            agents = User.objects.filter(
+                role='agent',
+                team=user.team,
+                is_active=True,
+            ).prefetch_related('extension')
+        # Admin sees everyone
+        else:
+            agents = User.objects.filter(
+                role__in=['agent', 'supervisor'],
+                is_active=True,
+            ).prefetch_related('extension')
 
         data = []
         for u in agents:
