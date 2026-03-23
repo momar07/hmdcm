@@ -8,6 +8,7 @@ AMI connection reuses settings from SystemSetting (ami_host, ami_port, etc.)
 import json
 import logging
 import socket
+import threading
 import time
 
 from apps.users.services import update_user_status
@@ -326,6 +327,55 @@ def agent_sync_status(user) -> dict:
 
 # ── Login / Logout sequences ─────────────────────────────────────────────────
 
+def _do_unpause(user_id: str, session_id: str):
+    """
+    Runs in a background thread 5 seconds after login.
+    Unpauses agent in all queues and sets status to available.
+    """
+    try:
+        import django
+        from django.apps import apps as django_apps
+        # Ensure Django is set up (needed for threads)
+        if not django_apps.ready:
+            django.setup()
+
+        from apps.users.models import User, AgentBreak
+        from apps.users.services import update_user_status
+        from django.utils import timezone
+
+        user      = User.objects.select_related('extension').get(pk=user_id)
+        interface = _get_interface(user)
+        queues    = _get_queues(user)
+
+        # Close the LOGIN break
+        AgentBreak.objects.filter(
+            agent_id  = user_id,
+            reason    = 'LOGIN',
+            break_end__isnull = True,
+        ).update(break_end=timezone.now())
+
+        # Unpause in Asterisk
+        if interface and queues:
+            actions = [
+                ('QueuePause', {
+                    'Queue':     q,
+                    'Interface': interface,
+                    'Paused':    'false',
+                })
+                for q in queues
+            ]
+            _run_ami(actions)
+            log.info(f'[LoginSeq] {user.email} unpaused in queues: {queues}')
+
+        # Update CRM status
+        update_user_status(user_id, 'available')
+        _notify(user, 'available')
+        log.info(f'[LoginSeq] {user.email} → available (login sequence complete)')
+
+    except Exception as e:
+        log.error(f'[LoginSeq] _do_unpause error for user {user_id}: {e}')
+
+
 def agent_on_login(user, request=None) -> dict:
     """
     Full login sequence:
@@ -399,13 +449,11 @@ def agent_on_login(user, request=None) -> dict:
     update_user_status(str(user.id), 'away')
     _notify(user, 'away')
 
-    # Step 5: Fire Celery task — will unpause after 5 seconds
-    from apps.users.tasks import complete_login_sequence
-    complete_login_sequence.apply_async(
-        args=[str(user.id), str(session.id)],
-        countdown=5,
-    )
-    log.info(f'[Login] {user.email} — added paused, will unpause in 5s')
+    # Step 5: Fire background thread — will unpause after 5 seconds
+    t = threading.Timer(5.0, _do_unpause, args=[str(user.id), str(session.id)])
+    t.daemon = True   # won't block server shutdown
+    t.start()
+    log.info(f'[Login] {user.email} — added paused, will unpause in 5s via threading.Timer')
 
     return {
         'success':    True,
