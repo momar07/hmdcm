@@ -9,6 +9,7 @@ import PipelineStagesSettings         from '@/components/settings/PipelineStages
 import { PageHeader }                 from '@/components/ui/PageHeader';
 import { Button }                     from '@/components/ui/Button';
 import { Input }                      from '@/components/ui/Input';
+import { Select }                     from '@/components/ui/Select';
 import { Spinner }                    from '@/components/ui/Spinner';
 import { settingsApi, SystemSetting } from '@/lib/api/settings';
 
@@ -595,7 +596,7 @@ function QueuesSettings() {
                 { value: 'false', label: 'Inactive' },
               ]}
               value={String(form.is_active)}
-              onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.value === 'true' }))}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm((f) => ({ ...f, is_active: e.target.value === 'true' }))}
             />
           </div>
           <Input
