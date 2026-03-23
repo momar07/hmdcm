@@ -39,7 +39,8 @@ export const usersApi = {
 
 // ── Queue / Agent Status ──────────────────────────────────────
 export const agentStatusApi = {
-  get:  ()                                                    => api.get('/users/me/queue-status/'),
-  set:  (action: 'login'|'open_session'|'pause'|'logoff'|'sync_status', reason = 'Break') => api.post('/users/me/queue-status/', { action, reason }),
-  live: ()                                                    => api.get('/users/live-agents/'),
+  get:  ()                          => api.get('/users/me/queue-status/'),
+  set:  (status: 'available' | 'away' | 'offline' | 'on_call' | 'busy') =>
+          api.post('/users/me/queue-status/', { status }),
+  live: ()                          => api.get('/users/live-agents/'),
 };

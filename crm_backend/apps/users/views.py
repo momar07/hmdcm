@@ -118,13 +118,12 @@ class QueueViewSet(viewsets.ModelViewSet):
 
 class AgentQueueStatusView(APIView):
     """
-    POST /api/users/me/queue-status/
-    body: { "action": "login" | "pause" | "logoff", "reason": "Break" }
+    GET  /api/users/me/queue-status/  — return current status + extension
+    POST /api/users/me/queue-status/  — body: { "status": "available"|"away"|"offline"|"on_call" }
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        """GET current status + extension info."""
         user = request.user
         ext  = getattr(user, 'extension', None)
         return Response({
@@ -134,115 +133,24 @@ class AgentQueueStatusView(APIView):
         })
 
     def post(self, request):
-        user   = request.user
-        act    = request.data.get('action', '').strip()
-        reason = request.data.get('reason', 'Break')
+        user           = request.user
+        new_status     = request.data.get('status', '').strip()
+        VALID_STATUSES = ['available', 'away', 'offline', 'on_call', 'busy']
 
-        if act == 'sync_status':
-            # Check real VICIdial status on page load
-            import pymysql
-            from django.conf import settings
-            ext       = getattr(user, 'extension', None)
-            agent_num = (ext.vicidial_user or ext.number) if ext else None
-
-            real_status = 'offline'
-            if agent_num:
-                try:
-                    conn = pymysql.connect(
-                        host   = getattr(settings, 'VICIDIAL_DB_HOST', '192.168.2.222'),
-                        port   = getattr(settings, 'VICIDIAL_DB_PORT', 3306),
-                        user   = getattr(settings, 'VICIDIAL_DB_USER', 'cron'),
-                        passwd = getattr(settings, 'VICIDIAL_DB_PASS', '1234'),
-                        db     = getattr(settings, 'VICIDIAL_DB_NAME', 'asterisk'),
-                        connect_timeout=3,
-                    )
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            "SELECT status, pause_code FROM vicidial_live_agents WHERE user=%s",
-                            (agent_num,)
-                        )
-                        row = cur.fetchone()
-                    conn.close()
-                    if row:
-                        vd_status = row[0]
-                        vd_pause  = row[1]
-                        if vd_status == 'READY':
-                            real_status = 'available'
-                        elif vd_status == 'INCALL':
-                            real_status = 'on_call'
-                        elif vd_status == 'PAUSED' and vd_pause in ('LOGIN', '', None):
-                            real_status = 'offline'
-                        elif vd_status == 'PAUSED':
-                            real_status = 'away'
-                        elif vd_status == 'DISPO':
-                            real_status = 'busy'
-                        # else: offline (not in table)
-                    # Update CRM DB to match real status
-                    if user.status != real_status:
-                        from apps.users.services import update_user_status
-                        update_user_status(str(user.id), real_status)
-                except Exception as e:
-                    pass
-
-            return Response({
-                'success': True,
-                'status':  real_status,
-                'message': f'Real VICIdial status: {real_status}',
-            })
-
-        if act == 'open_session':
-            ext          = getattr(user, 'extension', None)
-            vicidial_url = ext.vicidial_login_url if ext else None
-
-            # If agent is on Break → skip iframe, just send RESUME
-            if user.status == 'away':
-                return Response({
-                    'success':     True,
-                    'status':      user.status,
-                    'resume_only': True,
-                    'message':     'Agent on break — resume only',
-                })
-
-            # Fresh login — return URL for iframe
-            return Response({
-                'success':      True,
-                'status':       user.status,
-                'resume_only':  False,
-                'message':      'Session URL ready — open iframe',
-                'vicidial_url': vicidial_url,
-            })
-
-        elif act == 'login':
-            # Step 2: iframe loaded — RESUME + DB validation
-            ext          = getattr(user, 'extension', None)
-            vicidial_url = ext.vicidial_login_url if ext else None
-            result       = agent_queue_login(user)
-            return Response({
-                'success':      result['success'],
-                'status':       result['status'],
-                'message':      result['message'],
-                'vicidial_url': vicidial_url,
-            }, status=200 if result['success'] else 400)
-        elif act == 'pause':
-            ok = agent_queue_pause(user, reason)
-            return Response({
-                'success': ok,
-                'status':  'away',
-                'message': f'Paused ({reason})',
-            })
-        elif act == 'logoff':
-            ok = agent_queue_logoff(user)
-            return Response({
-                'success': ok,
-                'status':  'offline',
-                'message': 'Logged off from queue',
-            })
-        else:
+        if new_status not in VALID_STATUSES:
             return Response(
-                {'error': 'action must be login | pause | logoff'},
-                status=400
+                {'error': f'status must be one of: {", ".join(VALID_STATUSES)}'},
+                status=400,
             )
 
+        from apps.users.services import update_user_status
+        update_user_status(str(user.id), new_status)
+
+        return Response({
+            'success': True,
+            'status':  new_status,
+            'message': f'Status updated to {new_status}',
+        })
 
 class LiveAgentsView(APIView):
     """
