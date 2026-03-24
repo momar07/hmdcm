@@ -500,12 +500,17 @@ def send_followup_reminders(self):
         customer_name= f'{customer.first_name} {customer.last_name}'.strip() if customer else None
         customer_phone = _get_customer_phone(customer)
 
+        # Ensure scheduled_at is always a proper ISO string with timezone
+        scheduled_str = f.scheduled_at.isoformat() if f.scheduled_at else ''
+        if scheduled_str and not (scheduled_str.endswith('Z') or '+' in scheduled_str):
+            scheduled_str += '+00:00'   # treat naive as UTC
+
         payload = {
             'type':         'followup_reminder',
             'followup_id':  str(f.id),
             'title':        f.title,
             'followup_type':f.followup_type,
-            'scheduled_at': f.scheduled_at.isoformat(),
+            'scheduled_at': scheduled_str,
             'customer':     customer_name or 'Unknown',
             'customer_id':  customer_id,
             'customer_phone': customer_phone,

@@ -78,10 +78,15 @@ export function ReminderToastListener() {
                 <p className="text-xs text-gray-500 font-mono">{ev.customer_phone}</p>
               )}
               <p className="text-xs text-blue-600 font-medium">
-                🕐 {new Date(ev.scheduled_at).toLocaleString('en-GB', {
-                  hour: '2-digit', minute: '2-digit',
-                  day: '2-digit', month: 'short',
-                })}
+                🕐 {(() => {
+                  if (!ev.scheduled_at) return 'Scheduled';
+                  const d = new Date(ev.scheduled_at);
+                  if (isNaN(d.getTime())) return ev.scheduled_at;
+                  return d.toLocaleString('en-GB', {
+                    hour: '2-digit', minute: '2-digit',
+                    day: '2-digit', month: 'short',
+                  });
+                })()}
               </p>
             </div>
 
