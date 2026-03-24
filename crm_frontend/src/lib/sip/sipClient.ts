@@ -1,4 +1,5 @@
 import JsSIP from 'jssip';
+import { getAudioCtx, getRingBuffer, setRingBuffer } from './audioContext';
 
 export type SipStatus = 'disconnected' | 'connecting' | 'registered' | 'error';
 export type CallStatus = 'idle' | 'ringing' | 'incoming' | 'active' | 'holding';
@@ -45,40 +46,17 @@ export class SipClient {
     this.onEndCause         = onEndCause;
   }
 
-  // ── Web Audio API ring (bypasses Chrome autoplay policy) ──────────────
-  private _audioCtx:      AudioContext | null      = null;
-  private _ringSource:    AudioBufferSourceNode | null = null;
-  private _ringBuffer:    AudioBuffer | null        = null;
-  private _ringing:       boolean                   = false;
-
-  /** Pre-fetch the ring buffer once so first ring is instant */
-  async _preloadRingBuffer() {
-    if (this._ringBuffer) return;
-    try {
-      const ctx  = this._getAudioCtx();
-      const resp = await fetch('/sounds/ringing.mp3');
-      const arr  = await resp.arrayBuffer();
-      this._ringBuffer = await ctx.decodeAudioData(arr);
-      console.log('[SIP] 🎵 Ring buffer preloaded');
-    } catch (e) {
-      console.warn('[SIP] Ring preload failed:', e);
-    }
-  }
-
-  private _getAudioCtx(): AudioContext {
-    if (!this._audioCtx || this._audioCtx.state === 'closed') {
-      this._audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
-    return this._audioCtx;
-  }
+  // ── Ring audio — uses shared AudioContext from audioContext.ts ─────────
+  private _ringSource: AudioBufferSourceNode | null = null;
+  private _ringing:    boolean                      = false;
 
   private _startRinging() {
     this._stopRinging();
     this._ringing = true;
 
     const play = (buf: AudioBuffer) => {
-      if (!this._ringing) return;           // was stopped before we got here
-      const ctx    = this._getAudioCtx();
+      if (!this._ringing) return;
+      const ctx    = getAudioCtx();               // shared, already unlocked
       const source = ctx.createBufferSource();
       source.buffer = buf;
       source.loop   = true;
@@ -88,27 +66,31 @@ export class SipClient {
       source.connect(gain);
       gain.connect(ctx.destination);
 
-      ctx.resume().then(() => {
-        if (!this._ringing) { source.stop(); return; }
+      // ctx.state should already be 'running' after unlockAudioCtx()
+      if (ctx.state === 'running') {
         source.start(0);
         this._ringSource = source;
-        console.log('[SIP] 🔔 Ringing started (AudioContext)');
-      }).catch(e => console.warn('[SIP] AudioContext resume failed:', e));
+        console.log('[SIP] 🔔 Ringing started');
+      } else {
+        ctx.resume().then(() => {
+          if (!this._ringing) { try { source.stop(); } catch (_) {} return; }
+          source.start(0);
+          this._ringSource = source;
+          console.log('[SIP] 🔔 Ringing started (after resume)');
+        }).catch(e => console.warn('[SIP] AudioContext resume failed:', e));
+      }
     };
 
-    if (this._ringBuffer) {
-      play(this._ringBuffer);
+    const cached = getRingBuffer();
+    if (cached) {
+      play(cached);
     } else {
-      // Buffer not preloaded yet — fetch now
-      const ctx = this._getAudioCtx();
+      const ctx = getAudioCtx();
       fetch('/sounds/ringing.mp3')
-        .then(r => r.arrayBuffer())
+        .then(r  => r.arrayBuffer())
         .then(arr => ctx.decodeAudioData(arr))
-        .then(buf => {
-          this._ringBuffer = buf;
-          play(buf);
-        })
-        .catch(e => console.warn('[SIP] Ring fetch failed:', e));
+        .then(buf => { setRingBuffer(buf); play(buf); })
+        .catch(e  => console.warn('[SIP] Ring fetch failed:', e));
     }
   }
 

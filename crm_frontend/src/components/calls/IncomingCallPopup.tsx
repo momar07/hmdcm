@@ -1,5 +1,8 @@
 'use client';
 
+// Re-export so layout.tsx import stays unchanged
+export { unlockAudioCtx as unlockAudio } from '@/lib/sip/audioContext';
+
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   Phone, PhoneOff, Mic, MicOff,
@@ -50,59 +53,9 @@ function TransferModal({
 }
 
 /* ─────────────────────────────────────────────────────────
-   Singleton audio manager — ONE instance globally
-   With Chrome Autoplay Policy unlock via AudioContext
+   Audio is managed by audioContext.ts + sipClient.ts
+   unlockAudio is re-exported at top of file
 ───────────────────────────────────────────────────────── */
-let _globalAudio: HTMLAudioElement | null = null;
-let _audioUnlocked = false;
-
-// Call this on any user interaction to unlock audio
-export function unlockAudio() {
-  if (_audioUnlocked) return;
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    // Create silent buffer and play it to unlock
-    const buf = ctx.createBuffer(1, 1, 22050);
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.connect(ctx.destination);
-    src.start(0);
-    ctx.resume().then(() => {
-      _audioUnlocked = true;
-      ctx.close();
-    }).catch(() => {});
-
-    // NOTE: do NOT play real audio here — sipClient owns ring audio
-    // AudioContext unlock above is sufficient for Chrome autoplay policy
-    _audioUnlocked = true;
-  } catch {}
-}
-
-function startRing() {
-  stopRing(); // always stop old one first
-  try {
-    _globalAudio = new Audio('/sounds/ringing.mp3');
-    _globalAudio.loop   = true;
-    _globalAudio.volume = 0.7;
-    const playPromise = _globalAudio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch((err) => {
-        // Chrome blocked autoplay — try via user interaction fallback
-        console.warn('[Ring] Autoplay blocked:', err.message);
-        // Store intent — will play on next user interaction
-        _globalAudio = null;
-      });
-    }
-  } catch {}
-}
-
-function stopRing() {
-  if (_globalAudio) {
-    _globalAudio.pause();
-    _globalAudio.currentTime = 0;
-    _globalAudio = null;
-  }
-}
 
 /* ─────────────────────────────────────────────────────────
    Main component
