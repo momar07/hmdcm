@@ -51,24 +51,26 @@ export class SipClient {
     // Always stop old audio first to prevent stuck ring
     this._stopRinging();
     try {
-      const audio      = new Audio('/sounds/ringing.mp3');
-      audio.loop       = true;
-      audio.volume     = 0.7;
+      const audio   = new Audio('/sounds/ringing.mp3');
+      audio.loop    = true;
+      audio.volume  = 0.7;
       audio.load();
-      this._ringAudio  = audio;  // assign before play to allow stopRing to work
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => console.log('[SIP] 🔔 Ringing started'))
-          .catch(e  => {
-            console.warn('[SIP] Autoplay blocked — retrying after 300ms:', e.name);
-            setTimeout(() => {
-              if (this._ringAudio === audio) {
-                audio.play().catch(() => {});
-              }
-            }, 300);
+
+      const tryPlay = (attempt: number) => {
+        // If stopRing was called while we were waiting, abort
+        if (this._ringAudio !== audio) return;
+        audio.play()
+          .then(() => console.log('[SIP] 🔔 Ringing started (attempt ' + attempt + ')'))
+          .catch(e => {
+            console.warn('[SIP] Autoplay blocked (attempt ' + attempt + '):', e.name);
+            if (attempt < 5) {
+              setTimeout(() => tryPlay(attempt + 1), 300 * attempt);
+            }
           });
-      }
+      };
+
+      this._ringAudio = audio;   // assign BEFORE tryPlay so stopRing can cancel
+      tryPlay(1);
     } catch (e) {
       console.error('[SIP] Ring error:', e);
       this._ringAudio = null;

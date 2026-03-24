@@ -72,14 +72,9 @@ export function unlockAudio() {
       ctx.close();
     }).catch(() => {});
 
-    // Also create and immediately pause a real audio element
-    const silent = new Audio('/sounds/ringing.mp3');
-    silent.volume = 0;
-    silent.play().then(() => {
-      silent.pause();
-      silent.currentTime = 0;
-      _audioUnlocked = true;
-    }).catch(() => {});
+    // NOTE: do NOT play real audio here — sipClient owns ring audio
+    // AudioContext unlock above is sufficient for Chrome autoplay policy
+    _audioUnlocked = true;
   } catch {}
 }
 

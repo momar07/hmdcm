@@ -33,23 +33,8 @@ export function SoftPhone() {
     return () => window.removeEventListener('sip:endcause', handler);
   }, [setLastEndCause]);
 
-  // Unlock autoplay on first user interaction
-  useEffect(() => {
-    const unlock = () => {
-      const silent = new Audio('/sounds/ringing.mp3');
-      silent.volume = 0;
-      silent.play().then(() => {
-        silent.pause();
-        console.log('[SIP] Autoplay unlocked ✅');
-      }).catch(() => {});
-    };
-    document.addEventListener('click', unlock, { once: true });
-    document.addEventListener('keydown', unlock, { once: true });
-    return () => {
-      document.removeEventListener('click', unlock);
-      document.removeEventListener('keydown', unlock);
-    };
-  }, []);
+  // Autoplay unlock is handled centrally in layout.tsx via unlockAudio()
+  // Removed duplicate here to prevent play/pause race with sipClient._startRinging()
 
   const extNumber   = user?.extension?.number   ?? null;
   const sipSecret   = user?.extension?.secret   ?? null;
