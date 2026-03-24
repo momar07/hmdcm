@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
 from django.core.exceptions import ValidationError
 
 from .models import Call, Disposition
@@ -17,8 +18,13 @@ from apps.leads.models import LeadStage
 
 class CallViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    filter_backends    = [DjangoFilterBackend]
+    filter_backends    = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields   = ['direction', 'status', 'agent', 'queue', 'customer']
+    search_fields      = ['caller', 'callee', 'uniqueid',
+                          'customer__first_name', 'customer__last_name',
+                          'agent__first_name', 'agent__last_name',
+                          'queue']
+    ordering_fields    = ['started_at', 'created_at', 'duration']
     http_method_names  = ['get', 'post', 'patch', 'head', 'options']
 
     def get_queryset(self):

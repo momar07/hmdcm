@@ -449,3 +449,96 @@ def process_ami_event(self, event: dict):
     except Exception as exc:
         logger.error(f'[AMI] Error processing {event_name}: {exc}')
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, max_retries=2)
+def send_followup_reminders(self):
+    """
+    Run every minute via Celery beat (or every 5 min via threading.Timer fallback).
+    Finds followups due in the next 15 minutes that haven't had a reminder sent,
+    and pushes a WebSocket notification to the assigned agent.
+    """
+    import datetime
+    from django.utils import timezone as tz
+    from apps.followups.models import Followup
+
+    now     = tz.now()
+    window  = now + datetime.timedelta(minutes=15)
+
+    due_followups = Followup.objects.filter(
+        status       = 'pending',
+        scheduled_at__gte = now,
+        scheduled_at__lte = window,
+        reminder_sent = False,
+    ).select_related('assigned_to', 'lead__customer', 'call__customer')
+
+    if not due_followups.exists():
+        return 'No reminders due'
+
+    channel_layer = get_channel_layer()
+
+    def _get_customer(f):
+        if f.lead and f.lead.customer:
+            return f.lead.customer
+        if f.call and f.call.customer:
+            return f.call.customer
+        return None
+
+    def _get_customer_phone(customer):
+        if not customer:
+            return None
+        primary = customer.phones.filter(is_primary=True, is_active=True).first()
+        if primary:
+            return primary.number
+        any_p = customer.phones.filter(is_active=True).first()
+        return any_p.number if any_p else None
+
+    sent_ids = []
+    for f in due_followups:
+        customer     = _get_customer(f)
+        customer_id  = str(customer.id) if customer else None
+        customer_name= f'{customer.first_name} {customer.last_name}'.strip() if customer else None
+        customer_phone = _get_customer_phone(customer)
+
+        payload = {
+            'type':         'followup_reminder',
+            'followup_id':  str(f.id),
+            'title':        f.title,
+            'followup_type':f.followup_type,
+            'scheduled_at': f.scheduled_at.isoformat(),
+            'customer':     customer_name or 'Unknown',
+            'customer_id':  customer_id,
+            'customer_phone': customer_phone,
+            'lead_id':      str(f.lead_id) if f.lead_id else None,
+        }
+
+        agent_id = str(f.assigned_to_id)
+
+        async def _push(aid, p):
+            try:
+                await channel_layer.group_send(
+                    f'agent_{aid}',
+                    {'type': 'call_event', 'payload': p}
+                )
+            except Exception as exc:
+                logger.error(f'[Reminder] Push failed for agent {aid}: {exc}')
+
+        import threading
+        def _run(aid=agent_id, p=payload):
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(_push(aid, p))
+            finally:
+                loop.close()
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        t.join(timeout=3)
+        sent_ids.append(f.id)
+        logger.info(f'[Reminder] Sent for followup {f.id} to agent {agent_id}')
+
+    # Mark reminders as sent
+    Followup.objects.filter(id__in=sent_ids).update(reminder_sent=True)
+    return f'Sent {len(sent_ids)} reminders'

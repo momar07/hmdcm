@@ -33,14 +33,17 @@ export default function CallsPage() {
   const [dialNumber, setDialNumber]         = useState('');
   const [dialing, setDialing]               = useState(false);
   const [completingCall, setCompletingCall] = useState<Call | null>(null);
+  const [searchQuery,   setSearchQuery]     = useState('');
+  const [searchInput,   setSearchInput]     = useState('');
 
   const { data, isLoading } = useQuery<PaginatedResponse<Call>>({
-    queryKey: ['calls', page, dirFilter, statusFilter],
+    queryKey: ['calls', page, dirFilter, statusFilter, searchQuery],
     queryFn:  () =>
       callsApi.list({
         page,
-        direction: dirFilter   || undefined,
+        direction: dirFilter    || undefined,
         status:    statusFilter || undefined,
+        search:    searchQuery  || undefined,
         page_size: 25,
       }).then((r) => r.data),
     placeholderData: (prev: PaginatedResponse<Call> | undefined) => prev,
@@ -144,7 +147,34 @@ export default function CallsPage() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap gap-3">
+      <div className="mb-4 flex flex-wrap gap-3 items-center">
+        {/* Search */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search caller, customer, agent..."
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { setSearchQuery(searchInput); setPage(1); }
+              if (e.key === 'Escape') { setSearchInput(''); setSearchQuery(''); setPage(1); }
+            }}
+            className="w-64 pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-sm
+                       focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+          />
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"
+               fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          {searchQuery && (
+            <button
+              onClick={() => { setSearchInput(''); setSearchQuery(''); setPage(1); }}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400
+                         hover:text-gray-600 text-base leading-none"
+            >×</button>
+          )}
+        </div>
         <Select
           options={[
             { value: '',         label: 'All Directions' },

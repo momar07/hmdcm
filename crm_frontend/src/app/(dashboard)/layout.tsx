@@ -10,6 +10,7 @@ import { SoftPhone }           from '@/components/softphone/SoftPhone';
 import { useAuthStore, useCallStore, useAgentStatusStore } from '@/store';
 import { useSipStore } from '@/store/sipStore';
 import { useWebSocket }        from '@/lib/websocket/useWebSocket';
+import { ReminderToastListener } from '@/components/followups/ReminderToast';
 import type { WSEvent }        from '@/types';
 
 export default function DashboardLayout({
@@ -92,6 +93,10 @@ export default function DashboardLayout({
         setStatus(s as any);
       }
     }
+    if (event.type === 'followup_reminder') {
+      // Dispatch DOM event — ReminderToastListener handles the toast UI
+      window.dispatchEvent(new CustomEvent('followup:reminder', { detail: event }));
+    }
   });
 
   // ringKey ref — no longer needs a separate effect
@@ -126,6 +131,7 @@ export default function DashboardLayout({
       </div>
       <IncomingCallPopup />
       <SoftPhone />
+      <ReminderToastListener />
       {dispModal && dispModal.callId && (
         <DispositionModal
           callId={dispModal.callId}

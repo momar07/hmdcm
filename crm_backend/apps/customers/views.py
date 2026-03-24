@@ -206,6 +206,24 @@ class CustomerHistoryView(APIView):
                 'source':       lead.source,
             })
 
+        # ── Tickets ───────────────────────────────────────────────────
+        from apps.tickets.models import Ticket
+        tickets_qs = Ticket.objects.filter(
+            customer_id=pk
+        ).prefetch_related('tags').order_by('-created_at')[:20]
+        for ticket in tickets_qs:
+            timeline.append({
+                'type':          'ticket',
+                'id':            str(ticket.id),
+                'date':          ticket.created_at,
+                'ticket_number': ticket.ticket_number,
+                'title':         ticket.title,
+                'status':        ticket.status,
+                'priority':      ticket.priority,
+                'category':      ticket.category or None,
+                'sla_breached':  ticket.sla_breached,
+            })
+
         # ── Sort all by date descending ────────────────────────────────
         def sort_key(item):
             d = item.get('date')
