@@ -3,9 +3,11 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft, Edit2, CheckCircle, XCircle,
-  AlertTriangle, MoreVertical, RefreshCw,
+  AlertTriangle, MoreVertical, RefreshCw, CheckSquare,
 } from "lucide-react";
 import { StatusBadge, PriorityBadge } from "./TicketBadge";
+import { NewApprovalModal } from "@/components/approvals/NewApprovalModal";
+import { useAuthStore } from "@/store";
 import type { TicketDetail, TicketUpdatePayload, TicketStatus, TicketPriority } from "@/types/tickets";
 
 interface Props {
@@ -14,12 +16,14 @@ interface Props {
   onUpdate: (payload: TicketUpdatePayload) => Promise<void>;
 }
 
-const STATUSES: TicketStatus[]  = ["open", "in_progress", "pending", "resolved", "closed"];
+const STATUSES: TicketStatus[]     = ["open", "in_progress", "pending", "resolved", "closed"];
 const PRIORITIES: TicketPriority[] = ["low", "medium", "high", "urgent"];
 
 export function TicketDetailHeader({ ticket, saving, onUpdate }: Props) {
   const router  = useRouter();
-  const [showMenu, setShowMenu] = useState(false);
+  const { user } = useAuthStore();
+  const [showMenu,     setShowMenu]     = useState(false);
+  const [showApproval, setShowApproval] = useState(false);
 
   return (
     <div className="bg-white border-b border-gray-200 px-6 py-4 flex flex-wrap items-center gap-4">
@@ -54,8 +58,21 @@ export function TicketDetailHeader({ ticket, saving, onUpdate }: Props) {
         )}
       </div>
 
-      {/* Quick Status Change */}
+      {/* Quick Actions */}
       <div className="flex items-center gap-2 shrink-0">
+
+        {/* Request Approval — agents only */}
+        {user?.role === 'agent' && (
+          <button
+            onClick={() => setShowApproval(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium
+              text-purple-700 bg-purple-50 border border-purple-200 rounded-lg
+              hover:bg-purple-100 transition-colors">
+            <CheckSquare className="h-3.5 w-3.5" />
+            Request Approval
+          </button>
+        )}
+
         {ticket.status !== "resolved" && ticket.status !== "closed" && (
           <button
             onClick={() => onUpdate({ status: "resolved" })}
@@ -77,37 +94,16 @@ export function TicketDetailHeader({ ticket, saving, onUpdate }: Props) {
             <XCircle className="h-3.5 w-3.5" /> Close
           </button>
         )}
-
-        {/* More menu */}
-        <div className="relative">
-          <button onClick={() => setShowMenu(p => !p)}
-            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            <MoreVertical className="h-4 w-4 text-gray-500" />
-          </button>
-          {showMenu && (
-            <div className="absolute right-0 top-8 w-44 bg-white border border-gray-200
-              rounded-xl shadow-lg z-20 py-1" onMouseLeave={() => setShowMenu(false)}>
-              {STATUSES.map(s => (
-                <button key={s}
-                  onClick={() => { onUpdate({ status: s }); setShowMenu(false); }}
-                  className="w-full text-left px-3 py-2 text-xs text-gray-700
-                    hover:bg-gray-50 capitalize transition-colors">
-                  → {s.replace("_", " ")}
-                </button>
-              ))}
-              <hr className="my-1 border-gray-100" />
-              {PRIORITIES.map(p => (
-                <button key={p}
-                  onClick={() => { onUpdate({ priority: p }); setShowMenu(false); }}
-                  className="w-full text-left px-3 py-2 text-xs text-gray-700
-                    hover:bg-gray-50 capitalize transition-colors">
-                  ◆ {p}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
+
+      {/* Approval Modal — pre-linked to this ticket */}
+      <NewApprovalModal
+        open={showApproval}
+        onClose={() => setShowApproval(false)}
+        onCreated={() => setShowApproval(false)}
+        defaultTicketId={ticket.id}
+        defaultCustomerId={ticket.customer ?? undefined}
+      />
     </div>
   );
 }

@@ -1,9 +1,11 @@
 'use client';
 
-import { Bell, PhoneCall }         from 'lucide-react';
+import { useState }               from 'react';
+import { Bell, PhoneCall, CheckSquare } from 'lucide-react';
 import { useAuthStore }            from '@/store';
 import { AgentStatusDropdown }     from './AgentStatusDropdown';
 import { useAgentStatusStore }     from '@/store';
+import { NewApprovalModal }        from '@/components/approvals/NewApprovalModal';
 import type { AgentStatus }        from '@/types';
 
 const ROLE_COLORS: Record<string, string> = {
@@ -24,6 +26,7 @@ const STATUS_DOT: Record<AgentStatus, string> = {
 export function Topbar() {
   const { user }   = useAuthStore();
   const { status } = useAgentStatusStore();
+  const [showApproval, setShowApproval] = useState(false);
 
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center
@@ -44,7 +47,20 @@ export function Topbar() {
           </span>
         )}
 
-        {/* Agent Status Dropdown — agents & supervisors only */}
+        {/* Request Approval button — agents only */}
+        {user?.role === 'agent' && (
+          <button
+            onClick={() => setShowApproval(true)}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs
+                       font-medium text-blue-700 bg-blue-50 border border-blue-200
+                       rounded-lg hover:bg-blue-100 transition-colors"
+          >
+            <CheckSquare size={14} />
+            Request Approval
+          </button>
+        )}
+
+        {/* Agent Status Dropdown */}
         <AgentStatusDropdown />
 
         {/* Notifications */}
@@ -65,7 +81,6 @@ export function Topbar() {
               >
                 {user.full_name.charAt(0).toUpperCase()}
               </div>
-              {/* Status dot on avatar */}
               {['agent', 'supervisor'].includes(user.role) && (
                 <span
                   className={`absolute -bottom-0.5 -right-0.5 w-3 h-3
@@ -81,6 +96,13 @@ export function Topbar() {
           </div>
         )}
       </div>
+
+      {/* New Approval Modal */}
+      <NewApprovalModal
+        open={showApproval}
+        onClose={() => setShowApproval(false)}
+        onCreated={() => setShowApproval(false)}
+      />
     </header>
   );
 }
