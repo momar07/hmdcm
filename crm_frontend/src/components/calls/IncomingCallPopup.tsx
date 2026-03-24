@@ -163,23 +163,24 @@ export function IncomingCallPopup() {
     clearIncoming();
   }, [actions, clearIncoming]);
 
-  /* ── WS event: incomingCall set → show popup ─────────── */
+  /* ── WS event: incomingCall set → show popup + start ring ── */
   useEffect(() => {
     if (incomingCall) {
-      // Show popup — SipClient handles ring audio independently
       setVisible(true);
+      startRing();   // WS event arrived — start ring immediately
     }
   }, [incomingCall]);
 
   /* ── SIP status changes ───────────────────────────────── */
   useEffect(() => {
     if (callStatus === 'incoming') {
-      // SIP INVITE — ensure popup visible (SipClient handles ring)
+      // SIP INVITE — ensure popup + ring (in case WS event was missed)
       setVisible(true);
+      startRing();
     }
 
     if (callStatus === 'active') {
-      // Call answered — stay visible as call-control (SipClient stops ring)
+      stopRing();
       setVisible(true);
       const call = incomingCallRef.current;
       if (call?.customer_id) {
@@ -191,7 +192,7 @@ export function IncomingCallPopup() {
     }
 
     if (callStatus === 'idle') {
-      // Call ended / caller hung up (SipClient already stopped ring)
+      stopRing();
       setVisible(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -199,7 +200,7 @@ export function IncomingCallPopup() {
 
   /* ── Cleanup on unmount ───────────────────────────────── */
   useEffect(() => {
-    return () => {};
+    return () => { stopRing(); };
   }, []);
 
   if (!visible) return null;
