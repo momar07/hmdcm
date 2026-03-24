@@ -20,6 +20,7 @@ import {
   ChevronRight,
   LayoutGrid,
   Activity,
+  CheckSquare,
 } from 'lucide-react';
 import { useAuthStore, useUIStore, useAgentStatusStore } from '@/store';
 import type { Role } from '@/types';
@@ -65,6 +66,11 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/tickets', label: 'Tickets',
     icon: <TicketIcon size={18} />,
+    roles: ['admin', 'supervisor', 'agent'],
+  },
+  {
+    href: '/approvals', label: 'Approvals',
+    icon: <CheckSquare size={18} />,
     roles: ['admin', 'supervisor', 'agent'],
   },
   {
