@@ -168,8 +168,12 @@ export class SipClient {
         session.on('accepted', () => {
           console.log('[SIP] Incoming call accepted');
           this._stopRinging();
-          this.onCallStatusChange('active');
-          setTimeout(() => this._reattachStream(session), 500);
+          // Delay active status so popup stays visible for agent to see
+          // Asterisk fires 'accepted' on DTLS negotiation — not on agent answer
+          setTimeout(() => {
+            this.onCallStatusChange('active');
+            setTimeout(() => this._reattachStream(session), 500);
+          }, 1500);
         });
         session.on('ended',  (e: any) => {
           this._stopRinging();
