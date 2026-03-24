@@ -8,7 +8,11 @@ def get_all_calls(user=None) -> QuerySet:
         'agent', 'customer'
     ).prefetch_related('events').all()
     if user and user.role == 'agent':
-        qs = qs.filter(agent=user)
+        # Agent sees: their own calls + unassigned inbound calls
+        qs = qs.filter(
+            Q(agent=user) |
+            Q(agent__isnull=True, direction='inbound')
+        )
     elif user and user.role == 'supervisor':
         if user.team_id:
             qs = qs.filter(agent__team=user.team)

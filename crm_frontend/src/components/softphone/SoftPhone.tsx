@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Phone, PhoneOff,
   Mic, MicOff, PauseCircle, PlayCircle,
@@ -81,6 +81,35 @@ export function SoftPhone() {
   useEffect(() => {
     registerActions({ answer, hangup, toggleMute, toggleHold, call });
   }, [answer, hangup, toggleMute, toggleHold]);
+
+  // Track current webrtc call id
+  const webrtcCallIdRef = React.useRef<string | null>(null);
+  const callStartTimeRef = React.useRef<number>(0);
+
+  // Start webrtc call record when ringing begins
+  useEffect(() => {
+    if (localCallStatus === 'ringing' && dialNum) {
+      import('@/lib/api/calls').then(({ callsApi }) => {
+        callsApi.startWebrtcCall({
+          customer_phone: dialNum,
+        }).then((res: any) => {
+          webrtcCallIdRef.current = res.data?.call_id ?? null;
+          callStartTimeRef.current = Date.now();
+        }).catch(() => {});
+      });
+    }
+    if (localCallStatus === 'idle' && webrtcCallIdRef.current) {
+      const callId   = webrtcCallIdRef.current;
+      const duration = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
+      webrtcCallIdRef.current = null;
+      import('@/lib/api/calls').then(({ callsApi }) => {
+        callsApi.endWebrtcCall(callId, {
+          end_cause: 'ended',
+          duration,
+        }).catch(() => {});
+      });
+    }
+  }, [localCallStatus]);
 
   // Status colours
   const statusDot: Record<string, string> = {
