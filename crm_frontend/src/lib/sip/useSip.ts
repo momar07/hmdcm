@@ -29,6 +29,7 @@ export function useSip(config: SipConfig | null) {
   useEffect(() => {
     if (!config) return;
 
+    ;(window as any).__sipClient = null;   // reset before creating new
     const client = new SipClient(
       config,
       setSipStatus,
@@ -40,6 +41,7 @@ export function useSip(config: SipConfig | null) {
     );
 
     clientRef.current = client;
+    ;(window as any).__sipClient = client;   // expose for preload
     client.connect();
 
     return () => { client.disconnect(); };

@@ -55,6 +55,22 @@ export function SoftPhone() {
     toggleMute, toggleHold, sendDtmf,
   } = useSip(sipConfig);
 
+  // Preload ring buffer as soon as SIP registers (so first ring is instant)
+  const sipClientRef = (useSip as any)._clientRef;
+  useEffect(() => {
+    if (sipStatus === 'registered') {
+      // Access the internal SipClient instance via the hook's exposed ref
+      // and preload the audio buffer to avoid fetch delay on first call
+      import('@/lib/sip/useSip').then(mod => {
+        // The hook exposes _client via window for preload
+        const client = (window as any).__sipClient;
+        if (client?._preloadRingBuffer) {
+          client._preloadRingBuffer();
+        }
+      }).catch(() => {});
+    }
+  }, [sipStatus]);
+
   // Sync local SIP state → global store
   useEffect(() => { setSipStatus(sipStatus); },           [sipStatus]);
   useEffect(() => { setCallStatus(localCallStatus); },    [localCallStatus]);

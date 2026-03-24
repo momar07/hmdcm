@@ -45,43 +45,80 @@ export class SipClient {
     this.onEndCause         = onEndCause;
   }
 
-  private _ringAudio: HTMLAudioElement | null = null;
+  // ── Web Audio API ring (bypasses Chrome autoplay policy) ──────────────
+  private _audioCtx:      AudioContext | null      = null;
+  private _ringSource:    AudioBufferSourceNode | null = null;
+  private _ringBuffer:    AudioBuffer | null        = null;
+  private _ringing:       boolean                   = false;
+
+  /** Pre-fetch the ring buffer once so first ring is instant */
+  async _preloadRingBuffer() {
+    if (this._ringBuffer) return;
+    try {
+      const ctx  = this._getAudioCtx();
+      const resp = await fetch('/sounds/ringing.mp3');
+      const arr  = await resp.arrayBuffer();
+      this._ringBuffer = await ctx.decodeAudioData(arr);
+      console.log('[SIP] 🎵 Ring buffer preloaded');
+    } catch (e) {
+      console.warn('[SIP] Ring preload failed:', e);
+    }
+  }
+
+  private _getAudioCtx(): AudioContext {
+    if (!this._audioCtx || this._audioCtx.state === 'closed') {
+      this._audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    return this._audioCtx;
+  }
 
   private _startRinging() {
-    // Always stop old audio first to prevent stuck ring
     this._stopRinging();
-    try {
-      const audio   = new Audio('/sounds/ringing.mp3');
-      audio.loop    = true;
-      audio.volume  = 0.7;
-      audio.load();
+    this._ringing = true;
 
-      const tryPlay = (attempt: number) => {
-        // If stopRing was called while we were waiting, abort
-        if (this._ringAudio !== audio) return;
-        audio.play()
-          .then(() => console.log('[SIP] 🔔 Ringing started (attempt ' + attempt + ')'))
-          .catch(e => {
-            console.warn('[SIP] Autoplay blocked (attempt ' + attempt + '):', e.name);
-            if (attempt < 5) {
-              setTimeout(() => tryPlay(attempt + 1), 300 * attempt);
-            }
-          });
-      };
+    const play = (buf: AudioBuffer) => {
+      if (!this._ringing) return;           // was stopped before we got here
+      const ctx    = this._getAudioCtx();
+      const source = ctx.createBufferSource();
+      source.buffer = buf;
+      source.loop   = true;
 
-      this._ringAudio = audio;   // assign BEFORE tryPlay so stopRing can cancel
-      tryPlay(1);
-    } catch (e) {
-      console.error('[SIP] Ring error:', e);
-      this._ringAudio = null;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.7;
+      source.connect(gain);
+      gain.connect(ctx.destination);
+
+      ctx.resume().then(() => {
+        if (!this._ringing) { source.stop(); return; }
+        source.start(0);
+        this._ringSource = source;
+        console.log('[SIP] 🔔 Ringing started (AudioContext)');
+      }).catch(e => console.warn('[SIP] AudioContext resume failed:', e));
+    };
+
+    if (this._ringBuffer) {
+      play(this._ringBuffer);
+    } else {
+      // Buffer not preloaded yet — fetch now
+      const ctx = this._getAudioCtx();
+      fetch('/sounds/ringing.mp3')
+        .then(r => r.arrayBuffer())
+        .then(arr => ctx.decodeAudioData(arr))
+        .then(buf => {
+          this._ringBuffer = buf;
+          play(buf);
+        })
+        .catch(e => console.warn('[SIP] Ring fetch failed:', e));
     }
   }
 
   private _stopRinging() {
-    if (!this._ringAudio) return;
-    this._ringAudio.pause();
-    this._ringAudio.currentTime = 0;
-    this._ringAudio = null;
+    this._ringing = false;
+    if (this._ringSource) {
+      try { this._ringSource.stop(); } catch (_) {}
+      this._ringSource = null;
+    }
+    console.log('[SIP] 🔕 Ringing stopped');
   }
 
   connect() {
