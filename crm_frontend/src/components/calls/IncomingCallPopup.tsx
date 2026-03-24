@@ -129,14 +129,12 @@ export function IncomingCallPopup() {
 
   /* ── Dismiss (reject / close) ─────────────────────────── */
   const handleDismiss = useCallback(() => {
-    stopRing();
     setVisible(false);
     clearIncoming();
   }, [clearIncoming]);
 
   /* ── Answer ───────────────────────────────────────────── */
   const handleAnswer = useCallback(() => {
-    stopRing();
     const call = incomingCallRef.current;
     if (!call?.customer_id) {
       actions?.answer();
@@ -165,11 +163,10 @@ export function IncomingCallPopup() {
     clearIncoming();
   }, [actions, clearIncoming]);
 
-  /* ── WS event: incomingCall set → show + ring ─────────── */
+  /* ── WS event: incomingCall set → show popup ─────────── */
   useEffect(() => {
     if (incomingCall) {
-      // New call arrived — start fresh ring
-      startRing();
+      // Show popup — SipClient handles ring audio independently
       setVisible(true);
     }
   }, [incomingCall]);
@@ -177,14 +174,12 @@ export function IncomingCallPopup() {
   /* ── SIP status changes ───────────────────────────────── */
   useEffect(() => {
     if (callStatus === 'incoming') {
-      // SIP INVITE — ensure popup visible + ring
+      // SIP INVITE — ensure popup visible (SipClient handles ring)
       setVisible(true);
-      if (!_globalAudio) startRing();
     }
 
     if (callStatus === 'active') {
-      // Call answered — stop ring, stay visible as call-control
-      stopRing();
+      // Call answered — stay visible as call-control (SipClient stops ring)
       setVisible(true);
       const call = incomingCallRef.current;
       if (call?.customer_id) {
@@ -196,8 +191,7 @@ export function IncomingCallPopup() {
     }
 
     if (callStatus === 'idle') {
-      // Call ended / caller hung up → STOP ring immediately
-      stopRing();
+      // Call ended / caller hung up (SipClient already stopped ring)
       setVisible(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -205,7 +199,7 @@ export function IncomingCallPopup() {
 
   /* ── Cleanup on unmount ───────────────────────────────── */
   useEffect(() => {
-    return () => { stopRing(); };
+    return () => {};
   }, []);
 
   if (!visible) return null;
