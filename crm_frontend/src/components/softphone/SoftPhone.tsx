@@ -22,7 +22,7 @@ export function SoftPhone() {
     callStatus, isMuted, isOnHold, callTimer,
   } = useSipStore();
 
-  // Listen for end cause events from SipClient
+  // Listen for end cause events — show briefly in UI + capture in ref for endWebrtcCall
   useEffect(() => {
     const handler = (e: Event) => {
       const cause = (e as CustomEvent).detail as string;
@@ -83,18 +83,50 @@ export function SoftPhone() {
     registerActions({ answer, hangup, toggleMute, toggleHold, call });
   }, [answer, hangup, toggleMute, toggleHold]);
 
-  // Track current webrtc call id
-  const webrtcCallIdRef = React.useRef<string | null>(null);
-  const callStartTimeRef = React.useRef<number>(0);
+  // Track current webrtc call id + external dial context
+  const externalDialRef    = React.useRef<{ phone: string; customerId: string|null; leadId: string|null } | null>(null);
+  const webrtcCallIdRef    = React.useRef<string | null>(null);
+  const callStartTimeRef   = React.useRef<number>(0);
+  const lastEndCauseRef    = React.useRef<string>('ended');
 
-  // Start webrtc call record when ringing begins
+  // Capture end cause from SipClient event into ref (for endWebrtcCall)
   useEffect(() => {
-    if (localCallStatus === 'ringing' && dialNum) {
+    const handler = (e: Event) => {
+      lastEndCauseRef.current = (e as CustomEvent).detail as string ?? 'ended';
+    };
+    window.addEventListener('sip:endcause', handler);
+    return () => window.removeEventListener('sip:endcause', handler);
+  }, []);
+
+  // Listen for external dial requests (e.g. from customer page "Call Now" button)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { phone, customerId, leadId } = (e as CustomEvent).detail ?? {};
+      if (!phone) return;
+      setDialNum(phone);
+      setOpen(true);
+      // Store context for startWebrtcCall
+      externalDialRef.current = { phone, customerId: customerId ?? null, leadId: leadId ?? null };
+      // Small delay so dialNum state settles before call()
+      setTimeout(() => { call(phone); }, 100);
+    };
+    window.addEventListener('sip:dial', handler);
+    return () => window.removeEventListener('sip:dial', handler);
+  }, [call]);
+
+  // Start webrtc call record when outbound ringing begins
+  useEffect(() => {
+    if (localCallStatus === 'ringing' && (dialNum || externalDialRef.current?.phone)) {
+      const targetPhone = externalDialRef.current?.phone || dialNum;
+      const ctx         = externalDialRef.current;
+      lastEndCauseRef.current = 'ended';   // reset before new call
       import('@/lib/api/calls').then(({ callsApi }) => {
         callsApi.startWebrtcCall({
-          customer_phone: dialNum,
+          customer_phone: targetPhone,
+          customer_id:    ctx?.customerId ?? null,
+          lead_id:        ctx?.leadId     ?? null,
         }).then((res: any) => {
-          webrtcCallIdRef.current = res.data?.call_id ?? null;
+          webrtcCallIdRef.current  = res.data?.call_id ?? null;
           callStartTimeRef.current = Date.now();
         }).catch(() => {});
       });
@@ -102,12 +134,11 @@ export function SoftPhone() {
     if (localCallStatus === 'idle' && webrtcCallIdRef.current) {
       const callId   = webrtcCallIdRef.current;
       const duration = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
+      const cause    = lastEndCauseRef.current || 'ended';
       webrtcCallIdRef.current = null;
+      externalDialRef.current = null;
       import('@/lib/api/calls').then(({ callsApi }) => {
-        callsApi.endWebrtcCall(callId, {
-          end_cause: 'ended',
-          duration,
-        }).catch(() => {});
+        callsApi.endWebrtcCall(callId, { end_cause: cause, duration }).catch(() => {});
       });
     }
   }, [localCallStatus]);

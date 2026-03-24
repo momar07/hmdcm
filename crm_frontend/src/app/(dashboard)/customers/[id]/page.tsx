@@ -10,6 +10,7 @@ import {
   Ticket as TicketIcon, Plus,
 } from 'lucide-react';
 import { customersApi } from '@/lib/api/customers';
+import { useSipStore }   from '@/store/sipStore';
 import { callsApi }     from '@/lib/api/calls';
 import { leadsApi }     from '@/lib/api/leads';
 import { ticketsApi }   from '@/lib/api/tickets';
@@ -50,6 +51,14 @@ export default function CustomerDetailPage() {
   const [noteOpen, setNoteOpen]     = useNoteState(false);
   const [ticketModal, setTicketModal] = useState(false);
   const qc = useQueryClient();
+  const { sipStatus, callStatus: activeSipCall } = useSipStore();
+
+  // Trigger a call from customer page → SoftPhone handles it
+  const handleCallNow = (phone: string) => {
+    window.dispatchEvent(new CustomEvent('sip:dial', {
+      detail: { phone, customerId: id, leadId: null },
+    }));
+  };
 
   const addNoteMutation = useMutation({
     mutationFn: () => api.post('/notes/', {
@@ -119,6 +128,19 @@ export default function CustomerDetailPage() {
             </Button>
             <Button variant="secondary" icon={<ArrowLeft size={16}/>}
                     onClick={() => router.back()}>Back</Button>
+            {customer.phones?.length > 0 && sipStatus === 'registered' && (
+              <Button
+                variant="primary"
+                icon={<Phone size={16}/>}
+                disabled={activeSipCall !== 'idle'}
+                onClick={() => handleCallNow(
+                  customer.phones.find((p: any) => p.is_primary)?.number
+                  ?? customer.phones[0]?.number
+                )}
+              >
+                {activeSipCall !== 'idle' ? 'In Call...' : 'Call Now'}
+              </Button>
+            )}
           </div>
         }
       />

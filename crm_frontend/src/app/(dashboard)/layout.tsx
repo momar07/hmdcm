@@ -47,28 +47,26 @@ export default function DashboardLayout({
   const prevCallStatus = useRef<string>('idle');
 
   useEffect(() => {
-    if (prevCallStatus.current === 'active' && callStatus === 'idle') {
-      const call = incomingCall;
-      setDispModal({
-        callId:       '',
-        callerNumber: call?.caller ?? 'Unknown',
-        customerName: call?.customer_name ?? null,
-        customerId:   call?.customer_id   ?? null,
-      });
-      import('@/lib/api/calls').then(({ callsApi }) => {
-        callsApi.pendingCompletions().then(res => {
-          const pending = res.data;
-          if (Array.isArray(pending) && pending.length > 0) {
-            const latest = pending[0];
-            setDispModal({
-              callId:       latest.id,
-              callerNumber: (latest as any).caller ?? (latest as any).caller_number ?? 'Unknown',
-              customerName: (latest as any).customer_name ?? null,
-              customerId:   (latest as any).customer   ?? null,
-            });
-          }
-        }).catch(() => {});
-      });
+    // Show DispositionModal when call ends (both inbound active→idle AND outbound ringing/active→idle)
+    const wasInCall = prevCallStatus.current === 'active' || prevCallStatus.current === 'ringing';
+    if (wasInCall && callStatus === 'idle') {
+      // Short delay so backend has time to update the call record
+      setTimeout(() => {
+        import('@/lib/api/calls').then(({ callsApi }) => {
+          callsApi.pendingCompletions().then(res => {
+            const pending = res.data;
+            if (Array.isArray(pending) && pending.length > 0) {
+              const latest = pending[0];
+              setDispModal({
+                callId:       latest.id,
+                callerNumber: (latest as any).caller ?? (latest as any).caller_number ?? 'Unknown',
+                customerName: (latest as any).customer_name ?? null,
+                customerId:   (latest as any).customer   ?? null,
+              });
+            }
+          }).catch(() => {});
+        });
+      }, 800);  // 800ms so endWebrtcCall finishes before we query pending
     }
     prevCallStatus.current = callStatus;
   }, [callStatus]);
