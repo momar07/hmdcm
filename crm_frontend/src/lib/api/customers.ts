@@ -25,4 +25,10 @@ export const customersApi = {
 
   screenPop: (phone: string) =>
     api.get('/calls/screen-pop/', { params: { phone } }),
+
+  bulkAction: (data: {
+    ids:         string[];
+    action:      'assign' | 'activate' | 'deactivate' | 'export';
+    assigned_to?: string;
+  }) => api.post('/customers/bulk-action/', data),
 };

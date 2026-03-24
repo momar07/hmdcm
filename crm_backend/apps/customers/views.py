@@ -240,3 +240,91 @@ class CustomerHistoryView(APIView):
             'results': timeline,
         })
 
+
+
+class CustomerBulkActionView(APIView):
+    """
+    POST /api/customers/bulk-action/
+    body: {
+        ids:        [uuid, ...],
+        action:     'assign' | 'activate' | 'deactivate' | 'export',
+        assigned_to: uuid   (required for action=assign)
+    }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        ids     = request.data.get('ids', [])
+        action  = request.data.get('action', '').strip()
+
+        if not ids or not action:
+            return Response(
+                {'error': 'ids and action are required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(ids) > 500:
+            return Response(
+                {'error': 'Maximum 500 records per bulk action'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        qs = Customer.objects.filter(id__in=ids)
+        count = qs.count()
+
+        if count == 0:
+            return Response({'error': 'No matching customers found'}, status=404)
+
+        if action == 'activate':
+            qs.update(is_active=True)
+            return Response({'updated': count, 'action': 'activated'})
+
+        elif action == 'deactivate':
+            qs.update(is_active=False)
+            return Response({'updated': count, 'action': 'deactivated'})
+
+        elif action == 'assign':
+            assigned_to_id = request.data.get('assigned_to')
+            if not assigned_to_id:
+                return Response(
+                    {'error': 'assigned_to is required for assign action'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            from apps.users.models import User
+            try:
+                agent = User.objects.get(pk=assigned_to_id)
+            except User.DoesNotExist:
+                return Response({'error': 'Agent not found'}, status=404)
+            qs.update(assigned_to=agent)
+            return Response({
+                'updated':      count,
+                'action':       'assigned',
+                'assigned_to':  agent.get_full_name(),
+            })
+
+        elif action == 'export':
+            # Return CSV-ready data
+            customers = qs.prefetch_related('phones', 'tags').order_by('first_name')
+            rows = []
+            for c in customers:
+                primary = c.phones.filter(is_primary=True).first() or c.phones.first()
+                rows.append({
+                    'id':         str(c.id),
+                    'first_name': c.first_name,
+                    'last_name':  c.last_name,
+                    'email':      c.email or '',
+                    'company':    c.company or '',
+                    'phone':      primary.number if primary else '',
+                    'city':       c.city or '',
+                    'country':    c.country or '',
+                    'is_active':  c.is_active,
+                    'created_at': c.created_at.strftime('%Y-%m-%d') if c.created_at else '',
+                    'tags':       ', '.join(t.name for t in c.tags.all()),
+                })
+            return Response({'count': len(rows), 'data': rows})
+
+        else:
+            return Response(
+                {'error': f'Unknown action: {action}'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )

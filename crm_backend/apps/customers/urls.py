@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CustomerViewSet, CustomerTagViewSet, CustomerHistoryView
+from .views import CustomerViewSet, CustomerBulkActionView, CustomerTagViewSet, CustomerHistoryView
 
 router = DefaultRouter()
 router.register(r'tags', CustomerTagViewSet, basename='customer-tag')
