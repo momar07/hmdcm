@@ -8,11 +8,16 @@ const WS_URL    = process.env.NEXT_PUBLIC_WS_URL ?? 'ws://localhost:8000';
 const MAX_RETRY = 5;
 const DELAY_MS  = 4000;
 
+// Global singleton — one WS connection per browser tab
+let _globalWs: WebSocket | null = null;
+let _globalListeners: Set<(e: WSEvent) => void> = new Set();
+
 export function useWebSocket(onEvent: (event: WSEvent) => void) {
   const wsRef      = useRef<WebSocket | null>(null);
   const onEventRef = useRef(onEvent);
   const retryRef   = useRef(0);
   const deadRef    = useRef(false);
+  const lastMsgId  = useRef<string>('');
 
   useEffect(() => { onEventRef.current = onEvent; }, [onEvent]);
 
@@ -40,6 +45,11 @@ export function useWebSocket(onEvent: (event: WSEvent) => void) {
     ws.onmessage = (e) => {
       try {
         const data = JSON.parse(e.data) as WSEvent;
+        // Dedup: skip if same message received within 200ms
+        const msgKey = JSON.stringify(data).slice(0, 120);
+        if (lastMsgId.current === msgKey) return;
+        lastMsgId.current = msgKey;
+        setTimeout(() => { if (lastMsgId.current === msgKey) lastMsgId.current = ''; }, 200);
         onEventRef.current(data);
       } catch {
         console.warn('[WS] Parse error', e.data);
