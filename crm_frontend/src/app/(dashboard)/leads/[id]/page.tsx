@@ -95,7 +95,7 @@ export default function LeadDetailPage() {
       qc.invalidateQueries({ queryKey: ['lead-events', id] });
       setNewFollowupDate('');
     },
-    onError: () => toast.error('Failed to set follow-up date'),
+    onError: (err: any) => toast.error('Error: ' + (err?.response?.data?.followup_date?.[0] || err?.response?.data?.detail || 'Failed to set follow-up date')),
   });
 
   if (isLoading) return (
@@ -236,7 +236,7 @@ export default function LeadDetailPage() {
             <Button
               variant="primary" size="sm"
               disabled={!newFollowupDate || setFollowupDate.isPending}
-              onClick={() => setFollowupDate.mutate(newFollowupDate)}
+              onClick={() => setFollowupDate.mutate(newFollowupDate.length === 16 ? newFollowupDate + ':00' : newFollowupDate)}
             >
               Set
             </Button>
