@@ -18,7 +18,7 @@ from .views import (
 
 # SimpleRouter — لا يعمل API root page فلا يحجب /api/calls/
 calls_router = SimpleRouter()
-calls_router.register(r'', CallViewSet, basename='call')
+calls_router.register(r'list', CallViewSet, basename='call')
 
 # router منفصل للـ dispositions CRUD
 disp_router = SimpleRouter()

@@ -17,10 +17,10 @@ export interface CallCompletionPayload {
 
 export const callsApi = {
   list: (params?: Record<string, unknown>) =>
-    api.get<PaginatedResponse<Call>>('/calls/', { params }),
+    api.get<PaginatedResponse<Call>>('/calls/list/', { params }),
 
   get: (id: string) =>
-    api.get<Call>(`/calls/${id}/`),
+    api.get<Call>(`/calls/list/${id}/`),
 
   originate: (data: { phone_number: string; customer_id?: string; lead_id?: string }) =>
     api.post('/calls/originate/', data),
