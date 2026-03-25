@@ -307,10 +307,15 @@ def process_ami_event(self, event: dict):
             if cause in cause_status_map:
                 status = cause_status_map[cause]
             elif call_obj.status == 'answered':
+                # Already marked answered by AgentConnect — keep it
                 status = 'answered'
             else:
-                # ringing or any other pre-answer status → no_answer
-                status = 'no_answer'
+                # Re-fetch from DB to catch AgentConnect that may have just fired
+                fresh = Call.objects.filter(uniqueid=uniqueid).values('status').first()
+                if fresh and fresh['status'] == 'answered':
+                    status = 'answered'
+                else:
+                    status = 'no_answer'
 
             # Calculate duration from started_at if Asterisk didn't send it
             if duration == 0 and call_obj.started_at and status == 'answered':

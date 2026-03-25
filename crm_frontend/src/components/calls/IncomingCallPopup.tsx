@@ -84,16 +84,12 @@ export function IncomingCallPopup() {
   /* ── Answer ───────────────────────────────────────────── */
   const handleAnswer = useCallback(() => {
     const call = incomingCallRef.current;
+    actions?.answer();
     if (!call?.customer_id) {
-      actions?.answer();
       const caller   = call?.caller   || '';
       const uniqueid = call?.uniqueid  || '';
-      setTimeout(() => {
-        setVisible(false);
-        router.push(`/customers/new?phone=${encodeURIComponent(caller)}&uniqueid=${encodeURIComponent(uniqueid)}`);
-      }, 300);
-    } else {
-      actions?.answer();
+      setVisible(false);
+      router.push(`/customers/new?phone=${encodeURIComponent(caller)}&uniqueid=${encodeURIComponent(uniqueid)}`);
     }
   }, [actions, router]);
 

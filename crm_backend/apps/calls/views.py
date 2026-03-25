@@ -219,6 +219,7 @@ class PendingCompletionsView(APIView):
         return Response([{
             'id':            str(c.id),
             'caller':        c.caller,
+            'direction':     c.direction,
             'customer':      str(c.customer_id) if c.customer_id else None,
             'customer_name': c.customer.get_full_name() if c.customer else None,
             'started_at':    c.started_at,

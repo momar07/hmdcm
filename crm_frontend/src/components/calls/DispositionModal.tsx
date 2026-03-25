@@ -87,6 +87,8 @@ export function DispositionModal({
       qc.invalidateQueries({ queryKey: ['followups-overdue'] });
       qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
       qc.invalidateQueries({ queryKey: ['leads'] });
+      qc.invalidateQueries({ queryKey: ['customer-history'] });
+      qc.invalidateQueries({ queryKey: ['customer-calls'] });
       onClose();
     },
     onError: (err: any) => {

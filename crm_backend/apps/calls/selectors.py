@@ -14,8 +14,14 @@ def get_all_calls(user=None) -> QuerySet:
             Q(agent__isnull=True, direction='inbound')
         )
     elif user and user.role == 'supervisor':
+        # Supervisor: team filter only on /calls/ list page — NOT when
+        # filtering by customer (customer filter is applied by the ViewSet)
+        # so we don't restrict here to avoid hiding calls on customer page
         if user.team_id:
-            qs = qs.filter(agent__team=user.team)
+            qs = qs.filter(
+                Q(agent__team=user.team) | Q(agent__isnull=True)
+            )
+    # admin sees all — no filter
     return qs.order_by('-created_at')
 
 

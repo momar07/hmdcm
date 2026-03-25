@@ -81,7 +81,7 @@ export function SoftPhone() {
   // Register actions in store so IncomingCallPopup can call them
   useEffect(() => {
     registerActions({ answer, hangup, toggleMute, toggleHold, call });
-  }, [answer, hangup, toggleMute, toggleHold]);
+  }, [answer, hangup, toggleMute, toggleHold, call]);
 
   // Track current webrtc call id + external dial context
   const externalDialRef    = React.useRef<{ phone: string; customerId: string|null; leadId: string|null } | null>(null);
