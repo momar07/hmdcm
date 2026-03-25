@@ -52,7 +52,8 @@ export default function DashboardLayout({
     // Show DispositionModal when call ends (both inbound active→idle AND outbound ringing/active→idle)
     const wasInCall = prevCallStatus.current === 'active'
                    || prevCallStatus.current === 'ringing'
-                   || prevCallStatus.current === 'holding';
+                   || prevCallStatus.current === 'holding'
+                   || prevCallStatus.current === 'incoming';
     if (wasInCall && callStatus === 'idle') {
       // Retry up to 4 times (800ms, 1.8s, 3s, 5s) — handles slow networks
       const tryFetchPending = (attempt: number) => {

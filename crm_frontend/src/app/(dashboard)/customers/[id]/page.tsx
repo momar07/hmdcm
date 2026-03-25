@@ -97,10 +97,13 @@ export default function CustomerDetailPage() {
 
   const { data: callsData } = useQuery({
     queryKey: ['customer-calls', id],
-    queryFn:  () => callsApi.list({ customer: id, page_size: 50 }).then(r => {
-      const d = (r as any).data ?? r;
-      return { results: Array.isArray(d) ? d : (d?.results ?? []), count: d?.count ?? 0 };
-    }),
+    queryFn:  async () => {
+      const r = await callsApi.list({ customer: id, page_size: 50 });
+      const d = (r as any)?.data ?? r;
+      const results = Array.isArray(d) ? d : (d?.results ?? []);
+      const count   = d?.count ?? results.length;
+      return { results, count };
+    },
     enabled:  !!id && tab === 'calls',
     staleTime: 30_000,
   });

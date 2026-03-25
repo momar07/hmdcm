@@ -34,11 +34,19 @@ class CallViewSet(viewsets.ModelViewSet):
         customer_id = self.request.query_params.get('customer')
         if customer_id:
             from django.db.models import Q as _Q
+            from apps.customers.models import CustomerPhone as _CP
+            # Get all phone numbers for this customer
+            phones = list(_CP.objects.filter(
+                customer_id=customer_id
+            ).values_list('number', flat=True))
+
             qs = Call.objects.select_related(
                 'agent', 'customer'
             ).prefetch_related('events').filter(
-                customer_id=customer_id
-            ).order_by('-created_at')
+                _Q(customer_id=customer_id) |
+                _Q(caller__in=phones) |
+                _Q(callee__in=phones)
+            ).distinct().order_by('-created_at')
         return qs
 
     def get_serializer_class(self):
@@ -407,8 +415,11 @@ class EndWebrtcCallView(APIView):
         end_cause = (request.data.get('end_cause') or 'ended').lower()
         duration  = int(request.data.get('duration') or 0)
 
+        # If call was already marked answered by AMI/AgentConnect — keep it
+        if call.status == 'answered':
+            final_status = 'answered'
         # Map JsSIP end cause → Call status
-        if 'busy' in end_cause:
+        elif 'busy' in end_cause:
             final_status = 'busy'
         elif 'no_answer' in end_cause or 'no answer' in end_cause or 'unavailable' in end_cause:
             final_status = 'no_answer'
