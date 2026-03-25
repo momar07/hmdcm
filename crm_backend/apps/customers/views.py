@@ -147,17 +147,17 @@ class CustomerHistoryView(APIView):
                 pass
 
             # Resolve followup linked to this call
-        followup_id    = None
-        followup_title = None
-        try:
-            fu = call.followups.filter(status='pending').first()                  or call.followups.first()
-            if fu:
-                followup_id    = str(fu.id)
-                followup_title = fu.title
-        except Exception:
-            pass
+            followup_id    = None
+            followup_title = None
+            try:
+                fu = call.followups.filter(status='pending').first() or call.followups.first()
+                if fu:
+                    followup_id    = str(fu.id)
+                    followup_title = fu.title
+            except Exception:
+                pass
 
-        timeline.append({
+            timeline.append({
                 'type':           'call',
                 'id':             str(call.id),
                 'date':           call.started_at,
@@ -222,6 +222,28 @@ class CustomerHistoryView(APIView):
                 'priority':      ticket.priority,
                 'category':      ticket.category or None,
                 'sla_breached':  ticket.sla_breached,
+            })
+
+        # ── Approvals ──────────────────────────────────────────────────
+        from apps.approvals.models import ApprovalRequest
+        approvals_qs = ApprovalRequest.objects.filter(
+            customer_id=pk
+        ).select_related('requested_by', 'reviewed_by').order_by('-created_at')[:20]
+        for ap in approvals_qs:
+            timeline.append({
+                'type':              'approval',
+                'id':                str(ap.id),
+                'date':              ap.created_at,
+                'approval_type':     ap.approval_type,
+                'status':            ap.status,
+                'title':             ap.title,
+                'description':       ap.description,
+                'amount':            str(ap.amount) if ap.amount else None,
+                'requested_by_name': ap.requested_by.get_full_name() if ap.requested_by else None,
+                'reviewed_by_name':  ap.reviewed_by.get_full_name()  if ap.reviewed_by  else None,
+                'review_comment':    ap.review_comment,
+                'reviewed_at':       ap.reviewed_at,
+                'ticket':            str(ap.ticket_id) if ap.ticket_id else None,
             })
 
         # ── Sort all by date descending ────────────────────────────────

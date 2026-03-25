@@ -7,7 +7,7 @@ import {
   ArrowLeft, Phone, Mail, Building2, MapPin,
   PhoneIncoming, PhoneOutgoing, PhoneMissed,
   FileText, MessageSquare, TrendingUp, Clock,
-  Ticket as TicketIcon, Plus,
+  Ticket as TicketIcon, Plus, CheckSquare,
 } from 'lucide-react';
 import { customersApi } from '@/lib/api/customers';
 import { useSipStore }   from '@/store/sipStore';
@@ -266,8 +266,9 @@ export default function CustomerDetailPage() {
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5
                   ${item.type === 'call'
                     ? item.status === 'no_answer' ? 'bg-red-50' : 'bg-blue-50'
-                    : item.type === 'note'   ? 'bg-yellow-50'
-                    : item.type === 'ticket' ? 'bg-purple-50'
+                    : item.type === 'note'     ? 'bg-yellow-50'
+                    : item.type === 'ticket'   ? 'bg-purple-50'
+                    : item.type === 'approval' ? 'bg-blue-50'
                     : 'bg-green-50'}`}>
                   {item.type === 'call' && item.status === 'no_answer'
                     ? <PhoneMissed size={14} className="text-red-500" />
@@ -279,6 +280,8 @@ export default function CustomerDetailPage() {
                     ? <MessageSquare size={14} className="text-yellow-600" />
                     : item.type === 'ticket'
                     ? <TicketIcon size={14} className="text-purple-600" />
+                    : item.type === 'approval'
+                    ? <CheckSquare size={14} className="text-blue-500" />
                     : <TrendingUp size={14} className="text-green-600" />}
                 </div>
 
@@ -342,6 +345,44 @@ export default function CustomerDetailPage() {
                       <p className="mt-1 text-sm text-gray-700">{item.content}</p>
                       <p className="text-xs text-gray-400 mt-1">by {item.author}</p>
                     </>
+                  )}
+
+                  {/* Approval in timeline */}
+                  {item.type === 'approval' && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium text-gray-900">
+                          Approval Request
+                        </span>
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded-full
+                          ${item.status === 'approved'  ? 'bg-green-100 text-green-700'
+                          : item.status === 'rejected'  ? 'bg-red-100 text-red-600'
+                          : item.status === 'cancelled' ? 'bg-gray-100 text-gray-500'
+                          : 'bg-yellow-100 text-yellow-700'}`}>
+                          {item.status}
+                        </span>
+                        <span className="text-xs text-gray-400 capitalize bg-gray-100 px-2 py-0.5 rounded-full">
+                          {item.approval_type}
+                        </span>
+                        {item.amount && (
+                          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                            {parseFloat(item.amount).toLocaleString()} EGP
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-700">{item.title}</p>
+                      {item.requested_by_name && (
+                        <p className="text-xs text-gray-400">
+                          Requested by: {item.requested_by_name}
+                          {item.reviewed_by_name ? ` · Reviewed by: ${item.reviewed_by_name}` : ''}
+                        </p>
+                      )}
+                      {item.review_comment && (
+                        <p className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1 mt-1">
+                          💬 {item.review_comment}
+                        </p>
+                      )}
+                    </div>
                   )}
 
                   {/* Ticket in timeline */}
