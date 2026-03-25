@@ -34,6 +34,12 @@ export const callsApi = {
   pendingCompletions: () =>
     api.get<Call[]>('/calls/pending-completions/'),
 
+  markCallAnswered: (callId: string) =>
+    api.patch(`/calls/mark-answered/${callId}/`),
+
+  rejectCall: (callId: string) =>
+    api.patch(`/calls/reject/${callId}/`),
+
   dispositionsList: () =>
     api.get<Disposition[]>('/calls/dispositions-list/'),
 

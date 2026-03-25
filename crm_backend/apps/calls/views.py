@@ -505,3 +505,40 @@ class DispositionActionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         from .models import DispositionAction
         serializer.save()
+
+
+class MarkCallAnsweredView(APIView):
+    """PATCH /api/calls/{call_id}/mark-answered/ — marks inbound SIP call as answered"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, call_id):
+        from django.utils import timezone as tz
+        from .models import Call
+        try:
+            call = Call.objects.get(pk=call_id)
+        except Call.DoesNotExist:
+            return Response({'error': 'Call not found'}, status=404)
+        if call.status in ('ringing', 'incoming'):
+            call.status     = 'answered'
+            call.agent      = request.user
+            call.started_at = tz.now()
+            call.save(update_fields=['status', 'agent', 'started_at'])
+        return Response({'call_id': str(call.id), 'status': call.status})
+
+
+class RejectCallView(APIView):
+    """PATCH /api/calls/{call_id}/reject/ — marks inbound call as no_answer when agent rejects"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, call_id):
+        from django.utils import timezone as tz
+        from .models import Call
+        try:
+            call = Call.objects.get(pk=call_id)
+        except Call.DoesNotExist:
+            return Response({'error': 'Call not found'}, status=404)
+        if call.status in ('ringing', 'incoming'):
+            call.status   = 'no_answer'
+            call.ended_at = tz.now()
+            call.save(update_fields=['status', 'ended_at'])
+        return Response({'call_id': str(call.id), 'status': call.status})

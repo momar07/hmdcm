@@ -77,13 +77,27 @@ export function IncomingCallPopup() {
 
   /* ── Dismiss (reject / close) ─────────────────────────── */
   const handleDismiss = useCallback(() => {
+    const call = incomingCallRef.current;
+    actions?.hangup?.();
     setVisible(false);
     clearIncoming();
-  }, [clearIncoming]);
+    // Mark call as no_answer in DB
+    if (call?.call_id) {
+      import('@/lib/api/calls').then(({ callsApi }) => {
+        callsApi.rejectCall(call.call_id).catch(() => {});
+      });
+    }
+  }, [actions, clearIncoming]);
 
   /* ── Answer ───────────────────────────────────────────── */
   const handleAnswer = useCallback(() => {
     const call = incomingCallRef.current;
+    // Mark call as answered in DB immediately
+    if (call?.call_id) {
+      import('@/lib/api/calls').then(({ callsApi }) => {
+        callsApi.markCallAnswered(call.call_id).catch(() => {});
+      });
+    }
     actions?.answer();
     if (!call?.customer_id) {
       const caller   = call?.caller   || '';
