@@ -83,7 +83,7 @@ export default function CustomerDetailPage() {
   const { data: historyData, isLoading: histLoading } = useQuery({
     queryKey: ['customer-history', id],
     queryFn:  () => api.get(`/customers/${id}/history/`).then(r => r.data),
-    enabled:  !!id && tab === 'timeline',
+    enabled:  !!id && tab === 'timeline' && !!customer,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
@@ -97,8 +97,12 @@ export default function CustomerDetailPage() {
 
   const { data: callsData } = useQuery({
     queryKey: ['customer-calls', id],
-    queryFn:  () => callsApi.list({ customer: id, page_size: 25 }).then(r => r.data),
+    queryFn:  () => callsApi.list({ customer: id, page_size: 50 }).then(r => {
+      const d = (r as any).data ?? r;
+      return { results: Array.isArray(d) ? d : (d?.results ?? []), count: d?.count ?? 0 };
+    }),
     enabled:  !!id && tab === 'calls',
+    staleTime: 30_000,
   });
 
   const { data: leadsData } = useQuery({

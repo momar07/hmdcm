@@ -283,6 +283,11 @@ def process_ami_event(self, event: dict):
         elif event_name in ('Hangup', 'SoftHangupRequest'):
             duration = int(event.get('Duration', 0))
 
+            # Skip WebRTC calls — their status is managed by endWebrtcCall endpoint
+            if uniqueid and uniqueid.startswith('webrtc-'):
+                logger.debug(f'[AMI] Skipping Hangup for WebRTC call: {uniqueid}')
+                return
+
             # Cause 16 = Normal Clearing — used for ALL hangups including unanswered
             # We check the current call status to determine the real outcome
             cause = str(event.get('Cause', '16'))
