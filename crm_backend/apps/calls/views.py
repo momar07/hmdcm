@@ -266,6 +266,10 @@ class DispositionsListView(APIView):
             'color':               d.color,
             'requires_followup':   d.requires_followup,
             'default_next_action': d.default_next_action,
+            'direction':           d.direction,
+            'actions':             list(d.actions.order_by('order').values(
+                                       'id', 'action_type', 'config', 'order'
+                                   )),
         } for d in dispositions])
 
 
