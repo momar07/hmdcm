@@ -96,7 +96,7 @@ class OriginateCallSerializer(serializers.Serializer):
 class DispositionActionSerializer(serializers.ModelSerializer):
     class Meta:
         model  = DispositionAction
-        fields = ['id', 'action_type', 'config', 'order']
+        fields = ['id', 'disposition', 'action_type', 'config', 'order']
 
 
 class DispositionFullSerializer(serializers.ModelSerializer):

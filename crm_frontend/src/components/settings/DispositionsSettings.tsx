@@ -320,7 +320,7 @@ export default function DispositionsSettings() {
   const { data: rawData, isLoading } = useQuery({
     queryKey: ['dispositions-crud'],
     queryFn:  () => dispositionsApi.list().then(r => {
-      const d = r.data as any;
+      const d = (r as any).data ?? r;
       return Array.isArray(d) ? d : (d?.results ?? []);
     }),
     staleTime: 30_000,
