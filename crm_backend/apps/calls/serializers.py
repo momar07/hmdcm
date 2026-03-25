@@ -102,6 +102,7 @@ class DispositionActionSerializer(serializers.ModelSerializer):
 class DispositionFullSerializer(serializers.ModelSerializer):
     """للـ Settings page — CRUD كامل مع الـ actions"""
     actions = DispositionActionSerializer(many=True, read_only=True)
+    code    = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model  = Disposition
@@ -110,3 +111,23 @@ class DispositionFullSerializer(serializers.ModelSerializer):
             'requires_note', 'is_active', 'order', 'actions',
         ]
         read_only_fields = ['id']
+
+    def _auto_code(self, name: str) -> str:
+        import re
+        return re.sub(r'[^a-z0-9]+', '_', name.lower()).strip('_') or 'disposition'
+
+    def validate(self, attrs):
+        if not attrs.get('code'):
+            attrs['code'] = self._auto_code(attrs.get('name', ''))
+        return attrs
+
+    def create(self, validated_data):
+        # تأكد إن الـ code فريد
+        base = validated_data['code']
+        code = base
+        i = 1
+        while Disposition.objects.filter(code=code).exists():
+            code = f'{base}_{i}'
+            i += 1
+        validated_data['code'] = code
+        return super().create(validated_data)
