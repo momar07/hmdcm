@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm }         from 'react-hook-form';
 import { zodResolver }     from '@hookform/resolvers/zod';
 import { z }               from 'zod';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast               from 'react-hot-toast';
 import { followupsApi }    from '@/lib/api/followups';
 import { customersApi }    from '@/lib/api/customers';
@@ -48,10 +48,14 @@ export default function NewFollowupPage() {
     })),
   ];
 
+  const qc = useQueryClient();
   const mutation = useMutation({
     mutationFn: (data: FormData) => followupsApi.create(data),
     onSuccess: () => {
-      toast.success('Follow-up created!');
+      toast.success('Follow-up created! ✅');
+      qc.invalidateQueries({ queryKey: ['followups'] });
+      qc.invalidateQueries({ queryKey: ['followups-overdue'] });
+      qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
       router.push('/followups');
     },
     onError: (err: any) => {

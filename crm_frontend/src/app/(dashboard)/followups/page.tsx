@@ -173,6 +173,9 @@ function RescheduleModal({ followup, onClose }: { followup: Followup; onClose: (
     mutationFn: () => followupsApi.reschedule(followup.id, `${date}T${time}:00`),
     onSuccess: () => {
       toast.success('Rescheduled ✅');
+      qc.invalidateQueries({ queryKey: ['followups'] });
+      qc.invalidateQueries({ queryKey: ['followups-overdue'] });
+      qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
       onClose();
     },
     onError: () => toast.error('Failed to reschedule'),
@@ -428,7 +431,7 @@ export default function FollowupsPage() {
       page_size: 20,
     }).then(r => r.data),
     placeholderData: (prev: any) => prev,
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
   });
 
   const { data: overdueData } = useQuery({

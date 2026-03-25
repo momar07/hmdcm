@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Phone, User, FileText, Calendar, CheckCircle } from 'lucide-react';
 import { callsApi } from '@/lib/api/calls';
 import { useCallStore } from '@/store';
@@ -29,6 +29,7 @@ export function DispositionModal({
   callId, callerNumber, customerName, customerId, onClose,
 }: DispositionModalProps) {
 
+  const qc = useQueryClient();
   const [selectedDisp,   setSelectedDisp]   = useState('');
   const [note,           setNote]           = useState('');
   const [nextAction,     setNextAction]     = useState('no_action');
@@ -58,6 +59,9 @@ export function DispositionModal({
     }),
     onSuccess: () => {
       toast.success('Call completed successfully ✅');
+      qc.invalidateQueries({ queryKey: ['followups'] });
+      qc.invalidateQueries({ queryKey: ['followups-overdue'] });
+      qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
       onClose();
     },
     onError: (err: any) => {
