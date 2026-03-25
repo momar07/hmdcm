@@ -1,5 +1,5 @@
 import api from './axios';
-import type { Lead, LeadStatus, LeadPriority, PaginatedResponse } from '@/types';
+import type { Lead, LeadStatus, LeadPriority, LeadEvent, PaginatedResponse } from '@/types';
 
 const toArray = <T>(data: any): T[] => {
   if (Array.isArray(data))          return data;
@@ -68,4 +68,12 @@ export const leadsApi = {
       )
     );
   },
+
+  // ── Audit trail ──────────────────────────────────────────
+  events: (leadId: string) =>
+    api.get<LeadEvent[]>(`/leads/${leadId}/events/`),
+
+  // ── Follow-up date sync ──────────────────────────────────
+  setFollowupDate: (leadId: string, followup_date: string | null) =>
+    api.patch(`/leads/${leadId}/followup-date/`, { followup_date }),
 };

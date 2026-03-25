@@ -328,3 +328,13 @@ export interface Column<T> {
   render?: (row: T) => React.ReactNode;
   width?:  string;
 }
+
+export interface LeadEvent {
+  id:           string;
+  event_type:   string;
+  actor_name:   string | null;
+  old_value:    string;
+  new_value:    string;
+  note:         string;
+  created_at:   string;
+}

@@ -109,6 +109,15 @@ export default function DashboardLayout({
         });
       });
     }
+    if (event.type === 'lead_assigned') {
+      const ev = event as any;
+      import('react-hot-toast').then(({ default: toast }) => {
+        toast('📋 ' + ev.message, {
+          duration: 6000,
+          style: { borderLeft: '4px solid #7c3aed', maxWidth: '360px' },
+        });
+      });
+    }
     if (event.type === 'approval_request') {
       const ev2 = event as any;
       const msg2 = '📋 New request from ' + (ev2.requested_by_name ?? 'Agent') + ': ' + (ev2.title ?? '');

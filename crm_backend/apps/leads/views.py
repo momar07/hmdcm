@@ -8,7 +8,7 @@ from .serializers import (LeadListSerializer, LeadDetailSerializer,
                            LeadStatusSerializer, LeadPrioritySerializer,
                            LeadStageSerializer)
 from .selectors import get_all_leads
-from .services import create_lead, assign_lead, update_lead_status
+from .services import create_lead, assign_lead, update_lead_status, update_lead_stage, update_lead_followup_date
 
 
 class LeadViewSet(viewsets.ModelViewSet):
@@ -27,12 +27,12 @@ class LeadViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['patch'], url_path='assign')
     def assign(self, request, pk=None):
-        assign_lead(pk, request.data.get('agent_id'))
+        assign_lead(pk, request.data.get('agent_id'), actor=request.user)
         return Response({'detail': 'Lead assigned.'})
 
     @action(detail=True, methods=['patch'], url_path='status')
     def change_status(self, request, pk=None):
-        update_lead_status(pk, request.data.get('status_id'))
+        update_lead_status(pk, request.data.get('status_id'), actor=request.user)
         return Response({'detail': 'Status updated.'})
 
     @action(detail=True, methods=['patch'], url_path='move-stage')
@@ -45,15 +45,7 @@ class LeadViewSet(viewsets.ModelViewSet):
                 status=http_status.HTTP_400_BAD_REQUEST,
             )
         try:
-            lead  = self.get_object()
-            stage = LeadStage.objects.get(pk=stage_id, is_active=True)
-            lead.stage = stage
-            from django.utils import timezone
-            if stage.is_won:
-                lead.won_at = timezone.now()
-            elif stage.is_closed and not stage.is_won:
-                lead.lost_at = timezone.now()
-            lead.save(update_fields=['stage', 'won_at', 'lost_at'])
+            lead, stage = update_lead_stage(pk, stage_id, actor=request.user)
             return Response({
                 'detail':     'Stage updated.',
                 'stage_id':   str(stage.id),
@@ -66,6 +58,21 @@ class LeadViewSet(viewsets.ModelViewSet):
                 status=http_status.HTTP_404_NOT_FOUND,
             )
 
+
+    @action(detail=True, methods=['get'], url_path='events')
+    def events(self, request, pk=None):
+        """GET /leads/{id}/events/ — audit trail for the lead."""
+        from .models import LeadEvent
+        from .serializers import LeadEventSerializer
+        qs = LeadEvent.objects.filter(lead_id=pk).select_related('actor').order_by('-created_at')[:100]
+        return Response(LeadEventSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['patch'], url_path='followup-date')
+    def set_followup_date(self, request, pk=None):
+        """PATCH /leads/{id}/followup-date/ — sets followup_date and auto-creates Followup."""
+        date_val = request.data.get('followup_date')
+        update_lead_followup_date(pk, date_val, actor=request.user)
+        return Response({'detail': 'Follow-up date set.'})
 
 class LeadStatusViewSet(viewsets.ModelViewSet):
     queryset         = LeadStatus.objects.all().order_by('order')

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Lead, LeadStatus, LeadPriority, LeadStage
+from .models import Lead, LeadStatus, LeadPriority, LeadStage, LeadEvent
 from apps.customers.serializers import CustomerListSerializer
 
 
@@ -137,3 +137,16 @@ class LeadDetailSerializer(serializers.ModelSerializer):
             setattr(instance, attr, val)
         instance.save()
         return instance
+
+
+class LeadEventSerializer(serializers.ModelSerializer):
+    actor_name = serializers.CharField(
+        source='actor.get_full_name', read_only=True, default=None
+    )
+
+    class Meta:
+        model  = LeadEvent
+        fields = [
+            'id', 'event_type', 'actor_name',
+            'old_value', 'new_value', 'note', 'created_at',
+        ]

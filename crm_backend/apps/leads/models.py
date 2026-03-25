@@ -125,3 +125,33 @@ class Lead(BaseModel):
 
     def __str__(self):
         return f'{self.title} — {self.customer}'
+
+
+class LeadEvent(BaseModel):
+    """Audit trail — كل تغيير على الـ Lead يتسجّل هنا"""
+    EVENT_CHOICES = [
+        ('created',        'Created'),
+        ('stage_changed',  'Stage Changed'),
+        ('status_changed', 'Status Changed'),
+        ('assigned',       'Assigned'),
+        ('followup_set',   'Follow-up Scheduled'),
+        ('won',            'Won'),
+        ('lost',           'Lost'),
+        ('note',           'Note Added'),
+    ]
+
+    lead       = models.ForeignKey('Lead', on_delete=models.CASCADE,
+                                   related_name='events')
+    event_type = models.CharField(max_length=30, choices=EVENT_CHOICES)
+    actor      = models.ForeignKey('users.User', null=True, blank=True,
+                                   on_delete=models.SET_NULL, related_name='+')
+    old_value  = models.CharField(max_length=255, blank=True)
+    new_value  = models.CharField(max_length=255, blank=True)
+    note       = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'lead_events'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.lead_id} | {self.event_type} @ {self.created_at}'
