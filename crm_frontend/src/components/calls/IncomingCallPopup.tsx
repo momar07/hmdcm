@@ -98,11 +98,18 @@ export function IncomingCallPopup() {
     const caller     = call?.caller      || '';
     const uniqueid   = call?.uniqueid    || '';
 
+    console.log('[Answer] incomingCall:', call);
+    console.log('[Answer] call_id:', callId);
+
     // Mark call as answered in DB immediately
     if (callId) {
       import('@/lib/api/calls').then(({ callsApi }) => {
-        callsApi.markCallAnswered(callId).catch(() => {});
+        callsApi.markCallAnswered(callId)
+          .then(() => console.log('[Answer] markCallAnswered OK'))
+          .catch((e: any) => console.error('[Answer] markCallAnswered FAILED:', e?.response?.data || e));
       });
+    } else {
+      console.warn('[Answer] No call_id found — markCallAnswered skipped');
     }
 
     actions?.answer();

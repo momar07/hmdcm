@@ -65,6 +65,7 @@ export default function DashboardLayout({
           import('@/lib/api/calls').then(({ callsApi }) => {
             callsApi.pendingCompletions().then(res => {
               const pending = (res as any).data ?? res;
+              console.log('[Modal] pendingCompletions result:', pending);
               if (Array.isArray(pending) && pending.length > 0) {
                 const latest = pending[0];
                 setDispModal({
