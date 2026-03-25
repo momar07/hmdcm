@@ -112,27 +112,35 @@ class CustomerHistoryView(APIView):
         timeline = []
 
         # ── Calls ────────────────────────────────────────────────────
-        # Get customer's phone numbers for fallback matching
+        # Build all phone variants for matching
         from apps.customers.models import CustomerPhone
-        customer_phones = list(
-            CustomerPhone.objects.filter(customer_id=pk).values_list('number', flat=True)
-        )
+        phone_rows = CustomerPhone.objects.filter(customer_id=pk).values_list('number', 'normalized')
+        phone_variants = set()
+        for number, normalized in phone_rows:
+            for val in [number, normalized]:
+                if not val: continue
+                phone_variants.add(val)
+                digits = ''.join(c for c in val if c.isdigit())
+                if digits:
+                    phone_variants.add(digits)
+                    if not val.startswith('+'): phone_variants.add('+' + digits)
+                    if len(digits) >= 9: phone_variants.add(digits[-9:])
 
-        # Match by customer FK OR by caller/callee phone number (handles unlinked calls)
+        # Match by customer FK OR by caller/callee phone number
         from django.db.models import Q
         calls_qs = Call.objects.filter(
             Q(customer_id=pk) |
-            Q(caller__in=customer_phones, customer__isnull=True) |
-            Q(callee__in=customer_phones, customer__isnull=True)
+            Q(caller__in=phone_variants) |
+            Q(callee__in=phone_variants)
         ).select_related('agent', 'completion__disposition').order_by('-started_at')[:50]
 
-        # Auto-link unlinked calls to this customer (both inbound caller + outbound callee)
+        # Auto-link unlinked calls to this customer
         from apps.customers.models import Customer as CustomerModel
         try:
             customer_obj = CustomerModel.objects.get(id=pk)
             Call.objects.filter(
-                Q(caller__in=customer_phones, customer__isnull=True) |
-                Q(callee__in=customer_phones, customer__isnull=True)
+                Q(caller__in=phone_variants, customer__isnull=True) |
+                Q(callee__in=phone_variants, customer__isnull=True)
             ).update(customer=customer_obj)
         except Exception:
             pass

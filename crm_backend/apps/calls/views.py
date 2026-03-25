@@ -35,17 +35,25 @@ class CallViewSet(viewsets.ModelViewSet):
         if customer_id:
             from django.db.models import Q as _Q
             from apps.customers.models import CustomerPhone as _CP
-            # Get all phone numbers for this customer
-            phones = list(_CP.objects.filter(
-                customer_id=customer_id
-            ).values_list('number', flat=True))
+            # Build all phone variants (raw, normalized, +prefix, 9-digit suffix)
+            phone_rows = _CP.objects.filter(customer_id=customer_id).values_list('number', 'normalized')
+            phone_variants = set()
+            for number, normalized in phone_rows:
+                for val in [number, normalized]:
+                    if not val: continue
+                    phone_variants.add(val)
+                    digits = ''.join(c for c in val if c.isdigit())
+                    if digits:
+                        phone_variants.add(digits)
+                        if not val.startswith('+'): phone_variants.add('+' + digits)
+                        if len(digits) >= 9: phone_variants.add(digits[-9:])
 
             qs = Call.objects.select_related(
                 'agent', 'customer'
             ).prefetch_related('events').filter(
                 _Q(customer_id=customer_id) |
-                _Q(caller__in=phones) |
-                _Q(callee__in=phones)
+                _Q(caller__in=phone_variants) |
+                _Q(callee__in=phone_variants)
             ).distinct().order_by('-created_at')
         return qs
 

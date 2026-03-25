@@ -167,7 +167,7 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
                 first_stage = LeadStage.objects.filter(is_active=True).order_by('order').first()
                 stage_id   = cfg.get('default_stage') or (first_stage.id if first_stage else None)
                 lead = Lead.objects.create(
-                    title       = f'Lead from call — {call.customer.name}',
+                    title       = f'Lead from call — {call.customer.get_full_name()}',
                     customer    = call.customer,
                     assigned_to = agent,
                     source      = 'call',
@@ -183,7 +183,7 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
                 from apps.tickets.models import Ticket
                 cfg = action.config or {}
                 Ticket.objects.create(
-                    title       = f'Ticket from call — {call.customer.name}',
+                    title       = f'Ticket from call — {call.customer.get_full_name()}',
                     customer    = call.customer,
                     assigned_to = agent,
                     priority    = cfg.get('default_priority', 'medium'),
