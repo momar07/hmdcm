@@ -93,6 +93,10 @@ export default function LeadDetailPage() {
       toast.success('Follow-up scheduled ✅');
       qc.invalidateQueries({ queryKey: ['lead', id] });
       qc.invalidateQueries({ queryKey: ['lead-events', id] });
+      // invalidate followups page cache — يظهر فوراً لما تروح /followups
+      qc.invalidateQueries({ queryKey: ['followups'] });
+      qc.invalidateQueries({ queryKey: ['followups-overdue'] });
+      qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
       setNewFollowupDate('');
     },
     onError: (err: any) => toast.error('Error: ' + (err?.response?.data?.followup_date?.[0] || err?.response?.data?.detail || 'Failed to set follow-up date')),
