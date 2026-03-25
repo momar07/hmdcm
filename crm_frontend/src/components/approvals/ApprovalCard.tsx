@@ -34,7 +34,6 @@ export function ApprovalCard({ approval, canReview, onUpdated }: Props) {
     setLoading(true);
     try {
       await approvalsApi.approve(approval.id, comment);
-      toast.success("Request approved ✅");
       onUpdated();
     } catch { toast.error("Failed to approve"); }
     finally  { setLoading(false); }
@@ -45,7 +44,6 @@ export function ApprovalCard({ approval, canReview, onUpdated }: Props) {
     setLoading(true);
     try {
       await approvalsApi.reject(approval.id, comment);
-      toast.success("Request rejected");
       onUpdated();
     } catch { toast.error("Failed to reject"); }
     finally  { setLoading(false); }
