@@ -1,6 +1,6 @@
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from .models import Call, CallCompletion, Disposition
+from .models import Call, CallCompletion, Disposition, DispositionAction
 
 
 def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
@@ -123,8 +123,110 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
 
         call.lead.save()
 
-    # إنشاء الـ Followup تلقائياً لو مطلوب
-    if followup_required and assigned_user:
+    # ── تنفيذ الـ DispositionActions الديناميكية ───────────────
+    disp_actions = DispositionAction.objects.filter(
+        disposition=disposition
+    ).order_by('order')
+
+    for action in disp_actions:
+        atype = action.action_type
+
+        # 1) create_followup
+        if atype == 'create_followup':
+            scheduled = followup_due_at or data.get('followup_date')
+            if scheduled:
+                from apps.followups.models import Followup
+                followup = Followup.objects.create(
+                    lead          = call.lead,
+                    call          = call,
+                    assigned_to   = assigned_user,
+                    title         = f'Follow-up: {disposition.name}',
+                    description   = note,
+                    followup_type = followup_type or 'call',
+                    scheduled_at  = scheduled,
+                    status        = 'pending',
+                )
+                completion.followup_created = followup
+                completion.save(update_fields=['followup_created'])
+
+        # 2) create_lead
+        elif atype == 'create_lead':
+            if call.customer and not call.lead:
+                from apps.leads.models import Lead, LeadStage
+                cfg        = action.config or {}
+                first_stage = LeadStage.objects.filter(is_active=True).order_by('order').first()
+                stage_id   = cfg.get('default_stage') or (first_stage.id if first_stage else None)
+                lead = Lead.objects.create(
+                    title       = f'Lead from call — {call.customer.name}',
+                    customer    = call.customer,
+                    assigned_to = agent,
+                    source      = 'call',
+                    stage_id    = stage_id,
+                    description = note,
+                )
+                call.lead = lead
+                call.save(update_fields=['lead'])
+
+        # 3) create_ticket
+        elif atype == 'create_ticket':
+            if call.customer:
+                from apps.tickets.models import Ticket
+                cfg = action.config or {}
+                Ticket.objects.create(
+                    title       = f'Ticket from call — {call.customer.name}',
+                    customer    = call.customer,
+                    assigned_to = agent,
+                    priority    = cfg.get('default_priority', 'medium'),
+                    description = note,
+                    source      = 'call',
+                )
+
+        # 4) mark_won
+        elif atype == 'mark_won':
+            if call.lead:
+                from apps.leads.models import LeadStage
+                from django.utils import timezone as tz
+                won_stage = LeadStage.objects.filter(is_won=True, is_active=True).first()
+                if won_stage:
+                    call.lead.stage    = won_stage
+                    call.lead.won_at   = tz.now()
+                    call.lead.won_amount = data.get('won_amount') or call.lead.won_amount
+                    call.lead.save(update_fields=['stage', 'won_at', 'won_amount'])
+
+        # 5) escalate
+        elif atype == 'escalate':
+            try:
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+                layer = get_channel_layer()
+                async_to_sync(layer.group_send)('supervisors', {
+                    'type':        'send_event',
+                    'event_type':  'escalation',
+                    'call_id':     str(call.id),
+                    'agent_name':  agent.name if hasattr(agent, 'name') else str(agent),
+                    'note':        note,
+                    'disposition': disposition.name,
+                })
+            except Exception:
+                pass
+
+        # 6) change_lead_stage
+        elif atype == 'change_lead_stage':
+            stage_id = data.get('new_lead_stage_id') or (action.config or {}).get('stage_id')
+            if stage_id and call.lead:
+                from apps.leads.models import LeadStage
+                from django.utils import timezone as tz
+                try:
+                    stage = LeadStage.objects.get(pk=stage_id)
+                    call.lead.stage = stage
+                    if stage.is_won:
+                        call.lead.won_at = tz.now()
+                    call.lead.save(update_fields=['stage', 'won_at'])
+                except LeadStage.DoesNotExist:
+                    pass
+
+    # Fallback: النظام القديم لو مفيش actions جديدة
+    if not disp_actions.exists() and followup_required and assigned_user:
         from apps.followups.models import Followup
         followup = Followup.objects.create(
             lead          = call.lead,
@@ -132,7 +234,7 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
             assigned_to   = assigned_user,
             title         = f'Follow-up: {disposition.name}',
             description   = note,
-            followup_type = followup_type,
+            followup_type = followup_type or 'call',
             scheduled_at  = followup_due_at,
             status        = 'pending',
         )

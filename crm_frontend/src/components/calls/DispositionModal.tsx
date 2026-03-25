@@ -4,89 +4,101 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { X, Phone, User, FileText, Calendar, CheckCircle } from 'lucide-react';
 import { callsApi } from '@/lib/api/calls';
-import { useCallStore } from '@/store';
-import { useSipStore } from '@/store/sipStore';
+import { dispositionsApi, type Disposition, type ActionType } from '@/lib/api/dispositions';
 import toast from 'react-hot-toast';
-import type { Disposition } from '@/types';
 
 interface DispositionModalProps {
-  callId:       string;
-  callerNumber: string;
+  callId:        string;
+  callerNumber:  string;
   customerName?: string | null;
-  customerId?:  string | null;
-  onClose:      () => void;
+  customerId?:   string | null;
+  leadId?:       string | null;
+  onClose:       () => void;
 }
 
-const NEXT_ACTIONS = [
-  { value: 'no_action',       label: 'No Action',        color: 'bg-gray-100 text-gray-700' },
-  { value: 'callback',        label: 'Schedule Callback', color: 'bg-blue-100 text-blue-700' },
-  { value: 'followup_later',  label: 'Follow Up Later',   color: 'bg-yellow-100 text-yellow-700' },
-  { value: 'send_quotation',  label: 'Send Quotation',    color: 'bg-purple-100 text-purple-700' },
-  { value: 'close_lead',      label: 'Close Lead',        color: 'bg-green-100 text-green-700' },
-];
+const ACTION_ICONS: Record<ActionType, string> = {
+  no_action:         '⊘',
+  create_followup:   '📅',
+  create_lead:       '🔗',
+  create_ticket:     '🎫',
+  change_lead_stage: '📌',
+  mark_won:          '🏆',
+  escalate:          '🚨',
+};
+
+const ACTION_LABELS: Record<ActionType, string> = {
+  no_action:         'No Action',
+  create_followup:   'Creates Follow-up',
+  create_lead:       'Creates Lead',
+  create_ticket:     'Creates Ticket',
+  change_lead_stage: 'Changes Lead Stage',
+  mark_won:          'Marks Lead as Won',
+  escalate:          'Escalates to Supervisor',
+};
 
 export function DispositionModal({
-  callId, callerNumber, customerName, customerId, onClose,
+  callId, callerNumber, customerName, customerId, leadId, onClose,
 }: DispositionModalProps) {
-
   const qc = useQueryClient();
-  const [selectedDisp,   setSelectedDisp]   = useState('');
-  const [note,           setNote]           = useState('');
-  const [nextAction,     setNextAction]     = useState('no_action');
-  const [followupDate,   setFollowupDate]   = useState('');
-  const [requireFollowup, setRequireFollowup] = useState(false);
+  const [selectedDisp, setSelectedDisp] = useState('');
+  const [note,         setNote]         = useState('');
+  const [followupDate, setFollowupDate] = useState('');
 
-  // Load dispositions
+  // جيب الـ dispositions الجديدة مع الـ actions
   const { data: dispositions = [] } = useQuery<Disposition[]>({
-    queryKey: ['dispositions'],
-    queryFn:  () => callsApi.dispositionsList().then(r => r.data),
+    queryKey: ['dispositions-full'],
+    queryFn:  () => dispositionsApi.list().then(r => {
+      const d = (r as any).data ?? r;
+      return Array.isArray(d) ? d : (d?.results ?? []);
+    }),
   });
 
-  // When disposition changes — check if followup is required
-  useEffect(() => {
-    const d = dispositions.find(d => d.id === selectedDisp);
-    if (d) setRequireFollowup(d.requires_followup ?? false);
-  }, [selectedDisp, dispositions]);
+  const selected = dispositions.find(d => d.id === selectedDisp);
+  const actions  = selected?.actions ?? [];
 
-  // Submit mutation
+  const needsFollowup = actions.some(a => a.action_type === 'create_followup');
+  const needsNote     = selected?.requires_note ?? true;
+
+  const canSubmit = selectedDisp &&
+    (!needsNote || note.length >= 10) &&
+    (!needsFollowup || followupDate);
+
   const { mutate: submit, isPending } = useMutation({
     mutationFn: () => callsApi.complete(callId, {
-      disposition_id:   selectedDisp,
-      note,
-      next_action:      nextAction as any,
-      followup_required: requireFollowup,
-      followup_due_at:  followupDate || undefined,
+      disposition_id:  selectedDisp,
+      note:            note || ' ',
+      next_action:     'no_action',
+      followup_due_at: followupDate ? (
+        followupDate.length === 16 ? followupDate + ':00' : followupDate
+      ) : undefined,
+      followup_date: followupDate ? (
+        followupDate.length === 16 ? followupDate + ':00' : followupDate
+      ) : undefined,
     }),
     onSuccess: () => {
-      toast.success('Call completed successfully ✅');
+      toast.success('Call completed ✅');
       qc.invalidateQueries({ queryKey: ['followups'] });
       qc.invalidateQueries({ queryKey: ['followups-overdue'] });
       qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
+      qc.invalidateQueries({ queryKey: ['leads'] });
       onClose();
     },
     onError: (err: any) => {
-      const msg = err?.response?.data?.detail || 'Failed to save disposition';
+      const msg = err?.response?.data?.detail ||
+                  err?.response?.data?.non_field_errors?.[0] ||
+                  'Failed to save disposition';
       toast.error(msg);
     },
   });
 
-  const canSubmit = selectedDisp && note.length >= 10 && nextAction &&
-                    (!requireFollowup || followupDate);
-
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
-           onClick={onClose} />
-
-      {/* Modal */}
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md
-                        max-h-[90vh] overflow-y-auto">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
 
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4
-                          border-b border-gray-100">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center">
                 <Phone size={16} className="text-green-600" />
@@ -96,15 +108,14 @@ export function DispositionModal({
                 <p className="text-xs text-gray-400">{callerNumber}</p>
               </div>
             </div>
-            <button onClick={onClose}
-                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
               <X size={16} className="text-gray-400" />
             </button>
           </div>
 
           <div className="px-6 py-4 space-y-5">
 
-            {/* Customer info */}
+            {/* Customer */}
             {customerName && (
               <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-xl">
                 <User size={15} className="text-blue-500 shrink-0" />
@@ -119,16 +130,11 @@ export function DispositionModal({
               </label>
               <div className="grid grid-cols-2 gap-2">
                 {dispositions.map(d => (
-                  <button
-                    key={d.id}
-                    onClick={() => setSelectedDisp(d.id)}
-                    className={`px-3 py-2.5 rounded-xl text-sm font-medium
-                                border-2 transition-all text-left
-                                ${selectedDisp === d.id
-                                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                                  : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
-                                }`}
-                  >
+                  <button key={d.id} onClick={() => setSelectedDisp(d.id)}
+                    className={`px-3 py-2.5 rounded-xl text-sm font-medium border-2 transition-all text-left
+                      ${selectedDisp === d.id
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}>
                     <span className="inline-block w-2 h-2 rounded-full mr-2"
                           style={{ backgroundColor: d.color || '#6b7280' }} />
                     {d.name}
@@ -137,93 +143,57 @@ export function DispositionModal({
               </div>
             </div>
 
-            {/* Note */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <FileText size={14} className="inline mr-1" />
-                Note <span className="text-red-500">*</span>
-                <span className="text-gray-400 font-normal ml-1">(min 10 chars)</span>
-              </label>
-              <textarea
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                rows={3}
-                placeholder="Add call notes here..."
-                className="w-full border border-gray-200 rounded-xl px-3 py-2.5
-                           text-sm resize-none focus:outline-none focus:ring-2
-                           focus:ring-blue-300 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-400 mt-1">{note.length} / 10 min chars</p>
-            </div>
-
-            {/* Next Action */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Next Action <span className="text-red-500">*</span>
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {NEXT_ACTIONS.map(a => (
-                  <button
-                    key={a.value}
-                    onClick={() => setNextAction(a.value)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium
-                                border-2 transition-all
-                                ${nextAction === a.value
-                                  ? 'border-blue-500 ' + a.color
-                                  : 'border-transparent ' + a.color
-                                }`}
-                  >
-                    {a.label}
-                  </button>
+            {/* Actions preview */}
+            {selected && actions.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-1">
+                <p className="text-xs font-semibold text-amber-800 mb-2">⚡ Automatic Actions:</p>
+                {actions.map(a => (
+                  <div key={a.id} className="flex items-center gap-2 text-xs text-amber-700">
+                    <span>{ACTION_ICONS[a.action_type]}</span>
+                    <span>{ACTION_LABELS[a.action_type]}</span>
+                  </div>
                 ))}
               </div>
-            </div>
+            )}
 
-            {/* Follow-up date — shown if required */}
-            {(requireFollowup || nextAction === 'callback' || nextAction === 'followup_later') && (
+            {/* Note */}
+            {needsNote && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <FileText size={14} className="inline mr-1" />
+                  Note <span className="text-red-500">*</span>
+                  <span className="text-gray-400 font-normal ml-1">(min 10 chars)</span>
+                </label>
+                <textarea
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  rows={3}
+                  placeholder="Add call notes..."
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5
+                             text-sm resize-none focus:outline-none focus:ring-2
+                             focus:ring-blue-300 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-400 mt-1">{note.length} / 10 min</p>
+              </div>
+            )}
+
+            {/* Follow-up date — فقط لو action = create_followup */}
+            {needsFollowup && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   <Calendar size={14} className="inline mr-1" />
-                  Follow-up Date {requireFollowup && <span className="text-red-500">*</span>}
+                  Follow-up Date <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Date */}
-                  <div className="relative">
-                    <Calendar size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    <input
-                      type="date"
-                      value={followupDate ? followupDate.split('T')[0] : ''}
-                      min={new Date().toISOString().split('T')[0]}
-                      onChange={e => {
-                        const datePart = e.target.value;
-                        const timePart = followupDate ? followupDate.split('T')[1] : '09:00';
-                        setFollowupDate(datePart ? `${datePart}T${timePart ?? '09:00'}` : '');
-                      }}
-                      className="w-full pl-8 pr-3 py-2.5 border border-gray-200 rounded-xl
-                                 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300
-                                 focus:border-transparent text-gray-700"
-                    />
-                  </div>
-                  {/* Time */}
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none">🕐</span>
-                    <input
-                      type="time"
-                      value={followupDate ? followupDate.split('T')[1]?.slice(0,5) : '09:00'}
-                      onChange={e => {
-                        const timePart = e.target.value;
-                        const datePart = followupDate ? followupDate.split('T')[0] : new Date().toISOString().split('T')[0];
-                        setFollowupDate(`${datePart}T${timePart}`);
-                      }}
-                      className="w-full pl-8 pr-3 py-2.5 border border-gray-200 rounded-xl
-                                 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300
-                                 focus:border-transparent text-gray-700"
-                    />
-                  </div>
-                </div>
-                {/* Preview */}
+                <input
+                  type="datetime-local"
+                  value={followupDate}
+                  min={new Date().toISOString().slice(0, 16)}
+                  onChange={e => setFollowupDate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5
+                             text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                />
                 {followupDate && (
-                  <p className="text-xs text-blue-600 mt-1.5 font-medium">
+                  <p className="text-xs text-blue-600 mt-1">
                     📅 {new Date(followupDate).toLocaleString('en-GB', {
                       weekday: 'short', day: '2-digit', month: 'short',
                       year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -236,27 +206,21 @@ export function DispositionModal({
 
           {/* Footer */}
           <div className="px-6 pb-6 flex gap-3">
-            <button
-              onClick={onClose}
+            <button onClick={onClose}
               className="flex-1 py-2.5 rounded-xl border border-gray-200
-                         text-sm font-medium text-gray-600 hover:bg-gray-50
-                         transition-colors"
-            >
+                         text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors">
               Skip for now
             </button>
             <button
               onClick={() => canSubmit && submit()}
               disabled={!canSubmit || isPending}
-              className="flex-1 flex items-center justify-center gap-2
-                         py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700
-                         disabled:bg-gray-200 disabled:text-gray-400
-                         text-white text-sm font-semibold transition-colors"
-            >
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
+                         bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400
+                         text-white text-sm font-semibold transition-colors">
               <CheckCircle size={15} />
               {isPending ? 'Saving...' : 'Save & Close'}
             </button>
           </div>
-
         </div>
       </div>
     </>
