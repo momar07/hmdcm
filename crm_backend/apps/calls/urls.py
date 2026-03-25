@@ -18,7 +18,7 @@ from .views import (
 
 # router للـ calls العادي
 calls_router = DefaultRouter()
-calls_router.register(r'calls-list', CallViewSet, basename='call')
+calls_router.register(r'', CallViewSet, basename='call')
 
 # router منفصل للـ dispositions CRUD
 disp_router = DefaultRouter()
