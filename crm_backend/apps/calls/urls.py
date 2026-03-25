@@ -35,6 +35,8 @@ urlpatterns = [
     path('link-call/',                       LinkCallToCustomerView.as_view(), name='link-call'),
     path('start-webrtc-call/',               StartWebrtcCallView.as_view(),    name='start-webrtc-call'),
     path('end-webrtc-call/<uuid:call_id>/',  EndWebrtcCallView.as_view(),      name='end-webrtc-call'),
+    path('mark-answered/<uuid:call_id>/',    MarkCallAnsweredView.as_view(),   name='mark-answered'),
+    path('reject/<uuid:call_id>/',           RejectCallView.as_view(),         name='reject-call'),
     # routers
     path('', include(disp_router.urls)),
     path('', include(calls_router.urls)),
