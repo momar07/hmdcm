@@ -50,10 +50,12 @@ export default function DashboardLayout({
 
   useEffect(() => {
     // Show DispositionModal when call ends (both inbound active→idle AND outbound ringing/active→idle)
-    // Only show disposition modal after ANSWERED calls (active/holding → idle)
-    // incoming/ringing → idle = rejected/unanswered — no modal needed
+    // Show disposition modal when call ends
+    // incoming→idle = could be answered then ended, pendingCompletions filters correctly
+    // ringing→idle = outbound not answered, pendingCompletions returns empty → no modal
     const wasInCall = prevCallStatus.current === 'active'
-                   || prevCallStatus.current === 'holding';
+                   || prevCallStatus.current === 'holding'
+                   || prevCallStatus.current === 'incoming';
     if (wasInCall && callStatus === 'idle') {
       // Retry up to 4 times (800ms, 1.8s, 3s, 5s) — handles slow networks
       const tryFetchPending = (attempt: number) => {

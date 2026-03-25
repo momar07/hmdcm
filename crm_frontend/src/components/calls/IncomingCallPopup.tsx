@@ -92,16 +92,22 @@ export function IncomingCallPopup() {
   /* ── Answer ───────────────────────────────────────────── */
   const handleAnswer = useCallback(() => {
     const call = incomingCallRef.current;
+    // Capture call_id BEFORE answer() clears the session
+    const callId     = call?.call_id     || null;
+    const customerId = call?.customer_id || null;
+    const caller     = call?.caller      || '';
+    const uniqueid   = call?.uniqueid    || '';
+
     // Mark call as answered in DB immediately
-    if (call?.call_id) {
+    if (callId) {
       import('@/lib/api/calls').then(({ callsApi }) => {
-        callsApi.markCallAnswered(call.call_id).catch(() => {});
+        callsApi.markCallAnswered(callId).catch(() => {});
       });
     }
+
     actions?.answer();
-    if (!call?.customer_id) {
-      const caller   = call?.caller   || '';
-      const uniqueid = call?.uniqueid  || '';
+
+    if (!customerId) {
       setVisible(false);
       router.push(`/customers/new?phone=${encodeURIComponent(caller)}&uniqueid=${encodeURIComponent(uniqueid)}`);
     }
