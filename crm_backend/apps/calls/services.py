@@ -249,5 +249,8 @@ def get_pending_completions(agent=None):
     qs = Call.objects.filter(status='answered', is_completed=False)\
                      .select_related('customer', 'agent', 'lead')
     if agent:
-        qs = qs.filter(agent=agent)
+        # Supervisors/admins see all pending — agents only see their own
+        role = getattr(agent, 'role', 'agent')
+        if role not in ('supervisor', 'admin'):
+            qs = qs.filter(agent=agent)
     return qs

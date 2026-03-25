@@ -228,7 +228,7 @@ def process_ami_event(self, event: dict):
                 }
             )
             if created:
-                notify_incoming_call.apply(args=[str(call.id)])
+                notify_incoming_call.delay(str(call.id))
                 logger.info(f'[AMI] New trunk call: {uniqueid} | {caller} → {callee}')
 
         elif event_name == 'QueueCallerJoin':
@@ -264,7 +264,7 @@ def process_ami_event(self, event: dict):
                 }
             )
             # Always notify — whether new or updated from Newchannel
-            notify_incoming_call.apply(args=[str(call.id)])
+            notify_incoming_call.delay(str(call.id))
             logger.info(f'[AMI] Queue call: {uniqueid} | caller={caller} queue={queue} new={created}')
 
         elif event_name == 'Bridge':
@@ -329,7 +329,7 @@ def process_ami_event(self, event: dict):
             if updated:
                 call = Call.objects.filter(uniqueid=uniqueid).first()
                 if call:
-                    notify_call_ended.apply(args=[str(call.id), status])
+                    notify_call_ended.delay(str(call.id), status)
                 logger.info(f'[AMI] Call ended: {uniqueid} → {status} (cause={cause}, duration={duration}s)')
 
 

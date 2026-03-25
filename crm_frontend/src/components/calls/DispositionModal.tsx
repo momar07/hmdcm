@@ -8,12 +8,13 @@ import { dispositionsApi, type Disposition, type ActionType } from '@/lib/api/di
 import toast from 'react-hot-toast';
 
 interface DispositionModalProps {
-  callId:        string;
-  callerNumber:  string;
-  customerName?: string | null;
-  customerId?:   string | null;
-  leadId?:       string | null;
-  onClose:       () => void;
+  callId:         string;
+  callerNumber:   string;
+  customerName?:  string | null;
+  customerId?:    string | null;
+  leadId?:        string | null;
+  callDirection?: 'inbound' | 'outbound';
+  onClose:        () => void;
 }
 
 const ACTION_ICONS: Record<ActionType, string> = {
@@ -37,7 +38,7 @@ const ACTION_LABELS: Record<ActionType, string> = {
 };
 
 export function DispositionModal({
-  callId, callerNumber, customerName, customerId, leadId, onClose,
+  callId, callerNumber, customerName, customerId, leadId, callDirection, onClose,
 }: DispositionModalProps) {
   const qc = useQueryClient();
   const [selectedDisp, setSelectedDisp] = useState('');
@@ -46,11 +47,18 @@ export function DispositionModal({
 
   // جيب الـ dispositions الجديدة مع الـ actions
   const { data: dispositions = [] } = useQuery<Disposition[]>({
-    queryKey: ['dispositions-full'],
+    queryKey: ['dispositions-full', callDirection],
     queryFn:  async () => {
       const r = await dispositionsApi.list();
       const d = (r as any).data ?? r;
-      return Array.isArray(d) ? d : (d?.results ?? []);
+      const all: Disposition[] = Array.isArray(d) ? d : (d?.results ?? []);
+      // Filter by call direction — show 'both' always, plus direction-specific
+      if (callDirection) {
+        return all.filter(
+          disp => disp.direction === 'both' || disp.direction === callDirection
+        );
+      }
+      return all;
     },
   });
 
@@ -70,9 +78,6 @@ export function DispositionModal({
       note:            note || ' ',
       next_action:     'no_action',
       followup_due_at: followupDate ? (
-        followupDate.length === 16 ? followupDate + ':00' : followupDate
-      ) : undefined,
-      followup_date: followupDate ? (
         followupDate.length === 16 ? followupDate + ':00' : followupDate
       ) : undefined,
     }),

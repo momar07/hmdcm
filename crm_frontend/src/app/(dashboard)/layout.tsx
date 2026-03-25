@@ -24,6 +24,7 @@ export default function DashboardLayout({
   const [dispModal, setDispModal]        = useState<{
     callId: string; callerNumber: string;
     customerName?: string | null; customerId?: string | null;
+    callDirection?: 'inbound' | 'outbound';
   } | null>(null);
   const router                       = useRouter();
   const [hydrated, setHydrated]      = useState(false);
@@ -51,23 +52,34 @@ export default function DashboardLayout({
     // Show DispositionModal when call ends (both inbound active→idle AND outbound ringing/active→idle)
     const wasInCall = prevCallStatus.current === 'active' || prevCallStatus.current === 'ringing';
     if (wasInCall && callStatus === 'idle') {
-      // Short delay so backend has time to update the call record
-      setTimeout(() => {
-        import('@/lib/api/calls').then(({ callsApi }) => {
-          callsApi.pendingCompletions().then(res => {
-            const pending = (res as any).data ?? res;
-            if (Array.isArray(pending) && pending.length > 0) {
-              const latest = pending[0];
-              setDispModal({
-                callId:       latest.id,
-                callerNumber: (latest as any).caller ?? (latest as any).caller_number ?? 'Unknown',
-                customerName: (latest as any).customer_name ?? null,
-                customerId:   (latest as any).customer   ?? null,
-              });
-            }
-          }).catch(() => {});
-        });
-      }, 800);  // 800ms so endWebrtcCall finishes before we query pending
+      // Retry up to 4 times (800ms, 1.8s, 3s, 5s) — handles slow networks
+      const tryFetchPending = (attempt: number) => {
+        const delays = [800, 1000, 1200, 2000];
+        const delay  = delays[attempt] ?? 2000;
+        setTimeout(() => {
+          import('@/lib/api/calls').then(({ callsApi }) => {
+            callsApi.pendingCompletions().then(res => {
+              const pending = (res as any).data ?? res;
+              if (Array.isArray(pending) && pending.length > 0) {
+                const latest = pending[0];
+                setDispModal({
+                  callId:        latest.id,
+                  callerNumber:  (latest as any).caller ?? (latest as any).caller_number ?? 'Unknown',
+                  customerName:  (latest as any).customer_name ?? null,
+                  customerId:    (latest as any).customer   ?? null,
+                  callDirection: (latest as any).direction ?? 'inbound',
+                });
+              } else if (attempt < 3) {
+                // No pending found yet — retry
+                tryFetchPending(attempt + 1);
+              }
+            }).catch(() => {
+              if (attempt < 3) tryFetchPending(attempt + 1);
+            });
+          });
+        }, delay);
+      };
+      tryFetchPending(0);
     }
     prevCallStatus.current = callStatus;
   }, [callStatus]);
@@ -166,6 +178,7 @@ export default function DashboardLayout({
           callerNumber={dispModal.callerNumber}
           customerName={dispModal.customerName}
           customerId={dispModal.customerId}
+          callDirection={dispModal.callDirection}
           onClose={() => setDispModal(null)}
         />
       )}
