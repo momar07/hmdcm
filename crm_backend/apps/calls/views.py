@@ -444,6 +444,21 @@ class DispositionViewSet(viewsets.ModelViewSet):
         from .serializers import DispositionFullSerializer
         return DispositionFullSerializer
 
+    def destroy(self, request, *args, **kwargs):
+        """Soft delete — لو في completions مرتبطة، اعمله inactive بدل ما تمسحه"""
+        instance = self.get_object()
+        try:
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception:
+            # في completions مرتبطة — soft delete
+            instance.is_active = False
+            instance.save(update_fields=['is_active'])
+            return Response(
+                {'detail': 'Disposition deactivated (has linked call records).'},
+                status=status.HTTP_200_OK
+            )
+
 
 class DispositionActionViewSet(viewsets.ModelViewSet):
     """
