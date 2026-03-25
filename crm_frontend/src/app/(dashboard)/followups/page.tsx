@@ -444,14 +444,24 @@ export default function FollowupsPage() {
 
   const completeMutation = useMutation({
     mutationFn: (id: string) => { setCompleting(id); return followupsApi.complete(id); },
-    onSuccess:  () => { toast.success('Completed ✅'); },
+    onSuccess:  () => {
+      toast.success('Completed ✅');
+      qc.invalidateQueries({ queryKey: ['followups'] });
+      qc.invalidateQueries({ queryKey: ['followups-overdue'] });
+      qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
+    },
     onError:    () => toast.error('Failed to complete'),
     onSettled:  () => setCompleting(null),
   });
 
   const cancelMutation = useMutation({
     mutationFn: (id: string) => { setCancelling(id); return followupsApi.cancel(id); },
-    onSuccess:  () => { toast.success('Cancelled'); },
+    onSuccess:  () => {
+      toast.success('Cancelled');
+      qc.invalidateQueries({ queryKey: ['followups'] });
+      qc.invalidateQueries({ queryKey: ['followups-overdue'] });
+      qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
+    },
     onError:    () => toast.error('Failed to cancel'),
     onSettled:  () => setCancelling(null),
   });
