@@ -75,7 +75,7 @@ export function DispositionModal({
   const { mutate: submit, isPending } = useMutation({
     mutationFn: () => callsApi.complete(callId, {
       disposition_id:  selectedDisp,
-      note:            note || ' ',
+      note:            note.trim() || 'No additional notes',
       next_action:     'no_action',
       followup_due_at: followupDate ? (
         followupDate.length === 16 ? followupDate + ':00' : followupDate

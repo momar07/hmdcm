@@ -33,10 +33,14 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
 
     # Rule 4: لازم يكون فيه note
     note = data.get('note', '').strip()
-    if not note:
-        raise ValidationError('Note is required.')
-    if len(note) < 10:
-        raise ValidationError('Note must be at least 10 characters.')
+    requires_note = disposition.requires_note
+    if requires_note:
+        if not note:
+            raise ValidationError('Note is required for this disposition.')
+        if len(note) < 10:
+            raise ValidationError('Note must be at least 10 characters.')
+    else:
+        note = note or 'No additional notes'
 
     # Rule 5: لازم يكون فيه next_action
     next_action = data.get('next_action', '').strip()

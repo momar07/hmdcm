@@ -84,6 +84,15 @@ export default function CustomerDetailPage() {
     queryKey: ['customer-history', id],
     queryFn:  () => api.get(`/customers/${id}/history/`).then(r => r.data),
     enabled:  !!id && tab === 'timeline',
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: callsDataAll } = useQuery({
+    queryKey: ['customer-calls-count', id],
+    queryFn:  () => callsApi.list({ customer: id, page_size: 1 }).then(r => r.data),
+    enabled:  !!id,
+    staleTime: 60_000,
   });
 
   const { data: callsData } = useQuery({

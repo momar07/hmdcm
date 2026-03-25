@@ -311,6 +311,9 @@ def process_ami_event(self, event: dict):
                 status = 'answered'
             else:
                 # Re-fetch from DB to catch AgentConnect that may have just fired
+                # Small sleep to handle race condition with AgentConnect task
+                import time as _time
+                _time.sleep(0.5)
                 fresh = Call.objects.filter(uniqueid=uniqueid).values('status').first()
                 if fresh and fresh['status'] == 'answered':
                     status = 'answered'

@@ -28,7 +28,18 @@ class CallViewSet(viewsets.ModelViewSet):
     http_method_names  = ['get', 'post', 'patch', 'head', 'options']
 
     def get_queryset(self):
-        return get_all_calls(user=self.request.user)
+        qs = get_all_calls(user=self.request.user)
+        # When filtering by customer, show ALL calls for that customer
+        # regardless of agent assignment (for customer detail page)
+        customer_id = self.request.query_params.get('customer')
+        if customer_id:
+            from django.db.models import Q as _Q
+            qs = Call.objects.select_related(
+                'agent', 'customer'
+            ).prefetch_related('events').filter(
+                customer_id=customer_id
+            ).order_by('-created_at')
+        return qs
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
