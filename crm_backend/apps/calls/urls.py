@@ -10,10 +10,14 @@ from .views import (
     LeadStagesListView,
     ScreenPopView,
     LinkCallToCustomerView,
+    DispositionViewSet,
+    DispositionActionViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'', CallViewSet, basename='call')
+router.register(r'dispositions-crud', DispositionViewSet, basename='disposition-crud')
+router.register(r'disposition-actions', DispositionActionViewSet, basename='disposition-action')
 
 urlpatterns = [
     path('complete/<uuid:call_id>/',  CallCompleteView.as_view(),        name='call-complete'),

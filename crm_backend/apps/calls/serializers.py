@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Call, CallEvent, CallRecording, CallDisposition, Disposition
+from .models import Call, CallEvent, CallRecording, CallDisposition, Disposition, DispositionAction
 
 
 class DispositionSerializer(serializers.ModelSerializer):
@@ -91,3 +91,22 @@ class OriginateCallSerializer(serializers.Serializer):
     customer_id  = serializers.UUIDField(required=False)
     lead_id      = serializers.UUIDField(required=False)
     campaign_id  = serializers.UUIDField(required=False)
+
+
+class DispositionActionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = DispositionAction
+        fields = ['id', 'action_type', 'config', 'order']
+
+
+class DispositionFullSerializer(serializers.ModelSerializer):
+    """للـ Settings page — CRUD كامل مع الـ actions"""
+    actions = DispositionActionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model  = Disposition
+        fields = [
+            'id', 'name', 'code', 'color', 'direction',
+            'requires_note', 'is_active', 'order', 'actions',
+        ]
+        read_only_fields = ['id']

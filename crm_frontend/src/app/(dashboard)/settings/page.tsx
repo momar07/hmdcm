@@ -6,6 +6,7 @@ import { Settings, Phone, Shield, Bell, Layers, Save, RefreshCw, ListChecks, Plu
 import clsx                           from 'clsx';
 import toast                          from 'react-hot-toast';
 import PipelineStagesSettings         from '@/components/settings/PipelineStagesSettings';
+import DispositionsSettings            from '@/components/settings/DispositionsSettings';
 import { PageHeader }                 from '@/components/ui/PageHeader';
 import { Button }                     from '@/components/ui/Button';
 import { Input }                      from '@/components/ui/Input';
@@ -14,7 +15,7 @@ import { Spinner }                    from '@/components/ui/Spinner';
 import { settingsApi, SystemSetting } from '@/lib/api/settings';
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
-type Tab = 'general' | 'telephony' | 'security' | 'notifications' | 'pipeline' | 'queues';
+type Tab = 'general' | 'telephony' | 'security' | 'notifications' | 'pipeline' | 'queues' | 'dispositions';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'general',       label: 'General',       icon: <Settings size={16} /> },
@@ -23,6 +24,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'notifications', label: 'Notifications', icon: <Bell     size={16} /> },
   { id: 'pipeline',      label: 'Pipeline',      icon: <Layers      size={16} /> },
   { id: 'queues',        label: 'Queues',        icon: <ListChecks  size={16} /> },
+  { id: 'dispositions',  label: 'Dispositions',  icon: <Phone       size={16} /> },
 ];
 
 // ── Default values shown when the key doesn't exist in DB yet ────────────────
@@ -107,6 +109,7 @@ export default function SettingsPage() {
           {activeTab === 'notifications' && <NotificationSettings  map={settingsMap} />}
           {activeTab === 'pipeline'      && <PipelineStagesSettings />}
           {activeTab === 'queues'        && <QueuesSettings />}
+          {activeTab === 'dispositions'  && <DispositionsSettings />}
         </div>
       </div>
     </div>

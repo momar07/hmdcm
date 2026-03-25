@@ -424,3 +424,46 @@ class EndWebrtcCallView(APIView):
             'duration': duration,
             'message': 'Call record updated.',
         })
+
+
+# ── Disposition CRUD (Settings) ──────────────────────────────────────────────
+
+class DispositionViewSet(viewsets.ModelViewSet):
+    """
+    CRUD للـ Dispositions — مع filter على الـ direction.
+    GET /api/calls/dispositions-crud/?direction=inbound
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends    = [DjangoFilterBackend]
+    filterset_fields   = ['direction', 'is_active']
+
+    def get_queryset(self):
+        return Disposition.objects.prefetch_related('actions').order_by('order', 'name')
+
+    def get_serializer_class(self):
+        from .serializers import DispositionFullSerializer
+        return DispositionFullSerializer
+
+
+class DispositionActionViewSet(viewsets.ModelViewSet):
+    """
+    CRUD للـ actions الخاصة بكل disposition.
+    POST /api/calls/disposition-actions/  body: { disposition, action_type, config, order }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        from .models import DispositionAction
+        qs = DispositionAction.objects.select_related('disposition')
+        disp_id = self.request.query_params.get('disposition')
+        if disp_id:
+            qs = qs.filter(disposition_id=disp_id)
+        return qs.order_by('order')
+
+    def get_serializer_class(self):
+        from .serializers import DispositionActionSerializer
+        return DispositionActionSerializer
+
+    def perform_create(self, serializer):
+        from .models import DispositionAction
+        serializer.save()

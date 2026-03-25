@@ -5,24 +5,23 @@ from apps.common.models import BaseModel
 
 class Disposition(BaseModel):
     """نتائج المكالمة المعرفة مسبقاً"""
-    NEXT_ACTION_CHOICES = [
-        ('callback',        'Schedule Callback'),
-        ('send_quotation',  'Send Quotation'),
-        ('followup_later',  'Follow-up Later'),
-        ('close_lead',      'Close Lead'),
-        ('no_action',       'No Action Required'),
+    DIRECTION_CHOICES = [
+        ('inbound',  'Inbound'),
+        ('outbound', 'Outbound'),
+        ('both',     'Both'),
     ]
 
-    name             = models.CharField(max_length=100)
-    code             = models.CharField(max_length=50, unique=True)
-    color            = models.CharField(max_length=20, default='#6b7280')
-    requires_followup = models.BooleanField(default=False)
-    default_next_action = models.CharField(
-        max_length=50, choices=NEXT_ACTION_CHOICES,
-        default='no_action'
-    )
-    is_active        = models.BooleanField(default=True)
-    order            = models.PositiveIntegerField(default=0)
+    name      = models.CharField(max_length=100)
+    code      = models.CharField(max_length=50, unique=True)
+    color     = models.CharField(max_length=20, default='#6b7280')
+    direction = models.CharField(max_length=10, choices=DIRECTION_CHOICES, default='both')
+    requires_note = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True)
+    order     = models.PositiveIntegerField(default=0)
+
+    # Legacy fields — kept for backward compat
+    requires_followup   = models.BooleanField(default=False)
+    default_next_action = models.CharField(max_length=50, default='no_action')
 
     class Meta:
         db_table = 'dispositions'
@@ -30,6 +29,32 @@ class Disposition(BaseModel):
 
     def __str__(self):
         return self.name
+
+
+class DispositionAction(BaseModel):
+    """كل disposition ممكن يكون له أكتر من action"""
+    ACTION_CHOICES = [
+        ('no_action',       'No Action'),
+        ('create_followup', 'Create Follow-up'),
+        ('create_lead',     'Create Lead'),
+        ('create_ticket',   'Create Ticket'),
+        ('change_lead_stage', 'Change Lead Stage'),
+        ('mark_won',        'Mark Lead as Won'),
+        ('escalate',        'Escalate to Supervisor'),
+    ]
+
+    disposition = models.ForeignKey(Disposition, on_delete=models.CASCADE,
+                                    related_name='actions')
+    action_type = models.CharField(max_length=30, choices=ACTION_CHOICES)
+    config      = models.JSONField(default=dict, blank=True)
+    order       = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'disposition_actions'
+        ordering = ['order']
+
+    def __str__(self):
+        return f'{self.disposition.name} → {self.action_type}'
 
 
 class Call(BaseModel):
