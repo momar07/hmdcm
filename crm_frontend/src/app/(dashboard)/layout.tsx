@@ -55,7 +55,7 @@ export default function DashboardLayout({
       setTimeout(() => {
         import('@/lib/api/calls').then(({ callsApi }) => {
           callsApi.pendingCompletions().then(res => {
-            const pending = res.data;
+            const pending = (res as any).data ?? res;
             if (Array.isArray(pending) && pending.length > 0) {
               const latest = pending[0];
               setDispModal({

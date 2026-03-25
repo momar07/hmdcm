@@ -47,10 +47,11 @@ export function DispositionModal({
   // جيب الـ dispositions الجديدة مع الـ actions
   const { data: dispositions = [] } = useQuery<Disposition[]>({
     queryKey: ['dispositions-full'],
-    queryFn:  () => dispositionsApi.list().then(r => {
+    queryFn:  async () => {
+      const r = await dispositionsApi.list();
       const d = (r as any).data ?? r;
       return Array.isArray(d) ? d : (d?.results ?? []);
-    }),
+    },
   });
 
   const selected = dispositions.find(d => d.id === selectedDisp);
