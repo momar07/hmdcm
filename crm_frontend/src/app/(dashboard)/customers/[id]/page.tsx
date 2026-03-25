@@ -84,8 +84,9 @@ export default function CustomerDetailPage() {
     queryKey: ['customer-history', id],
     queryFn:  () => api.get(`/customers/${id}/history/`).then(r => r.data),
     enabled:  !!id && tab === 'timeline' && !!customer,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
+    staleTime: 15_000,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
   });
 
   const { data: callsDataAll } = useQuery({

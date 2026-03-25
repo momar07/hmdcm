@@ -51,16 +51,22 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
     if next_action not in valid_actions:
         raise ValidationError(f'Invalid next action. Choose from: {valid_actions}')
 
-    # Rule 6: لو disposition بتطلب followup — لازم followup data
-    followup_required = disposition.requires_followup
-    followup_due_at   = data.get('followup_due_at')
+    # Rule 6: لو disposition عنده create_followup action — لازم followup_due_at
+    # Use new actions system — ignore legacy requires_followup field
+    disp_action_types = list(
+        DispositionAction.objects.filter(disposition=disposition)
+        .values_list('action_type', flat=True)
+    )
+    followup_due_at   = data.get('followup_due_at') or data.get('followup_date')
     followup_assigned = data.get('followup_assigned_to') or data.get('followup_assigned_id')
     followup_type     = data.get('followup_type', '').strip()
+
+    # Only require followup_due_at if there's a create_followup action
+    followup_required = 'create_followup' in disp_action_types
 
     if followup_required:
         if not followup_due_at:
             raise ValidationError('Follow-up due date is required for this disposition.')
-        # followup_assigned defaults to current agent if not provided
         if not followup_type:
             followup_type = 'call'
 

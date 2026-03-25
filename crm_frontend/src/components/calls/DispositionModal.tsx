@@ -73,14 +73,17 @@ export function DispositionModal({
     (!needsFollowup || followupDate);
 
   const { mutate: submit, isPending } = useMutation({
-    mutationFn: () => callsApi.complete(callId, {
-      disposition_id:  selectedDisp,
-      note:            note.trim() || 'No additional notes',
-      next_action:     'no_action',
-      followup_due_at: followupDate ? (
-        followupDate.length === 16 ? followupDate + ':00' : followupDate
-      ) : undefined,
-    }),
+    mutationFn: () => {
+      const fDate = followupDate
+        ? (followupDate.length === 16 ? followupDate + ':00' : followupDate)
+        : undefined;
+      return callsApi.complete(callId, {
+        disposition_id:  selectedDisp,
+        note:            note.trim() || 'No additional notes',
+        next_action:     'no_action',
+        followup_due_at: fDate,
+      });
+    },
     onSuccess: () => {
       toast.success('Call completed ✅');
       qc.invalidateQueries({ queryKey: ['followups'] });
