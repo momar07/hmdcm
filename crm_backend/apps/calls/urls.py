@@ -1,5 +1,5 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import DefaultRouter, SimpleRouter
 from .views import (
     MarkCallAnsweredView,
     RejectCallView,
@@ -16,12 +16,12 @@ from .views import (
     DispositionActionViewSet,
 )
 
-# router للـ calls العادي
-calls_router = DefaultRouter()
+# SimpleRouter — لا يعمل API root page فلا يحجب /api/calls/
+calls_router = SimpleRouter()
 calls_router.register(r'', CallViewSet, basename='call')
 
 # router منفصل للـ dispositions CRUD
-disp_router = DefaultRouter()
+disp_router = SimpleRouter()
 disp_router.register(r'dispositions-crud', DispositionViewSet, basename='disposition-crud')
 disp_router.register(r'disposition-actions', DispositionActionViewSet, basename='disposition-action')
 
@@ -37,7 +37,7 @@ urlpatterns = [
     path('end-webrtc-call/<uuid:call_id>/',  EndWebrtcCallView.as_view(),      name='end-webrtc-call'),
     path('mark-answered/<uuid:call_id>/',    MarkCallAnsweredView.as_view(),   name='mark-answered'),
     path('reject/<uuid:call_id>/',           RejectCallView.as_view(),         name='reject-call'),
-    # routers
-    path('', include(disp_router.urls)),
+    # routers — calls_router أولاً عشان ما يتغلبش بـ disp_router
     path('', include(calls_router.urls)),
+    path('', include(disp_router.urls)),
 ]
