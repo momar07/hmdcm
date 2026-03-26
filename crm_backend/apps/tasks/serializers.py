@@ -23,6 +23,8 @@ class TaskSerializer(serializers.ModelSerializer):
     # linked object labels
     customer_name    = serializers.SerializerMethodField()
     lead_title       = serializers.SerializerMethodField()
+    lead_phone       = serializers.SerializerMethodField()
+    customer_phone   = serializers.SerializerMethodField()
     ticket_title     = serializers.SerializerMethodField()
 
     class Meta:
@@ -33,8 +35,8 @@ class TaskSerializer(serializers.ModelSerializer):
             'action_type',
             'assigned_to', 'assigned_to_name',
             'assigned_by', 'assigned_by_name',
-            'customer', 'customer_name',
-            'lead', 'lead_title',
+            'customer', 'customer_name', 'customer_phone',
+            'lead', 'lead_title', 'lead_phone',
             'ticket', 'ticket_title',
             'call', 'followup',
             'due_date', 'reminder_at', 'reminder_sent',
@@ -60,6 +62,30 @@ class TaskSerializer(serializers.ModelSerializer):
 
     def get_lead_title(self, obj):
         return obj.lead.title if obj.lead else None
+
+    def get_lead_phone(self, obj):
+        """Get customer's primary phone via the lead's customer."""
+        if obj.lead and obj.lead.customer:
+            from apps.customers.models import CustomerPhone
+            phone = CustomerPhone.objects.filter(
+                customer=obj.lead.customer, is_primary=True
+            ).first() or CustomerPhone.objects.filter(
+                customer=obj.lead.customer
+            ).first()
+            return phone.number if phone else None
+        return None
+
+    def get_customer_phone(self, obj):
+        """Get primary phone for directly linked customer."""
+        if obj.customer:
+            from apps.customers.models import CustomerPhone
+            phone = CustomerPhone.objects.filter(
+                customer=obj.customer, is_primary=True
+            ).first() or CustomerPhone.objects.filter(
+                customer=obj.customer
+            ).first()
+            return phone.number if phone else None
+        return None
 
     def get_ticket_title(self, obj):
         return obj.ticket.title if obj.ticket else None

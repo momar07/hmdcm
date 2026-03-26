@@ -365,12 +365,18 @@ export interface Task {
   customer_name:    string | null;
   lead:             string | null;
   lead_title:       string | null;
+  lead_phone:       string | null;
+  customer_phone:   string | null;
   ticket:           string | null;
   ticket_title:     string | null;
   call:             string | null;
   due_date:         string | null;
   completed_at:     string | null;
   comment:          string;
+  action_type:      string;
+  reminder_at:      string | null;
+  reminder_sent:    boolean;
+  followup:         string | null;
   is_overdue:       boolean;
   logs:             TaskLog[];
   created_at:       string;

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksApi } from '@/lib/api/tasks';
+import { callsApi } from '@/lib/api/calls';
 import { Task, TaskStatus, TaskPriority } from '@/types';
 import TaskModal from '@/components/tasks/TaskModal';
 import toast from 'react-hot-toast';
@@ -44,7 +45,7 @@ function StatusBadge({ status }: { status: TaskStatus }) {
 function TaskCard({ task, onEdit, onStart, onComplete, onCancel }: {
   task:       Task;
   onEdit:     (t: Task) => void;
-  onStart:    (id: string) => void;
+  onStart:    (id: string, task: Task) => void;
   onComplete: (id: string) => void;
   onCancel:   (id: string) => void;
 }) {
@@ -88,10 +89,10 @@ function TaskCard({ task, onEdit, onStart, onComplete, onCancel }: {
           <div className="flex items-center gap-1 shrink-0">
             {task.status === 'pending' && (
               <button
-                onClick={() => onStart(task.id)}
+                onClick={() => onStart(task.id, task)}
                 className="text-xs px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
-                Start
+                {task.action_type === 'call_lead' ? '📞 Call' : 'Start'}
               </button>
             )}
             <button
@@ -175,9 +176,35 @@ export default function TasksPage() {
   // Mutations
   const startMutation = useMutation({
     mutationFn: (id: string) => tasksApi.start(id),
-    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['tasks'] }); toast.success('Task started'); },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['tasks'] }); },
     onError:    () => toast.error('Failed to start task'),
   });
+
+  const handleStart = async (id: string, task: Task) => {
+    // Start the task first
+    await startMutation.mutateAsync(id).catch(() => {});
+
+    // If action is call_lead → originate call automatically
+    if (task.action_type === 'call_lead') {
+      const phone = (task as any).lead_phone || (task as any).customer_phone;
+      if (!phone) {
+        toast.error('No phone number found for this lead');
+        return;
+      }
+      try {
+        await callsApi.originate({
+          phone_number: phone,
+          lead_id:      task.lead    ?? undefined,
+          customer_id:  task.customer ?? undefined,
+        });
+        toast.success(`📞 Calling ${phone}...`);
+      } catch (err: any) {
+        toast.error(err?.response?.data?.error || 'Failed to initiate call');
+      }
+    } else {
+      toast.success('Task started');
+    }
+  };
 
   const completeMutation = useMutation({
     mutationFn: ({ id, comment }: { id: string; comment?: string }) => tasksApi.complete(id, comment),
@@ -209,7 +236,7 @@ export default function TasksPage() {
             <TaskCard
               key={t.id} task={t}
               onEdit={openEdit}
-              onStart={(id) => startMutation.mutate(id)}
+              onStart={(id, task) => handleStart(id, task)}
               onComplete={(id) => completeMutation.mutate({ id })}
               onCancel={(id) => cancelMutation.mutate(id)}
             />
