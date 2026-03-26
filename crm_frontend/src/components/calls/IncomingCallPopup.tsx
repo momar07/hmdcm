@@ -8,6 +8,7 @@ import {
   Phone, PhoneOff, Mic, MicOff,
   PauseCircle, PlayCircle, PhoneForwarded, X, User,
 } from 'lucide-react';
+import { useAgentStatusStore } from '@/store/agentStatusStore';
 import { useCallStore }  from '@/store';
 import { useSipStore }   from '@/store/sipStore';
 import { useRouter }     from 'next/navigation';
@@ -63,6 +64,7 @@ function TransferModal({
 export function IncomingCallPopup() {
   const { incomingCall, clearIncoming } = useCallStore();
   const { actions, callStatus, isMuted, isOnHold, callTimer } = useSipStore();
+  const { status: agentStatus } = useAgentStatusStore();
   const router = useRouter();
 
   const [visible,      setVisible]      = useState(false);
@@ -136,7 +138,7 @@ export function IncomingCallPopup() {
 
   /* ── WS event: incomingCall set → show popup only ────────── */
   useEffect(() => {
-    if (incomingCall) {
+    if (incomingCall && agentStatus !== 'away') {
       setVisible(true);
       // NOTE: ring audio is managed exclusively by SipClient._startRinging()
     }
@@ -144,10 +146,10 @@ export function IncomingCallPopup() {
 
   /* ── SIP status changes ───────────────────────────────── */
   useEffect(() => {
-    if (callStatus === 'incoming') {
+    if (callStatus === 'incoming' && agentStatus !== 'away') {
       setVisible(true);
     }
-    if (callStatus === 'active') {
+    if (callStatus === 'active' && agentStatus !== 'away') {
       setVisible(true);
       const call = incomingCallRef.current;
       if (call?.customer_id) {
