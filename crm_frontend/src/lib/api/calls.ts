@@ -23,7 +23,7 @@ export const callsApi = {
     api.get<Call>(`/calls/list/${id}/`),
 
   originate: (data: { phone_number: string; customer_id?: string; lead_id?: string }) =>
-    api.post('/calls/originate/', data),
+    api.post('/calls/list/originate/', data),
 
   screenPop: (phone: string) =>
     api.get('/calls/screen-pop/', { params: { phone } }),
