@@ -111,7 +111,14 @@ export default function DashboardLayout({
         setStatus(s as any);
       }
     }
-    if (event.type === 'followup_reminder') {
+    if (event.type === 'task_assigned') {
+      toast(`📋 New Task: ${event.title}`, {
+        description: `Priority: ${event.priority?.toUpperCase()}${event.due_date ? ' · Due: ' + new Date(event.due_date).toLocaleDateString() : ''}`,
+        action: { label: 'View', onClick: () => window.location.href = '/tasks' },
+        duration: 8000,
+      });
+
+    } else if (event.type === 'followup_reminder') {
       // Dispatch DOM event — ReminderToastListener handles the toast UI
       window.dispatchEvent(new CustomEvent('followup:reminder', { detail: event }));
     }

@@ -338,3 +338,48 @@ export interface LeadEvent {
   note:         string;
   created_at:   string;
 }
+
+// ─── Tasks ────────────────────────────────────────────────────
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type TaskStatus   = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface TaskLog {
+  id:         string;
+  action:     string;
+  detail:     string;
+  actor_name: string;
+  created_at: string;
+}
+
+export interface Task {
+  id:               string;
+  title:            string;
+  description:      string;
+  priority:         TaskPriority;
+  status:           TaskStatus;
+  assigned_to:      string;
+  assigned_to_name: string;
+  assigned_by:      string | null;
+  assigned_by_name: string;
+  customer:         string | null;
+  customer_name:    string | null;
+  lead:             string | null;
+  lead_title:       string | null;
+  ticket:           string | null;
+  ticket_title:     string | null;
+  call:             string | null;
+  due_date:         string | null;
+  completed_at:     string | null;
+  comment:          string;
+  is_overdue:       boolean;
+  logs:             TaskLog[];
+  created_at:       string;
+  updated_at:       string;
+}
+
+export interface TaskStats {
+  pending:         number;
+  in_progress:     number;
+  overdue:         number;
+  completed_today: number;
+}
