@@ -112,10 +112,10 @@ export default function DashboardLayout({
       }
     }
     if (event.type === 'task_assigned') {
-      toast(`📋 New Task: ${event.title}`, {
-        description: `Priority: ${event.priority?.toUpperCase()}${event.due_date ? ' · Due: ' + new Date(event.due_date).toLocaleDateString() : ''}`,
-        action: { label: 'View', onClick: () => window.location.href = '/tasks' },
-        duration: 8000,
+      import('react-hot-toast').then(({ default: toast }) => {
+        toast(`📋 New Task: ${(event as any).title} — Priority: ${(event as any).priority?.toUpperCase() ?? ''}`, {
+          duration: 8000,
+        });
       });
 
     } else if (event.type === 'followup_reminder') {

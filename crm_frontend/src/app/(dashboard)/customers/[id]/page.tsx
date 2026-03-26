@@ -12,6 +12,7 @@ import {
 import { customersApi } from '@/lib/api/customers';
 import { useSipStore }   from '@/store/sipStore';
 import { callsApi }     from '@/lib/api/calls';
+import { tasksApi }     from '@/lib/api/tasks';
 import { leadsApi }     from '@/lib/api/leads';
 import { ticketsApi }   from '@/lib/api/tickets';
 import { PageHeader }   from '@/components/ui/PageHeader';
@@ -41,7 +42,7 @@ function timeAgo(dateStr: string) {
   return new Date(dateStr).toLocaleDateString();
 }
 
-type Tab = 'timeline' | 'calls' | 'leads' | 'tickets';
+type Tab = 'timeline' | 'calls' | 'leads' | 'tickets' | 'tasks';
 
 export default function CustomerDetailPage() {
   const { id }   = useParams<{ id: string }>();
@@ -120,6 +121,14 @@ export default function CustomerDetailPage() {
     queryFn:  () => ticketsApi.list({ customer: id, page_size: 50 }).then(r => r.data),
     enabled:  !!id && tab === 'tickets',
   });
+
+  const { data: tasksData, isLoading: tasksLoading } = useQuery({
+    queryKey: ['customer-tasks', id],
+    queryFn:  () => tasksApi.list({ customer: id, page_size: 25 }),
+    enabled:  !!id && tab === 'tasks',
+    staleTime: 10_000,
+  });
+
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
   if (!customer) return <div className="text-center py-20 text-gray-400">Customer not found.</div>;
@@ -244,6 +253,7 @@ export default function CustomerDetailPage() {
           { key: 'leads',    label: 'Leads',     icon: <TrendingUp size={14}/> },
           { key: 'tickets',  label: 'Tickets',   icon: <TicketIcon size={14}/>,
             badge: ticketCount > 0 ? ticketCount : null },
+          { key: 'tasks',    label: 'Tasks',     icon: <CheckSquare size={14}/> },
         ] as { key: Tab; label: string; icon: React.ReactNode; badge?: number | null }[]).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all
