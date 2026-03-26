@@ -30,13 +30,15 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description',
             'priority', 'status',
+            'action_type',
             'assigned_to', 'assigned_to_name',
             'assigned_by', 'assigned_by_name',
             'customer', 'customer_name',
             'lead', 'lead_title',
             'ticket', 'ticket_title',
-            'call',
-            'due_date', 'completed_at', 'comment',
+            'call', 'followup',
+            'due_date', 'reminder_at', 'reminder_sent',
+            'completed_at', 'comment',
             'is_overdue', 'logs',
             'created_at', 'updated_at',
         ]
@@ -68,6 +70,8 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         model  = Task
         fields = [
             'title', 'description', 'priority',
+            'action_type',
             'assigned_to', 'due_date',
-            'customer', 'lead', 'ticket', 'call',
+            'reminder_at',
+            'customer', 'lead', 'ticket', 'call', 'followup',
         ]

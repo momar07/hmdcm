@@ -51,6 +51,26 @@ class Task(models.Model):
                     related_name='assigned_tasks',
                   )
 
+    # ── Action Type ─────────────────────────────────────────
+    ACTION_TYPE_CHOICES = [
+        ('call_lead',   'Call Lead'),
+        ('send_email',  'Send Email'),
+        ('follow_up',   'Follow Up'),
+        ('send_offer',  'Send Offer'),
+        ('other',       'Other'),
+    ]
+    action_type = models.CharField(
+                    max_length=20,
+                    choices=ACTION_TYPE_CHOICES,
+                    default='other',
+                    db_index=True,
+                  )
+
+    # ── Reminder ─────────────────────────────────────────────
+    reminder_at      = models.DateTimeField(null=True, blank=True,
+                         help_text='When to remind the agent about this task')
+    reminder_sent    = models.BooleanField(default=False)
+
     # ── Optional Links (same pattern as ApprovalRequest) ─────
     customer    = models.ForeignKey(
                     'customers.Customer',
@@ -73,6 +93,12 @@ class Task(models.Model):
                   )
     call        = models.ForeignKey(
                     'calls.Call',
+                    on_delete=models.SET_NULL,
+                    null=True, blank=True,
+                    related_name='tasks',
+                  )
+    followup    = models.ForeignKey(
+                    'followups.Followup',
                     on_delete=models.SET_NULL,
                     null=True, blank=True,
                     related_name='tasks',

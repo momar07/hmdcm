@@ -191,7 +191,11 @@ CELERY_BEAT_SCHEDULE_TICKETS = {
 
 # Merge into main beat schedule if it exists
 if "CELERY_BEAT_SCHEDULE" not in dir():
-    CELERY_BEAT_SCHEDULE = {}
+    CELERY_BEAT_SCHEDULE = {
+    'send-task-reminders': {
+        'task':     'apps.tasks.tasks.send_task_reminders',
+        'schedule': 60.0,  # every 60 seconds
+    },}
 CELERY_BEAT_SCHEDULE.update(CELERY_BEAT_SCHEDULE_TICKETS)
 
 # Timezone
