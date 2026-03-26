@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'apps.integrations',
     'apps.settings_core',
     'apps.dashboard',
+    'apps.tasks',
     'apps.approvals',
     'apps.auditlog',
     'apps.asterisk',

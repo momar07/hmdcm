@@ -22,4 +22,5 @@ urlpatterns = [
     path('api/integrations/',include('apps.integrations.urls')),
     path('api/settings/',    include('apps.settings_core.urls')),
     path('api/dashboard/',   include('apps.dashboard.urls')),
+    path('api/tasks/',       include('apps.tasks.urls')),
 ]

@@ -99,3 +99,14 @@ class CallEventConsumer(AsyncWebsocketConsumer):
             'status':     event.get('status'),
             'extension':  event.get('extension'),
         }))
+
+    async def task_assigned(self, event):
+        """Notify agent when a new task is assigned to them."""
+        await self.send(text_data=json.dumps({
+            'type':        'task_assigned',
+            'task_id':     event.get('task_id'),
+            'title':       event.get('title'),
+            'priority':    event.get('priority'),
+            'due_date':    event.get('due_date'),
+            'assigned_by': event.get('assigned_by'),
+        }))
