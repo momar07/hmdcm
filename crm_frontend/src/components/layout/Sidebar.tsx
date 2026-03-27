@@ -84,6 +84,11 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['admin', 'supervisor', 'agent'],
   },
   {
+    href: '/sales/quotations', label: 'Quotations',
+    icon: <ClipboardList size={18} />,
+    roles: ['admin', 'supervisor', 'agent'],
+  },
+  {
     href: '/campaigns', label: 'Campaigns',
     icon: <Megaphone size={18} />,
     roles: ['admin', 'supervisor'],
