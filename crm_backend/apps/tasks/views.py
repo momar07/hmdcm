@@ -108,3 +108,24 @@ class TaskViewSet(viewsets.ModelViewSet):
                                status='completed',
                                completed_at__date=now.date()).count(),
         })
+
+    @action(detail=False, methods=['get'], url_path='team-stats')
+    def team_stats(self, request):
+        """Supervisor/admin stats across all agents."""
+        if request.user.role not in ('supervisor', 'admin'):
+            return Response({'detail': 'Forbidden.'}, status=403)
+        now         = timezone.now()
+        assigned_to = request.query_params.get('assigned_to')
+        qs          = Task.objects.all()
+        if assigned_to:
+            qs = qs.filter(assigned_to=assigned_to)
+        return Response({
+            'pending':         qs.filter(status='pending').count(),
+            'in_progress':     qs.filter(status='in_progress').count(),
+            'overdue':         qs.filter(due_date__lt=now).exclude(
+                                   status__in=['completed', 'cancelled']).count(),
+            'completed_today': qs.filter(
+                                   status='completed',
+                                   completed_at__date=now.date()).count(),
+        })
+

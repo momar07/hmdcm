@@ -67,7 +67,7 @@ function TaskCard({ task, onEdit, onStart, onComplete, onCancel }: {
               </span>
             )}
           </div>
-          <h3 className="text-sm font-semibold text-gray-800 truncate">{task.title}</h3>
+          <a href={`/tasks/${task.id}`} className="text-sm font-semibold text-gray-800 truncate hover:text-blue-600 hover:underline">{task.title}</a>
           {task.description && (
             <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{task.description}</p>
           )}
@@ -154,8 +154,8 @@ export default function TasksPage() {
 
   // Stats
   const { data: stats } = useQuery({
-    queryKey: ['task-stats'],
-    queryFn:  () => tasksApi.myStats(),
+    queryKey: ['task-stats', isSupervisor],
+    queryFn:  () => isSupervisor ? tasksApi.teamStats() : tasksApi.myStats(),
     refetchInterval: 30_000,
   });
 

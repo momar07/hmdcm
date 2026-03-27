@@ -50,4 +50,9 @@ export const tasksApi = {
 
   myStats: () =>
     api.get<TaskStats>('/tasks/my-stats/').then((r: any) => r.data),
+
+  teamStats: (assigned_to?: string) =>
+    api.get<TaskStats>('/tasks/team-stats/', {
+      params: assigned_to ? { assigned_to } : {},
+    }).then((r: any) => r.data),
 };
