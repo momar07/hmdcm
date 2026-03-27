@@ -184,9 +184,11 @@ class QuotationCreateSerializer(serializers.ModelSerializer):
         quotation   = Quotation.objects.create(**validated_data)
 
         for i, item in enumerate(items_data):
+            item.pop('order', None)
             QuotationItem.objects.create(quotation=quotation, order=i, **item)
 
         for i, field in enumerate(fields_data):
+            field.pop('order', None)
             QuotationField.objects.create(quotation=quotation, order=i, **field)
 
         quotation.recalculate_totals()
@@ -203,11 +205,13 @@ class QuotationCreateSerializer(serializers.ModelSerializer):
         if items_data is not None:
             instance.items.all().delete()
             for i, item in enumerate(items_data):
+                item.pop('order', None)
                 QuotationItem.objects.create(quotation=instance, order=i, **item)
 
         if fields_data is not None:
             instance.fields.all().delete()
             for i, field in enumerate(fields_data):
+                field.pop('order', None)
                 QuotationField.objects.create(quotation=instance, order=i, **field)
 
         instance.recalculate_totals()
