@@ -132,17 +132,31 @@ export default function QuotationBuilder({ quotation, customerId, leadId }: Prop
     onSuccess: (data) => {
       toast.success(isEdit ? 'Quotation updated ✅' : 'Quotation created ✅');
       qc.invalidateQueries({ queryKey: ['quotations'] });
-      router.push(`/sales/quotations/${data.id}`);
     },
     onError: (e: any) => toast.error(e?.response?.data?.detail || 'Failed to save'),
   });
 
   const submitMutation = useMutation({
     mutationFn: async () => {
-      const saved = await saveMutation.mutateAsync(false);
-      return quotationsApi.submit((saved as any).id);
+      const payload = {
+        quotation_type: qType,
+        title, customer: customer || null, lead: lead || null,
+        currency, tax_rate: Number(taxRate),
+        valid_until: validUntil || null,
+        terms_body: termsBody, internal_note: internalNote,
+        items:       qType === 'price_quote' ? items.filter(i => i.description || i.product) : [],
+        fields_data: qType === 'contract'    ? fields.filter(f => f.key)                     : [],
+      };
+      const saved = isEdit
+        ? await quotationsApi.update(quotation!.id, payload)
+        : await quotationsApi.create(payload as any);
+      return quotationsApi.submit(saved.id);
     },
-    onSuccess: () => { toast.success('Submitted for approval 🎉'); router.push('/sales/quotations'); },
+    onSuccess: (data: any) => {
+      toast.success('Submitted for approval 🎉');
+      qc.invalidateQueries({ queryKey: ['quotations'] });
+      router.push('/sales/quotations/' + data.id);
+    },
     onError: (e: any) => toast.error(e?.response?.data?.detail || 'Failed to submit'),
   });
 

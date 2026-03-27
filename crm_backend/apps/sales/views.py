@@ -120,6 +120,14 @@ class QuotationViewSet(viewsets.ModelViewSet):
             return QuotationCreateSerializer
         return QuotationSerializer
 
+    def create(self, request, *args, **kwargs):
+        write_ser = QuotationCreateSerializer(data=request.data, context={"request": request})
+        write_ser.is_valid(raise_exception=True)
+        ref = services.generate_ref_number()
+        write_ser.save(agent=request.user, ref_number=ref)
+        read_ser = QuotationSerializer(write_ser.instance, context={"request": request})
+        return Response(read_ser.data, status=status.HTTP_201_CREATED)
+
     def perform_create(self, serializer):
         ref = services.generate_ref_number()
         serializer.save(agent=self.request.user, ref_number=ref)
