@@ -389,3 +389,134 @@ export interface TaskStats {
   overdue:         number;
   completed_today: number;
 }
+
+// ─── Sales ────────────────────────────────────────────────────
+
+export type QuotationType = 'price_quote' | 'contract';
+export type QuotationStatus =
+  | 'draft' | 'pending_approval' | 'approved'
+  | 'sent'  | 'accepted' | 'rejected' | 'expired' | 'revision';
+
+export type ProductPricingType = 'fixed' | 'per_unit' | 'variants';
+
+export interface SalesSettings {
+  id:                     number;
+  enable_price_quotation: boolean;
+  enable_contract:        boolean;
+  company_name:           string;
+  company_logo:           string | null;
+  company_address:        string;
+  default_currency:       string;
+  default_tax_rate:       number;
+  quotation_prefix:       string;
+  next_quotation_number:  number;
+}
+
+export interface TermsTemplate {
+  id:              string;
+  name:            string;
+  category:        string;
+  body:            string;
+  is_active:       boolean;
+  created_by:      string | null;
+  created_by_name: string;
+  created_at:      string;
+  updated_at:      string;
+}
+
+export interface ProductDimensionField {
+  id:    string;
+  label: string;
+  unit:  string;
+  order: number;
+}
+
+export interface ProductVariant {
+  id:        string;
+  name:      string;
+  price:     number;
+  is_active: boolean;
+}
+
+export interface Product {
+  id:               string;
+  name:             string;
+  description:      string;
+  sku:              string;
+  category:         string;
+  pricing_type:     ProductPricingType;
+  base_price:       number;
+  unit:             string;
+  currency:         string;
+  is_active:        boolean;
+  created_by:       string | null;
+  created_by_name:  string;
+  dimension_fields: ProductDimensionField[];
+  variants:         ProductVariant[];
+  created_at:       string;
+  updated_at:       string;
+}
+
+export interface QuotationItem {
+  id:           string;
+  product:      string | null;
+  product_name: string;
+  description:  string;
+  qty:          number;
+  unit_price:   number;
+  discount_pct: number;
+  line_total:   number;
+  dimensions:   Record<string, number>;
+  note:         string;
+  order:        number;
+}
+
+export interface QuotationField {
+  id:    string;
+  key:   string;
+  value: string;
+  order: number;
+}
+
+export interface QuotationLog {
+  id:         string;
+  action:     string;
+  detail:     string;
+  actor_name: string;
+  created_at: string;
+}
+
+export interface Quotation {
+  id:             string;
+  ref_number:     string;
+  version:        number;
+  parent:         string | null;
+  quotation_type: QuotationType;
+  status:         QuotationStatus;
+  title:          string;
+  agent:          string | null;
+  agent_name:     string;
+  customer:       string | null;
+  customer_name:  string;
+  lead:           string | null;
+  lead_title:     string;
+  currency:       string;
+  tax_rate:       number;
+  subtotal:       number;
+  tax_amount:     number;
+  total_amount:   number;
+  valid_until:    string | null;
+  terms_body:     string;
+  internal_note:  string;
+  approval:       string | null;
+  reviewed_by:    string | null;
+  reviewed_at:    string | null;
+  review_comment: string;
+  items:          QuotationItem[];
+  fields_data:    QuotationField[];
+  logs:           QuotationLog[];
+  is_expired:     boolean;
+  created_at:     string;
+  updated_at:     string;
+}
+
