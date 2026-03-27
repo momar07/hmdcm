@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'apps.dashboard',
     'apps.tasks',
     'apps.approvals',
+    'apps.sales',
     'apps.auditlog',
     'apps.asterisk',
 ]
@@ -197,6 +198,10 @@ if "CELERY_BEAT_SCHEDULE" not in dir():
         'schedule': 60.0,  # every 60 seconds
     },}
 CELERY_BEAT_SCHEDULE.update(CELERY_BEAT_SCHEDULE_TICKETS)
+CELERY_BEAT_SCHEDULE["expire-overdue-quotations"] = {
+    "task":     "apps.sales.tasks.expire_overdue_quotations",
+    "schedule": 3600,   # every hour
+}
 
 # Timezone
 TIME_ZONE = 'Africa/Cairo'

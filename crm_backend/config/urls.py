@@ -23,4 +23,5 @@ urlpatterns = [
     path('api/settings/',    include('apps.settings_core.urls')),
     path('api/dashboard/',   include('apps.dashboard.urls')),
     path('api/tasks/',       include('apps.tasks.urls')),
+    path('api/sales/',       include('apps.sales.urls')),
 ]
