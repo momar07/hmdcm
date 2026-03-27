@@ -15,7 +15,7 @@ import { Spinner }                    from '@/components/ui/Spinner';
 import { settingsApi, SystemSetting } from '@/lib/api/settings';
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
-type Tab = 'general' | 'telephony' | 'security' | 'notifications' | 'pipeline' | 'queues' | 'dispositions';
+type Tab = 'general' | 'telephony' | 'security' | 'notifications' | 'pipeline' | 'queues' | 'dispositions' | 'sales';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'general',       label: 'General',       icon: <Settings size={16} /> },
@@ -25,6 +25,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'pipeline',      label: 'Pipeline',      icon: <Layers      size={16} /> },
   { id: 'queues',        label: 'Queues',        icon: <ListChecks  size={16} /> },
   { id: 'dispositions',  label: 'Dispositions',  icon: <Phone       size={16} /> },
+  { id: 'sales',         label: 'Sales',         icon: <Layers      size={16} /> },
 ];
 
 // ── Default values shown when the key doesn't exist in DB yet ────────────────
@@ -110,6 +111,14 @@ export default function SettingsPage() {
           {activeTab === 'pipeline'      && <PipelineStagesSettings />}
           {activeTab === 'queues'        && <QueuesSettings />}
           {activeTab === 'dispositions'  && <DispositionsSettings />}
+        {activeTab === 'sales' && (
+          <div className="text-center py-12">
+            <p className="text-sm text-gray-500 mb-4">Sales settings are managed on a dedicated page.</p>
+            <a href="/settings/sales" className="px-5 py-2.5 bg-blue-600 text-white text-sm rounded-xl hover:bg-blue-700">
+              Open Sales Settings →
+            </a>
+          </div>
+        )}
         </div>
       </div>
     </div>
