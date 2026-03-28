@@ -18,7 +18,8 @@ const SOURCE_LABELS: Record<string, string> = {
 
 export default function LeadsPage() {
   const router                          = useRouter();
-  const [statusFilter, setStatusFilter] = useState('');
+  const [statusFilter,   setStatusFilter]   = useState('');
+  const [lifecycleFilter, setLifecycleFilter] = useState('');
   const [page, setPage]                 = useState(1);
 
   // ── statuses ────────────────────────────────────────────────
@@ -147,7 +148,17 @@ export default function LeadsPage() {
       />
 
       <div className="mb-4">
-        <Select
+        <select
+        value={lifecycleFilter}
+        onChange={(e) => { setLifecycleFilter(e.target.value); setPage(1); }}
+        className='w-44 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+      >
+        <option value=''>All Lifecycle</option>
+        {['prospect','opportunity','won','customer','churned'].map((s) => (
+          <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>
+        ))}
+      </select>
+      <Select
           options={statusOptions}
           value={statusFilter}
           onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
