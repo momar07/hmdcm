@@ -115,6 +115,41 @@ class Lead(BaseModel):
                                      on_delete=models.SET_NULL, related_name='leads')
     is_active    = models.BooleanField(default=True)
 
+    # ── Contact fields (Plan A) ───────────────────────────────
+    first_name   = models.CharField(max_length=150, blank=True, db_index=True)
+    last_name    = models.CharField(max_length=150, blank=True, db_index=True)
+    email        = models.EmailField(blank=True, db_index=True)
+    phone        = models.CharField(max_length=30, blank=True, db_index=True)
+    company      = models.CharField(max_length=200, blank=True)
+    address      = models.TextField(blank=True)
+    city         = models.CharField(max_length=100, blank=True)
+    country      = models.CharField(max_length=100, blank=True, default='Egypt')
+
+    # ── Lifecycle & Scoring (Plan A) ──────────────────────────
+    LIFECYCLE_CHOICES = [
+        ('lead',        'Lead'),
+        ('prospect',    'Prospect'),
+        ('opportunity', 'Opportunity'),
+        ('customer',    'Customer'),
+        ('churned',     'Churned'),
+    ]
+    CLASSIFICATION_CHOICES = [
+        ('none',     'None'),
+        ('cold',     'Cold'),
+        ('warm',     'Warm'),
+        ('hot',      'Hot'),
+        ('very_hot', 'Very Hot'),
+    ]
+    lifecycle_stage = models.CharField(
+        max_length=20, choices=LIFECYCLE_CHOICES,
+        default='lead', db_index=True
+    )
+    classification  = models.CharField(
+        max_length=10, choices=CLASSIFICATION_CHOICES,
+        default='none', db_index=True
+    )
+    score           = models.PositiveIntegerField(default=0, db_index=True)
+
     class Meta:
         db_table = 'leads'
         ordering = ['-created_at']
@@ -155,3 +190,33 @@ class LeadEvent(BaseModel):
 
     def __str__(self):
         return f'{self.lead_id} | {self.event_type} @ {self.created_at}'
+
+
+class ScoreEvent(BaseModel):
+    """كل حدث بيأثر في الـ Lead Score"""
+    EVENT_CHOICES = [
+        ('call_long',          'Call > 3 min'),
+        ('call_short',         'Call < 3 min'),
+        ('call_no_answer',     'Call No Answer'),
+        ('followup_responded', 'Followup Responded'),
+        ('followup_missed',    'Followup Missed'),
+        ('quotation_sent',     'Quotation Sent'),
+        ('quotation_accepted', 'Quotation Accepted'),
+        ('quotation_rejected', 'Quotation Rejected'),
+        ('profile_complete',   'Profile Completed'),
+        ('time_decay',         'Time Decay'),
+        ('manual',             'Manual Adjustment'),
+    ]
+    lead       = models.ForeignKey(
+        'Lead', on_delete=models.CASCADE, related_name='score_events'
+    )
+    event_type = models.CharField(max_length=30, choices=EVENT_CHOICES)
+    points     = models.IntegerField()  # positive or negative
+    reason     = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = 'lead_score_events'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.lead_id} | {self.event_type} | {self.points:+d}'

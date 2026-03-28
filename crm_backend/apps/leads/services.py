@@ -1,4 +1,5 @@
 from .models import Lead, LeadEvent
+from .scoring import add_score_event
 from apps.customers.selectors import get_customer_by_id
 
 
@@ -83,6 +84,19 @@ def _sync_followup(lead, actor=None):
 
 
 # ── public services ────────────────────────────────────────────────────
+
+
+def _update_lifecycle(lead: Lead, new_stage: str, actor=None):
+    """يغير lifecycle_stage ويسجل event."""
+    if lead.lifecycle_stage == new_stage:
+        return
+    old = lead.lifecycle_stage
+    Lead.objects.filter(pk=lead.pk).update(lifecycle_stage=new_stage)
+    lead.lifecycle_stage = new_stage
+    _log_event(lead, 'stage_changed', actor=actor,
+               old_value=old, new_value=new_stage,
+               note=f'Lifecycle: {old} → {new_stage}')
+
 def create_lead(customer_id, title, status_id=None, priority_id=None,
                 source='manual', assigned_to=None, actor=None, **kwargs) -> Lead:
     customer = get_customer_by_id(customer_id)
@@ -163,6 +177,17 @@ def update_lead_stage(lead_id, stage_id, actor=None):
         _log_event(lead, 'stage_changed', actor=actor,
                    old_value=old_name, new_value=stage.name)
     lead.save(update_fields=fields)
+
+    # Auto lifecycle transition
+    if stage.is_won:
+        _update_lifecycle(lead, 'customer', actor=actor)
+        add_score_event(lead, 'quotation_accepted',
+                        reason=f'Deal won at stage: {stage.name}')
+    elif stage.is_closed and not stage.is_won:
+        _update_lifecycle(lead, 'churned', actor=actor)
+    elif lead.lifecycle_stage in ('lead', 'prospect'):
+        _update_lifecycle(lead, 'opportunity', actor=actor)
+
     return lead, stage
 
 

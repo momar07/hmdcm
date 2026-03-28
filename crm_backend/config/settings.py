@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'apps.tasks',
     'apps.approvals',
     'apps.sales',
+    'apps.deals',
     'apps.auditlog',
     'apps.asterisk',
 ]
@@ -193,6 +194,10 @@ CELERY_BEAT_SCHEDULE_TICKETS = {
 # Merge into main beat schedule if it exists
 if "CELERY_BEAT_SCHEDULE" not in dir():
     CELERY_BEAT_SCHEDULE = {
+    'run-daily-lead-score-decay': {
+        'task': 'apps.leads.tasks.run_daily_score_decay',
+        'schedule': 86400,  # every 24 hours
+    },
     'send-task-reminders': {
         'task':     'apps.tasks.tasks.send_task_reminders',
         'schedule': 60.0,  # every 60 seconds

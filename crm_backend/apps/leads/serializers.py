@@ -40,6 +40,8 @@ class LeadListSerializer(serializers.ModelSerializer):
         model  = Lead
         fields = [
             'id', 'title',
+            'first_name', 'last_name', 'email', 'phone', 'company',
+            'lifecycle_stage', 'classification', 'score',
             'customer', 'customer_name',
             'status',   'status_name',
             'priority', 'priority_name',
@@ -84,9 +86,12 @@ class LeadDetailSerializer(serializers.ModelSerializer):
             'source', 'assigned_to', 'assigned_name', 'campaign',
             'description', 'value', 'followup_date',
             'won_at', 'lost_at', 'won_amount', 'lost_reason',
+            'first_name', 'last_name', 'email', 'phone', 'company',
+            'address', 'city', 'country',
+            'lifecycle_stage', 'classification', 'score',
             'is_active', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'score', 'classification']
 
     def _get_obj(self, Model, uid, field):
         if uid is None:
