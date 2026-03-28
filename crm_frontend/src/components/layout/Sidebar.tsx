@@ -21,6 +21,7 @@ import {
   LayoutGrid,
   Activity,
   CheckSquare,
+  TrendingUp,
 } from 'lucide-react';
 import { useAuthStore, useUIStore, useAgentStatusStore } from '@/store';
 import type { Role } from '@/types';
@@ -81,6 +82,11 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/tasks', label: 'Tasks',
     icon: <CheckSquare size={18} />,
+    roles: ['admin', 'supervisor', 'agent'],
+  },
+  {
+    href: '/deals', label: 'Deals',
+    icon: <TrendingUp size={18} />,
     roles: ['admin', 'supervisor', 'agent'],
   },
   {
@@ -151,7 +157,6 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
         {visible.map((item) => {
-          // Exact match for /leads to prevent overlap with /leads/pipeline
           const active =
             item.href === '/leads'
               ? pathname === '/leads'
