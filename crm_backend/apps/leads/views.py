@@ -64,6 +64,20 @@ class LeadViewSet(viewsets.ModelViewSet):
             )
 
 
+    @action(detail=True, methods=['get'], url_path='score-events')
+    def score_events(self, request, pk=None):
+        """GET /leads/{id}/score-events/ — scoring history."""
+        from .models import ScoreEvent
+        qs = ScoreEvent.objects.filter(lead_id=pk).order_by('-created_at')[:50]
+        data = [{
+            'id':         str(e.id),
+            'event_type': e.event_type,
+            'points':     e.points,
+            'reason':     e.reason,
+            'created_at': e.created_at.isoformat(),
+        } for e in qs]
+        return Response(data)
+
     @action(detail=True, methods=['get'], url_path='events')
     def events(self, request, pk=None):
         """GET /leads/{id}/events/ — audit trail for the lead."""
