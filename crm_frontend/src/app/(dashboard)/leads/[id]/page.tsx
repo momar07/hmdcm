@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, User, Calendar, Tag, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import toast         from 'react-hot-toast';
 import { leadsApi }  from '@/lib/api/leads';
+import { dealsApi }  from '@/lib/api/deals';
 import { PageHeader }  from '@/components/ui/PageHeader';
 import { Button }      from '@/components/ui/Button';
 import { Spinner }     from '@/components/ui/Spinner';
@@ -35,8 +36,15 @@ export default function LeadDetailPage() {
   const { id }      = useParams<{ id: string }>();
   const router      = useRouter();
   const qc          = useQueryClient();
-  const [showEvents, setShowEvents] = useState(true);
+  const [showEvents, setShowEvents]       = useState(true);
   const [newFollowupDate, setNewFollowupDate] = useState('');
+  const [activeTab, setActiveTab]         = useState<'info'|'deals'|'activity'>('info');
+
+  const { data: dealsData } = useQuery({
+    queryKey: ['lead-deals', id],
+    queryFn:  () => dealsApi.list({ lead: id }),
+    enabled:  !!id,
+  });
 
   const { data: lead, isLoading } = useQuery({
     queryKey: ['lead', id],
@@ -274,6 +282,90 @@ export default function LeadDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── Contact Info ─────────────────────────────────────── */}
+      {(lead as any)?.first_name || (lead as any)?.phone || (lead as any)?.email ? (
+        <div className='bg-white rounded-xl border border-gray-200 shadow-sm p-5'>
+          <h2 className='text-sm font-semibold text-gray-500 mb-3'>Contact Info</h2>
+          <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+            {[
+              { label: 'Name',    value: `${(lead as any).first_name ?? ''} ${(lead as any).last_name ?? ''}`.trim() },
+              { label: 'Phone',   value: (lead as any).phone },
+              { label: 'Email',   value: (lead as any).email },
+              { label: 'Company', value: (lead as any).company },
+              { label: 'City',    value: (lead as any).city },
+              { label: 'Country', value: (lead as any).country },
+            ].filter((f) => f.value).map(({ label, value }) => (
+              <div key={label}>
+                <p className='text-xs text-gray-400'>{label}</p>
+                <p className='text-sm font-medium text-gray-800 mt-0.5'>{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Lifecycle & Score ────────────────────────────────── */}
+      {(() => {
+        const lifecycle = (lead as any)?.lifecycle_stage ?? 'prospect';
+        const score     = (lead as any)?.score ?? 0;
+        const cls       = (lead as any)?.classification ?? 'none';
+        const LC: Record<string,string> = {
+          prospect:'bg-gray-100 text-gray-600', opportunity:'bg-blue-100 text-blue-700',
+          won:'bg-green-100 text-green-700', customer:'bg-emerald-100 text-emerald-700',
+          churned:'bg-red-100 text-red-600',
+        };
+        const CC: Record<string,string> = {
+          none:'bg-gray-300', cold:'bg-sky-400', warm:'bg-yellow-400',
+          hot:'bg-orange-400', very_hot:'bg-red-500',
+        };
+        return (
+          <div className='bg-white rounded-xl border border-gray-200 shadow-sm p-5'>
+            <h2 className='text-sm font-semibold text-gray-500 mb-3'>Lifecycle & Score</h2>
+            <div className='flex items-center gap-6 flex-wrap'>
+              <div>
+                <p className='text-xs text-gray-400 mb-1'>Lifecycle</p>
+                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${LC[lifecycle] ?? 'bg-gray-100 text-gray-500'}`}>{lifecycle}</span>
+              </div>
+              <div>
+                <p className='text-xs text-gray-400 mb-1'>Classification</p>
+                <span className='text-sm font-semibold text-gray-700 capitalize'>{cls}</span>
+              </div>
+              <div>
+                <p className='text-xs text-gray-400 mb-1'>Score</p>
+                <div className='flex items-center gap-2'>
+                  <div className='w-28 h-2 bg-gray-200 rounded-full overflow-hidden'>
+                    <div className={`h-full rounded-full ${CC[cls] ?? 'bg-gray-300'}`} style={{width:`${score}%`}} />
+                  </div>
+                  <span className='text-sm font-semibold text-gray-700'>{score}/100</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Deals ────────────────────────────────────────────── */}
+      {(() => {
+        const deals = (dealsData as any)?.results ?? dealsData ?? [];
+        if (!deals.length) return null;
+        return (
+          <div className='bg-white rounded-xl border border-gray-200 shadow-sm p-5'>
+            <h2 className='text-sm font-semibold text-gray-500 mb-3'>Deals ({deals.length})</h2>
+            <div className='space-y-2'>
+              {deals.map((d: any) => (
+                <div key={d.id} className='flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100'>
+                  <div>
+                    <p className='text-sm font-medium text-gray-800'>{d.title}</p>
+                    <p className='text-xs text-gray-400 mt-0.5'>{d.stage_name ?? d.stage} · {d.value ? Number(d.value).toLocaleString()+' '+(d.currency??'EGP') : '—'}</p>
+                  </div>
+                  <a href={`/deals/${d.id}`} className='text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200'>View</a>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Audit Trail / Events ───────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
