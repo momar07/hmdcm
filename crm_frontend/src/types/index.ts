@@ -132,6 +132,19 @@ export interface LeadStage {
 export interface Lead {
   id:             string;
   title:          string;
+  // Contact fields (Plan A)
+  first_name:     string;
+  last_name:      string;
+  email:          string;
+  phone:          string;
+  company:        string;
+  address:        string;
+  city:           string;
+  country:        string;
+  // Lifecycle & Scoring
+  lifecycle_stage: 'lead' | 'prospect' | 'opportunity' | 'customer' | 'churned';
+  classification:  'none' | 'cold' | 'warm' | 'hot' | 'very_hot';
+  score:           number;
   customer:       string | Customer;
   customer_name:  string;
   customer_detail?: Customer;
@@ -520,3 +533,40 @@ export interface Quotation {
   updated_at:     string;
 }
 
+
+// ─── Deals ───────────────────────────────────────────────
+export interface DealLog {
+  id:         string;
+  action:     string;
+  old_value:  string;
+  new_value:  string;
+  note:       string;
+  actor_name: string;
+  created_at: string;
+}
+
+export interface Deal {
+  id:                   string;
+  lead:                 string;
+  lead_name:            string;
+  title:                string;
+  description:          string;
+  stage:                string | null;
+  stage_name:           string | null;
+  stage_color:          string | null;
+  assigned_to:          string | null;
+  assigned_name:        string;
+  value:                number | null;
+  currency:             string;
+  source:               string;
+  campaign:             string | null;
+  expected_close_date:  string | null;
+  won_amount:           number | null;
+  lost_reason:          string;
+  won_at:               string | null;
+  lost_at:              string | null;
+  is_active:            boolean;
+  logs:                 DealLog[];
+  created_at:           string;
+  updated_at:           string;
+}
