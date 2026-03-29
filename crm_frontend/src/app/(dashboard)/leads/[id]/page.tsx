@@ -46,6 +46,12 @@ export default function LeadDetailPage() {
     enabled:  !!id,
   });
 
+  const { data: scoreHistory } = useQuery({
+    queryKey: ['lead-score-events', id],
+    queryFn:  () => leadsApi.scoreEvents(id),
+    enabled:  !!id,
+  });
+
   const { data: lead, isLoading } = useQuery({
     queryKey: ['lead', id],
     queryFn:  () => leadsApi.get(id).then((r) => r.data),
@@ -372,6 +378,42 @@ export default function LeadDetailPage() {
                   <a href={`/deals/${d.id}`} className='text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200'>View</a>
                 </div>
               ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Score History ────────────────────────────────────── */}
+      {(() => {
+        const events = Array.isArray(scoreHistory) ? scoreHistory : [];
+        if (!events.length) return null;
+        return (
+          <div className='bg-white rounded-xl border border-gray-200 shadow-sm p-5'>
+            <h2 className='text-sm font-semibold text-gray-500 mb-3'>Score History</h2>
+            <div className='space-y-2'>
+              {events.map((e: any) => {
+                const positive = e.points > 0;
+                return (
+                  <div key={e.id} className='flex items-center justify-between p-2.5 rounded-lg bg-gray-50'>
+                    <div className='flex items-center gap-3'>
+                      <span className={`text-sm font-bold w-10 text-right ${
+                        positive ? 'text-green-600' : e.points < 0 ? 'text-red-500' : 'text-gray-400'
+                      }`}>
+                        {positive ? '+' : ''}{e.points}
+                      </span>
+                      <div>
+                        <p className='text-xs font-medium text-gray-700 capitalize'>
+                          {e.event_type.replace(/_/g, ' ')}
+                        </p>
+                        {e.reason && <p className='text-xs text-gray-400 mt-0.5'>{e.reason}</p>}
+                      </div>
+                    </div>
+                    <span className='text-xs text-gray-400'>
+                      {new Date(e.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         );

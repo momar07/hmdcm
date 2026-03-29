@@ -76,4 +76,10 @@ export const leadsApi = {
   // ── Follow-up date sync ──────────────────────────────────
   setFollowupDate: (leadId: string, followup_date: string | null) =>
     api.patch(`/leads/${leadId}/followup-date/`, { followup_date }),
+
+  updateLifecycle: (leadId: string, lifecycle_stage: string) =>
+    api.patch(`/leads/${leadId}/`, { lifecycle_stage }),
+
+  scoreEvents: (leadId: string) =>
+    api.get(`/leads/${leadId}/score-events/`).then((r) => r.data),
 };
