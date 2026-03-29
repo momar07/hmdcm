@@ -42,8 +42,9 @@ export default function CustomersPage() {
     }),
   });
 
-  const leads: Lead[] = (data as any)?.results ?? data ?? [];
-  const total: number = (data as any)?.count   ?? leads.length;
+  const payload = (data as any)?.data ?? data;
+  const leads: Lead[] = Array.isArray(payload) ? payload : (payload?.results ?? []);
+  const total: number = payload?.count ?? leads.length;
 
   return (
     <div className="p-6 space-y-5">

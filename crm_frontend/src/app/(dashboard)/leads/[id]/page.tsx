@@ -1,49 +1,144 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter }        from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, User, Calendar, Tag, Clock, ChevronDown, ChevronUp } from 'lucide-react';
-import toast         from 'react-hot-toast';
-import { leadsApi }  from '@/lib/api/leads';
-import { dealsApi }  from '@/lib/api/deals';
-import { PageHeader }  from '@/components/ui/PageHeader';
-import { Button }      from '@/components/ui/Button';
-import { Spinner }     from '@/components/ui/Spinner';
-import type { LeadEvent } from '@/types';
+import { useState }                    from 'react';
+import {
+  ArrowLeft, Phone, Mail, Building2, MapPin,
+  PhoneIncoming, PhoneOutgoing, PhoneMissed,
+  FileText, MessageSquare, TrendingUp, Clock,
+  Ticket as TicketIcon, Plus, CheckSquare, Edit,
+} from 'lucide-react';
+import { leadsApi }     from '@/lib/api/leads';
+import { dealsApi }     from '@/lib/api/deals';
+import { callsApi }     from '@/lib/api/calls';
+import { ticketsApi }   from '@/lib/api/tickets';
+import { quotationsApi } from '@/lib/api/sales';
+import { PageHeader }   from '@/components/ui/PageHeader';
+import { Button }       from '@/components/ui/Button';
+import { StatusBadge }  from '@/components/ui/StatusBadge';
+import { Spinner }      from '@/components/ui/Spinner';
+import { NewTicketModal } from '@/components/tickets/NewTicketModal';
+import { PriorityBadge, StatusBadge as TicketStatusBadge } from '@/components/tickets/TicketBadge';
+import api              from '@/lib/api/axios';
+import toast            from 'react-hot-toast';
+import Link             from 'next/link';
 
-const EVENT_LABELS: Record<string, { label: string; color: string; icon: string }> = {
-  created:        { label: 'Lead Created',         color: 'bg-blue-100 text-blue-700',   icon: '🆕' },
-  stage_changed:  { label: 'Stage Changed',         color: 'bg-purple-100 text-purple-700', icon: '📌' },
-  status_changed: { label: 'Status Changed',        color: 'bg-yellow-100 text-yellow-700', icon: '🔄' },
-  assigned:       { label: 'Assigned',              color: 'bg-indigo-100 text-indigo-700', icon: '👤' },
-  followup_set:   { label: 'Follow-up Scheduled',  color: 'bg-green-100 text-green-700',  icon: '📅' },
-  won:            { label: 'Won 🎉',                color: 'bg-green-200 text-green-800',  icon: '🏆' },
-  lost:           { label: 'Lost',                  color: 'bg-red-100 text-red-700',     icon: '❌' },
-  note:           { label: 'Note Added',            color: 'bg-gray-100 text-gray-700',   icon: '📝' },
-};
-
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 60)  return m + 'm ago';
-  const h = Math.floor(m / 60);
-  if (h < 24)  return h + 'h ago';
-  return Math.floor(h / 24) + 'd ago';
+function formatDuration(s: number) {
+  if (!s) return '';
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+function timeAgo(dateStr: string) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+const LC_COLOR: Record<string, string> = {
+  prospect:    'bg-gray-100 text-gray-600',
+  opportunity: 'bg-blue-100 text-blue-700',
+  won:         'bg-green-100 text-green-700',
+  customer:    'bg-emerald-100 text-emerald-700',
+  churned:     'bg-red-100 text-red-600',
+};
+
+const CLASS_COLOR: Record<string, string> = {
+  none:     'bg-gray-100 text-gray-500',
+  cold:     'bg-sky-100 text-sky-600',
+  warm:     'bg-yellow-100 text-yellow-700',
+  hot:      'bg-orange-100 text-orange-700',
+  very_hot: 'bg-red-100 text-red-700',
+};
+
+type Tab = 'timeline' | 'calls' | 'deals' | 'quotations' | 'followups' | 'tickets';
+
 export default function LeadDetailPage() {
-  const { id }      = useParams<{ id: string }>();
-  const router      = useRouter();
-  const qc          = useQueryClient();
-  const [showEvents, setShowEvents]       = useState(true);
+  const { id }   = useParams<{ id: string }>();
+  const router   = useRouter();
+  const qc       = useQueryClient();
+  const [tab, setTab]               = useState<Tab>('timeline');
+  const [noteText, setNoteText]     = useState('');
+  const [noteOpen, setNoteOpen]     = useState(false);
+  const [ticketModal, setTicketModal] = useState(false);
   const [newFollowupDate, setNewFollowupDate] = useState('');
-  const [activeTab, setActiveTab]         = useState<'info'|'deals'|'activity'>('info');
+
+  // ── Lead data ────────────────────────────────────────────────
+  const { data: lead, isLoading } = useQuery({
+    queryKey: ['lead', id],
+    queryFn:  () => leadsApi.get(id).then((r) => r.data),
+    enabled:  !!id,
+  });
+
+  const { data: stages } = useQuery({
+    queryKey: ['lead-stages'],
+    queryFn:  () => leadsApi.stages().then((r: any) => {
+      const raw = r?.data ?? r;
+      return Array.isArray(raw) ? raw : (raw?.results ?? []);
+    }),
+  });
+
+  const { data: statuses } = useQuery({
+    queryKey: ['lead-statuses'],
+    queryFn:  () => leadsApi.statuses().then((r: any) => {
+      const raw = r?.data ?? r;
+      return Array.isArray(raw) ? raw : (raw?.results ?? []);
+    }),
+  });
+
+  // ── Tab data ─────────────────────────────────────────────────
+  const { data: callsData } = useQuery({
+    queryKey: ['lead-calls', id],
+    queryFn:  async () => {
+      const r = await callsApi.list({ lead: id, page_size: 50 });
+      const d = (r as any)?.data ?? r;
+      return { results: Array.isArray(d) ? d : (d?.results ?? []), count: d?.count ?? 0 };
+    },
+    enabled: !!id && tab === 'calls',
+  });
 
   const { data: dealsData } = useQuery({
     queryKey: ['lead-deals', id],
-    queryFn:  () => dealsApi.list({ lead: id }),
-    enabled:  !!id,
+    queryFn:  () => dealsApi.list({ lead: id }).then((r: any) => {
+      const d = r?.data ?? r;
+      return { results: Array.isArray(d) ? d : (d?.results ?? []), count: d?.count ?? 0 };
+    }),
+    enabled: !!id && tab === 'deals',
+  });
+
+  const { data: quotationsData } = useQuery({
+    queryKey: ['lead-quotations', id],
+    queryFn:  () => quotationsApi.list({ lead: id } as any).then((r: any) => {
+      const d = r?.data ?? r;
+      return { results: Array.isArray(d) ? d : (d?.results ?? []), count: d?.count ?? 0 };
+    }),
+    enabled: !!id && tab === 'quotations',
+  });
+
+  const { data: followupsData } = useQuery({
+    queryKey: ['lead-followups', id],
+    queryFn:  () => api.get(`/followups/?lead=${id}&page_size=50`).then((r) => {
+      const d = r?.data;
+      return { results: Array.isArray(d) ? d : (d?.results ?? []), count: d?.count ?? 0 };
+    }),
+    enabled: !!id && tab === 'followups',
+  });
+
+  const { data: ticketsData, isLoading: ticketsLoading, refetch: refetchTickets } = useQuery({
+    queryKey: ['lead-tickets', id],
+    queryFn:  () => ticketsApi.list({ lead: id, page_size: 50 } as any).then((r) => r.data),
+    enabled:  !!id && tab === 'tickets',
+  });
+
+  const { data: eventsData, isLoading: eventsLoading } = useQuery({
+    queryKey: ['lead-events-timeline', id],
+    queryFn:  () => leadsApi.events(id).then((r) => r.data),
+    enabled:  !!id && tab === 'timeline',
   });
 
   const { data: scoreHistory } = useQuery({
@@ -52,174 +147,170 @@ export default function LeadDetailPage() {
     enabled:  !!id,
   });
 
-  const { data: lead, isLoading } = useQuery({
-    queryKey: ['lead', id],
-    queryFn:  () => leadsApi.get(id).then((r) => r.data),
-  });
-
-  const { data: statuses } = useQuery({
-    queryKey: ['lead-statuses'],
-    queryFn:  async () => {
-      const r = await leadsApi.statuses();
-      const raw = r.data as any;
-      return Array.isArray(raw) ? raw : (raw?.results ?? []);
-    },
-  });
-
-  const { data: stages } = useQuery({
-    queryKey: ['lead-stages'],
-    queryFn:  async () => {
-      const r = await leadsApi.stages();
-      const raw = r.data as any;
-      return Array.isArray(raw) ? raw : (raw?.results ?? []);
-    },
-  });
-
-  const { data: events, isLoading: eventsLoading } = useQuery({
-    queryKey: ['lead-events', id],
-    queryFn:  () => leadsApi.events(id).then((r) => r.data),
-    enabled:  !!id,
-  });
-
+  // ── Mutations ────────────────────────────────────────────────
   const moveStage = useMutation({
     mutationFn: (stageId: string) => leadsApi.moveStage(id, stageId),
-    onSuccess: () => {
-      toast.success('Stage updated ✅');
-      qc.invalidateQueries({ queryKey: ['lead', id] });
-      qc.invalidateQueries({ queryKey: ['lead-events', id] });
-    },
+    onSuccess: () => { toast.success('Stage updated ✅'); qc.invalidateQueries({ queryKey: ['lead', id] }); },
     onError: () => toast.error('Failed to update stage'),
   });
 
   const changeStatus = useMutation({
     mutationFn: (status_id: string) => leadsApi.changeStatus(id, status_id),
-    onSuccess: () => {
-      toast.success('Status updated');
-      qc.invalidateQueries({ queryKey: ['lead', id] });
-      qc.invalidateQueries({ queryKey: ['lead-events', id] });
-    },
+    onSuccess: () => { toast.success('Status updated'); qc.invalidateQueries({ queryKey: ['lead', id] }); },
     onError: () => toast.error('Failed to update status'),
   });
 
-  const setFollowupDate = useMutation({
+  const setFollowupMutation = useMutation({
     mutationFn: (date: string) => leadsApi.setFollowupDate(id, date),
     onSuccess: () => {
       toast.success('Follow-up scheduled ✅');
       qc.invalidateQueries({ queryKey: ['lead', id] });
-      qc.invalidateQueries({ queryKey: ['lead-events', id] });
-      // invalidate followups page cache — يظهر فوراً لما تروح /followups
-      qc.invalidateQueries({ queryKey: ['followups'] });
-      qc.invalidateQueries({ queryKey: ['followups-overdue'] });
-      qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
       setNewFollowupDate('');
     },
-    onError: (err: any) => toast.error('Error: ' + (err?.response?.data?.followup_date?.[0] || err?.response?.data?.detail || 'Failed to set follow-up date')),
+    onError: (err: any) => toast.error(err?.response?.data?.detail ?? 'Failed'),
   });
 
-  if (isLoading) return (
-    <div className="flex justify-center py-20"><Spinner size="lg" /></div>
-  );
-  if (!lead) return (
-    <div className="text-center py-20 text-gray-400">Lead not found.</div>
-  );
+  const addNoteMutation = useMutation({
+    mutationFn: () => api.post('/notes/', { content: noteText, lead: id, is_pinned: false }),
+    onSuccess: () => {
+      toast.success('Note added ✅');
+      setNoteText(''); setNoteOpen(false);
+      qc.invalidateQueries({ queryKey: ['lead-events-timeline', id] });
+    },
+    onError: () => toast.error('Failed to add note'),
+  });
 
-  const customer = lead.customer_detail ?? lead.customer;
+  if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>;
+  if (!lead)    return <div className="text-center py-20 text-gray-400">Lead not found.</div>;
+
+  const l             = lead as any;
+  const lifecycle     = l.lifecycle_stage ?? 'prospect';
+  const classification = l.classification ?? 'none';
+  const score         = l.score ?? 0;
+  const CC: Record<string,string> = { none:'bg-gray-300', cold:'bg-sky-400', warm:'bg-yellow-400', hot:'bg-orange-400', very_hot:'bg-red-500' };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6 p-6">
+
+      {/* ── Header ────────────────────────────────────────────── */}
       <PageHeader
-        title={lead.title}
-        subtitle={"Source: " + lead.source}
+        title={`${l.first_name ?? ''} ${l.last_name ?? ''}`.trim() || lead.title}
+        subtitle={l.company || lead.title}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2">
+            <Button variant="secondary" icon={<MessageSquare size={16}/>}
+                    onClick={() => setNoteOpen(!noteOpen)}>
+              Add Note
+            </Button>
+            <Button variant="primary" icon={<TicketIcon size={16}/>}
+                    onClick={() => setTicketModal(true)}>
+              New Ticket
+            </Button>
+            <Link href={`/leads/${id}/edit`}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border
+                         border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <Edit size={14}/> Edit
+            </Link>
             <Button variant="secondary" icon={<ArrowLeft size={16}/>}
                     onClick={() => router.back()}>Back</Button>
-            <a
-              href={`/leads/${id}/edit`}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg
-                         border border-gray-300 text-sm font-medium text-gray-700
-                         hover:bg-gray-50 transition-colors"
-            >
-              ✏️ Edit
-            </a>
           </div>
         }
       />
 
-      {/* ── Lead Info ─────────────────────────────────────────── */}
+      {/* ── Info Card ─────────────────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div className="flex flex-wrap gap-3 items-center">
+
+        {/* Badges row */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${LC_COLOR[lifecycle] ?? 'bg-gray-100 text-gray-500'}`}>
+            {lifecycle}
+          </span>
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${CLASS_COLOR[classification]}`}>
+            {classification}
+          </span>
           {lead.status_name && (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1
-                             rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-              <Tag size={12}/> {lead.status_name}
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+              {lead.status_name}
             </span>
           )}
           {lead.priority_name && (
-            <span className="inline-flex items-center px-3 py-1
-                             rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-100 text-orange-800">
               {lead.priority_name}
             </span>
           )}
         </div>
 
-        {lead.description && (
-          <p className="text-sm text-gray-600 leading-relaxed">{lead.description}</p>
-        )}
+        {/* Score bar */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400">Score</span>
+          <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${CC[classification] ?? 'bg-gray-300'}`} style={{width:`${score}%`}} />
+          </div>
+          <span className="text-sm font-semibold text-gray-700">{score}/100</span>
+        </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          {lead.assigned_name && (
+        {/* Contact info grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          {l.phone && (
             <div className="flex items-center gap-2 text-gray-600">
-              <User size={14} className="text-gray-400"/>
-              Assigned to: <span className="font-medium">{lead.assigned_name}</span>
+              <Phone size={14} className="text-gray-400"/> {l.phone}
             </div>
+          )}
+          {l.email && (
+            <div className="flex items-center gap-2 text-gray-600">
+              <Mail size={14} className="text-gray-400"/> {l.email}
+            </div>
+          )}
+          {l.company && (
+            <div className="flex items-center gap-2 text-gray-600">
+              <Building2 size={14} className="text-gray-400"/> {l.company}
+            </div>
+          )}
+          {(l.city || l.country) && (
+            <div className="flex items-center gap-2 text-gray-600">
+              <MapPin size={14} className="text-gray-400"/>
+              {[l.city, l.country].filter(Boolean).join(', ')}
+            </div>
+          )}
+          {lead.assigned_name && (
+            <div className="text-gray-600">Assigned: <span className="font-medium">{lead.assigned_name}</span></div>
           )}
           {lead.followup_date && (
             <div className="flex items-center gap-2 text-gray-600">
-              <Calendar size={14} className="text-gray-400"/>
-              Follow-up: <span className="font-medium">
-                {new Date(lead.followup_date).toLocaleDateString()}
-              </span>
+              <Clock size={14} className="text-gray-400"/>
+              Follow-up: <span className="font-medium">{new Date(lead.followup_date).toLocaleDateString()}</span>
             </div>
           )}
           {lead.value && (
             <div className="text-gray-600">
-              Value: <span className="font-semibold text-green-600">
-                EGP {Number(lead.value).toLocaleString()}
-              </span>
+              Value: <span className="font-semibold text-green-600">EGP {Number(lead.value).toLocaleString()}</span>
             </div>
           )}
         </div>
 
-        {/* Current Stage */}
+        {/* Stage */}
         {lead.stage_name && (
           <div className="flex items-center gap-2">
-            <span className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: lead.stage_color ?? '#6B7280' }}/>
-            <span className="text-sm font-medium text-gray-700">
-              Stage: {lead.stage_name}
-            </span>
+            <span className="w-3 h-3 rounded-full" style={{backgroundColor: lead.stage_color ?? '#6B7280'}}/>
+            <span className="text-sm font-medium text-gray-700">Stage: {lead.stage_name}</span>
           </div>
         )}
 
         {/* Move Stage */}
-        {stages && stages.length > 0 && (
+        {stages && (stages as any[]).length > 0 && (
           <div className="pt-3 border-t border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Move Stage</p>
             <div className="flex flex-wrap gap-2">
               {(stages as any[]).map((s: any) => (
                 <button key={s.id} onClick={() => moveStage.mutate(s.id)}
                   disabled={moveStage.isPending || lead.stage === s.id}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full
-                             text-xs font-medium border transition-colors
-                             disabled:opacity-50 disabled:cursor-default"
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors disabled:opacity-50"
                   style={{
                     backgroundColor: lead.stage === s.id ? s.color + '25' : '',
-                    borderColor:     lead.stage === s.id ? s.color : '#E5E7EB',
-                    color:           lead.stage === s.id ? s.color : '#374151',
+                    borderColor: lead.stage === s.id ? s.color : '#E5E7EB',
+                    color: lead.stage === s.id ? s.color : '#374151',
                   }}>
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }}/>
-                  {s.name}
+                  <span className="w-2 h-2 rounded-full" style={{backgroundColor: s.color}}/>{s.name}
                 </button>
               ))}
             </div>
@@ -227,15 +318,14 @@ export default function LeadDetailPage() {
         )}
 
         {/* Change Status */}
-        {statuses && statuses.length > 0 && (
+        {statuses && (statuses as any[]).length > 0 && (
           <div className="pt-3 border-t border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Change Status</p>
             <div className="flex flex-wrap gap-2">
-              {statuses.map((s: any) => (
+              {(statuses as any[]).map((s: any) => (
                 <button key={s.id} onClick={() => changeStatus.mutate(s.id)}
                   disabled={changeStatus.isPending}
-                  className="px-3 py-1 rounded-full text-xs font-medium border
-                             border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                  className="px-3 py-1 rounded-full text-xs font-medium border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors"
                   style={{
                     backgroundColor: lead.status_name === s.name ? s.color + '20' : '',
                     borderColor: lead.status_name === s.name ? s.color : '',
@@ -248,233 +338,283 @@ export default function LeadDetailPage() {
           </div>
         )}
 
-        {/* Set Follow-up Date */}
+        {/* Schedule Follow-up */}
         <div className="pt-3 border-t border-gray-100">
-          <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
-            Schedule Follow-up
-          </p>
+          <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Schedule Follow-up</p>
           <div className="flex gap-2 items-center">
-            <input
-              type="datetime-local"
-              value={newFollowupDate}
-              onChange={e => setNewFollowupDate(e.target.value)}
-              className="text-xs border border-gray-200 rounded-lg px-3 py-2
-                         focus:outline-none focus:ring-2 focus:ring-blue-300"
-            />
-            <Button
-              variant="primary" size="sm"
-              disabled={!newFollowupDate || setFollowupDate.isPending}
-              onClick={() => setFollowupDate.mutate(newFollowupDate.length === 16 ? newFollowupDate + ':00' : newFollowupDate)}
-            >
-              Set
-            </Button>
+            <input type="datetime-local" value={newFollowupDate}
+              onChange={(e) => setNewFollowupDate(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+            <Button variant="primary" size="sm"
+              disabled={!newFollowupDate || setFollowupMutation.isPending}
+              onClick={() => setFollowupMutation.mutate(
+                newFollowupDate.length === 16 ? newFollowupDate + ':00' : newFollowupDate
+              )}>Set</Button>
           </div>
         </div>
       </div>
 
-      {/* ── Customer Info ──────────────────────────────────────── */}
-      {customer && typeof customer === 'object' && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Customer</p>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">
-                {'first_name' in customer
-                  ? customer.first_name + ' ' + customer.last_name
-                  : lead.customer_name}
-              </p>
-              {'primary_phone' in customer && customer.primary_phone && (
-                <p className="text-sm text-gray-500 font-mono mt-0.5">
-                  {customer.primary_phone}
-                </p>
-              )}
-            </div>
-            {'id' in customer && (
-              <Button variant="secondary" size="sm"
-                      onClick={() => router.push('/customers/' + customer.id)}>
-                View Profile
-              </Button>
-            )}
+      {/* ── Add Note ─────────────────────────────────────────── */}
+      {noteOpen && (
+        <div className="bg-white rounded-xl border border-yellow-200 shadow-sm p-4 space-y-3">
+          <p className="text-sm font-semibold text-gray-700">📝 Add Note</p>
+          <textarea
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-yellow-400"
+            rows={3} placeholder="Write a note about this lead..."
+            value={noteText} onChange={(e) => setNoteText(e.target.value)}/>
+          <div className="flex gap-2 justify-end">
+            <Button variant="secondary" size="sm" onClick={() => { setNoteOpen(false); setNoteText(''); }}>Cancel</Button>
+            <Button variant="primary" size="sm"
+              loading={addNoteMutation.isPending} disabled={noteText.trim().length < 3}
+              onClick={() => addNoteMutation.mutate()}>Save Note</Button>
           </div>
         </div>
       )}
 
-      {/* ── Contact Info ─────────────────────────────────────── */}
-      {(lead as any)?.first_name || (lead as any)?.phone || (lead as any)?.email ? (
-        <div className='bg-white rounded-xl border border-gray-200 shadow-sm p-5'>
-          <h2 className='text-sm font-semibold text-gray-500 mb-3'>Contact Info</h2>
-          <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
-            {[
-              { label: 'Name',    value: `${(lead as any).first_name ?? ''} ${(lead as any).last_name ?? ''}`.trim() },
-              { label: 'Phone',   value: (lead as any).phone },
-              { label: 'Email',   value: (lead as any).email },
-              { label: 'Company', value: (lead as any).company },
-              { label: 'City',    value: (lead as any).city },
-              { label: 'Country', value: (lead as any).country },
-            ].filter((f) => f.value).map(({ label, value }) => (
-              <div key={label}>
-                <p className='text-xs text-gray-400'>{label}</p>
-                <p className='text-sm font-medium text-gray-800 mt-0.5'>{value}</p>
+      {/* ── Tabs ─────────────────────────────────────────────── */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit overflow-x-auto">
+        {([
+          { key: 'timeline',   label: 'Timeline',   icon: <Clock size={14}/> },
+          { key: 'calls',      label: 'Calls',      icon: <Phone size={14}/> },
+          { key: 'deals',      label: 'Deals',      icon: <TrendingUp size={14}/> },
+          { key: 'quotations', label: 'Quotations', icon: <FileText size={14}/> },
+          { key: 'followups',  label: 'Follow-ups', icon: <CheckSquare size={14}/> },
+          { key: 'tickets',    label: 'Tickets',    icon: <TicketIcon size={14}/> },
+        ] as { key: Tab; label: string; icon: React.ReactNode }[]).map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap
+              ${tab === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            {t.icon}{t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── TIMELINE TAB ─────────────────────────────────────── */}
+      {tab === 'timeline' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-700">Activity Timeline</h3>
+          </div>
+          {eventsLoading && <div className="flex justify-center py-10"><Spinner /></div>}
+          {!eventsLoading && !(eventsData as any[])?.length && (
+            <p className="px-5 py-8 text-center text-sm text-gray-400">No activity yet.</p>
+          )}
+          <div className="divide-y divide-gray-50">
+            {(eventsData as any[] ?? []).map((ev: any) => (
+              <div key={ev.id} className="px-5 py-4 flex items-start gap-4">
+                <div className="w-2 h-2 rounded-full bg-blue-400 mt-2 shrink-0"/>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-medium text-gray-900 capitalize">
+                      {ev.event_type?.replace(/_/g, ' ')}
+                    </span>
+                    {ev.old_value && ev.new_value && (
+                      <span className="text-xs text-gray-500">
+                        {ev.old_value} → <span className="font-medium text-gray-700">{ev.new_value}</span>
+                      </span>
+                    )}
+                  </div>
+                  {ev.note && <p className="text-sm text-gray-600 mt-0.5">{ev.note}</p>}
+                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                    {ev.actor_name && <span>{ev.actor_name}</span>}
+                    <span>·</span>
+                    <span>{timeAgo(ev.created_at)}</span>
+                  </div>
+                </div>
+                {/* Score events inline */}
+              </div>
+            ))}
+          </div>
+          {/* Score History */}
+          {Array.isArray(scoreHistory) && scoreHistory.length > 0 && (
+            <div className="border-t border-gray-100 px-5 py-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Score History</p>
+              <div className="space-y-2">
+                {(scoreHistory as any[]).map((e: any) => (
+                  <div key={e.id} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <span className={`text-sm font-bold w-10 text-right ${e.points > 0 ? 'text-green-600' : e.points < 0 ? 'text-red-500' : 'text-gray-400'}`}>
+                        {e.points > 0 ? '+' : ''}{e.points}
+                      </span>
+                      <div>
+                        <p className="text-xs font-medium text-gray-700 capitalize">{e.event_type?.replace(/_/g, ' ')}</p>
+                        {e.reason && <p className="text-xs text-gray-400 mt-0.5">{e.reason}</p>}
+                      </div>
+                    </div>
+                    <span className="text-xs text-gray-400">{new Date(e.created_at).toLocaleDateString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── CALLS TAB ────────────────────────────────────────── */}
+      {tab === 'calls' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-700">Calls ({callsData?.count ?? 0})</h3>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {!callsData?.results?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">No calls yet.</p>}
+            {callsData?.results?.map((call: any) => (
+              <div key={call.id}
+                className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer"
+                onClick={() => router.push(`/calls/${call.id}`)}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${call.direction === 'inbound' ? 'bg-blue-50' : 'bg-green-50'}`}>
+                    {call.direction === 'inbound'
+                      ? <PhoneIncoming size={14} className="text-blue-600"/>
+                      : <PhoneOutgoing size={14} className="text-green-600"/>}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-sm text-gray-900">{call.caller}</span>
+                      <StatusBadge status={call.status} size="xs"/>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {call.agent_name || 'No agent'} · {call.started_at ? new Date(call.started_at).toLocaleString() : ''}
+                    </p>
+                  </div>
+                </div>
+                {call.duration > 0 && <span className="text-xs text-gray-500 font-mono">{formatDuration(call.duration)}</span>}
               </div>
             ))}
           </div>
         </div>
-      ) : null}
+      )}
 
-      {/* ── Lifecycle & Score ────────────────────────────────── */}
-      {(() => {
-        const lifecycle = (lead as any)?.lifecycle_stage ?? 'prospect';
-        const score     = (lead as any)?.score ?? 0;
-        const cls       = (lead as any)?.classification ?? 'none';
-        const LC: Record<string,string> = {
-          prospect:'bg-gray-100 text-gray-600', opportunity:'bg-blue-100 text-blue-700',
-          won:'bg-green-100 text-green-700', customer:'bg-emerald-100 text-emerald-700',
-          churned:'bg-red-100 text-red-600',
-        };
-        const CC: Record<string,string> = {
-          none:'bg-gray-300', cold:'bg-sky-400', warm:'bg-yellow-400',
-          hot:'bg-orange-400', very_hot:'bg-red-500',
-        };
-        return (
-          <div className='bg-white rounded-xl border border-gray-200 shadow-sm p-5'>
-            <h2 className='text-sm font-semibold text-gray-500 mb-3'>Lifecycle & Score</h2>
-            <div className='flex items-center gap-6 flex-wrap'>
-              <div>
-                <p className='text-xs text-gray-400 mb-1'>Lifecycle</p>
-                <span className={`px-3 py-1 rounded-full text-xs font-semibold ${LC[lifecycle] ?? 'bg-gray-100 text-gray-500'}`}>{lifecycle}</span>
-              </div>
-              <div>
-                <p className='text-xs text-gray-400 mb-1'>Classification</p>
-                <span className='text-sm font-semibold text-gray-700 capitalize'>{cls}</span>
-              </div>
-              <div>
-                <p className='text-xs text-gray-400 mb-1'>Score</p>
-                <div className='flex items-center gap-2'>
-                  <div className='w-28 h-2 bg-gray-200 rounded-full overflow-hidden'>
-                    <div className={`h-full rounded-full ${CC[cls] ?? 'bg-gray-300'}`} style={{width:`${score}%`}} />
-                  </div>
-                  <span className='text-sm font-semibold text-gray-700'>{score}/100</span>
+      {/* ── DEALS TAB ────────────────────────────────────────── */}
+      {tab === 'deals' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Deals ({dealsData?.count ?? 0})</h3>
+            <Link href={`/deals/new?lead=${id}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700">
+              <Plus size={12}/> New Deal
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {!dealsData?.results?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">No deals yet.</p>}
+            {dealsData?.results?.map((deal: any) => (
+              <div key={deal.id}
+                className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer"
+                onClick={() => router.push(`/deals/${deal.id}`)}>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{deal.title}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {deal.stage_name ?? deal.stage} · {deal.value ? `${Number(deal.value).toLocaleString()} ${deal.currency ?? 'EGP'}` : '—'}
+                  </p>
                 </div>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{deal.stage_name ?? '—'}</span>
               </div>
-            </div>
+            ))}
           </div>
-        );
-      })()}
+        </div>
+      )}
 
-      {/* ── Deals ────────────────────────────────────────────── */}
-      {(() => {
-        const deals = (dealsData as any)?.results ?? dealsData ?? [];
-        if (!deals.length) return null;
-        return (
-          <div className='bg-white rounded-xl border border-gray-200 shadow-sm p-5'>
-            <h2 className='text-sm font-semibold text-gray-500 mb-3'>Deals ({deals.length})</h2>
-            <div className='space-y-2'>
-              {deals.map((d: any) => (
-                <div key={d.id} className='flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100'>
-                  <div>
-                    <p className='text-sm font-medium text-gray-800'>{d.title}</p>
-                    <p className='text-xs text-gray-400 mt-0.5'>{d.stage_name ?? d.stage} · {d.value ? Number(d.value).toLocaleString()+' '+(d.currency??'EGP') : '—'}</p>
-                  </div>
-                  <a href={`/deals/${d.id}`} className='text-xs px-2 py-1 rounded bg-blue-100 text-blue-700 hover:bg-blue-200'>View</a>
+      {/* ── QUOTATIONS TAB ───────────────────────────────────── */}
+      {tab === 'quotations' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Quotations ({quotationsData?.count ?? 0})</h3>
+            <Link href={`/sales/quotations/new?lead=${id}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700">
+              <Plus size={12}/> New Quotation
+            </Link>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {!quotationsData?.results?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">No quotations yet.</p>}
+            {quotationsData?.results?.map((q: any) => (
+              <div key={q.id}
+                className="px-5 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer"
+                onClick={() => router.push(`/sales/quotations/${q.id}`)}>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{q.title ?? q.ref_number}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{q.ref_number} · {q.quotation_type}</p>
                 </div>
-              ))}
-            </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                  ${q.status === 'approved' ? 'bg-green-100 text-green-700' :
+                    q.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                    q.status === 'pending_approval' ? 'bg-yellow-100 text-yellow-700' :
+                    'bg-gray-100 text-gray-600'}`}>
+                  {q.status}
+                </span>
+              </div>
+            ))}
           </div>
-        );
-      })()}
+        </div>
+      )}
 
-      {/* ── Score History ────────────────────────────────────── */}
-      {(() => {
-        const events = Array.isArray(scoreHistory) ? scoreHistory : [];
-        if (!events.length) return null;
-        return (
-          <div className='bg-white rounded-xl border border-gray-200 shadow-sm p-5'>
-            <h2 className='text-sm font-semibold text-gray-500 mb-3'>Score History</h2>
-            <div className='space-y-2'>
-              {events.map((e: any) => {
-                const positive = e.points > 0;
-                return (
-                  <div key={e.id} className='flex items-center justify-between p-2.5 rounded-lg bg-gray-50'>
-                    <div className='flex items-center gap-3'>
-                      <span className={`text-sm font-bold w-10 text-right ${
-                        positive ? 'text-green-600' : e.points < 0 ? 'text-red-500' : 'text-gray-400'
-                      }`}>
-                        {positive ? '+' : ''}{e.points}
-                      </span>
-                      <div>
-                        <p className='text-xs font-medium text-gray-700 capitalize'>
-                          {e.event_type.replace(/_/g, ' ')}
-                        </p>
-                        {e.reason && <p className='text-xs text-gray-400 mt-0.5'>{e.reason}</p>}
-                      </div>
-                    </div>
-                    <span className='text-xs text-gray-400'>
-                      {new Date(e.created_at).toLocaleDateString()}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+      {/* ── FOLLOWUPS TAB ────────────────────────────────────── */}
+      {tab === 'followups' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-700">Follow-ups ({followupsData?.count ?? 0})</h3>
           </div>
-        );
-      })()}
-
-      {/* ── Audit Trail / Events ───────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <button
-          onClick={() => setShowEvents(v => !v)}
-          className="w-full flex items-center justify-between px-5 py-4
-                     text-sm font-semibold text-gray-700 hover:bg-gray-50 rounded-xl"
-        >
-          <span className="flex items-center gap-2">
-            <Clock size={15} className="text-gray-400"/>
-            Activity Timeline
-            {events && (
-              <span className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">
-                {(events as LeadEvent[]).length}
-              </span>
-            )}
-          </span>
-          {showEvents ? <ChevronUp size={15}/> : <ChevronDown size={15}/>}
-        </button>
-
-        {showEvents && (
-          <div className="px-5 pb-5 space-y-3 border-t border-gray-100 pt-4">
-            {eventsLoading && <div className="flex justify-center py-4"><Spinner size="sm"/></div>}
-            {!eventsLoading && (!events || (events as LeadEvent[]).length === 0) && (
-              <p className="text-sm text-gray-400 text-center py-4">No activity yet.</p>
-            )}
-            {(events as LeadEvent[] | undefined)?.map((ev) => {
-              const meta = EVENT_LABELS[ev.event_type] ?? { label: ev.event_type, color: 'bg-gray-100 text-gray-600', icon: '•' };
-              return (
-                <div key={ev.id} className="flex items-start gap-3">
-                  <span className="text-base mt-0.5">{meta.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={"px-2 py-0.5 rounded-full text-xs font-semibold " + meta.color}>
-                        {meta.label}
-                      </span>
-                      {ev.old_value && ev.new_value && (
-                        <span className="text-xs text-gray-500">
-                          {ev.old_value} → <span className="font-medium text-gray-700">{ev.new_value}</span>
-                        </span>
-                      )}
-                      {!ev.old_value && ev.new_value && (
-                        <span className="text-xs font-medium text-gray-700">{ev.new_value}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-400">
-                      {ev.actor_name && <span>{ev.actor_name}</span>}
-                      <span>·</span>
-                      <span>{timeAgo(ev.created_at)}</span>
-                    </div>
-                  </div>
+          <div className="divide-y divide-gray-50">
+            {!followupsData?.results?.length && <p className="px-5 py-8 text-center text-sm text-gray-400">No follow-ups yet.</p>}
+            {followupsData?.results?.map((f: any) => (
+              <div key={f.id} className="px-5 py-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{f.title}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 capitalize">
+                    {f.followup_type} · {f.scheduled_at ? new Date(f.scheduled_at).toLocaleString() : '—'}
+                  </p>
                 </div>
-              );
-            })}
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium
+                  ${f.status === 'completed' ? 'bg-green-100 text-green-700' :
+                    f.status === 'cancelled' ? 'bg-red-100 text-red-600' :
+                    'bg-yellow-100 text-yellow-700'}`}>
+                  {f.status}
+                </span>
+              </div>
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ── TICKETS TAB ──────────────────────────────────────── */}
+      {tab === 'tickets' && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-700">Tickets ({ticketsData?.count ?? 0})</h3>
+            <Button variant="primary" size="sm" icon={<Plus size={14}/>}
+                    onClick={() => setTicketModal(true)}>New Ticket</Button>
+          </div>
+          {ticketsLoading && <div className="flex justify-center py-10"><Spinner /></div>}
+          {!ticketsLoading && !ticketsData?.results?.length && (
+            <p className="px-5 py-8 text-center text-sm text-gray-400">No tickets yet.</p>
+          )}
+          <div className="divide-y divide-gray-50">
+            {ticketsData?.results?.map((ticket: any) => (
+              <div key={ticket.id}
+                className="px-5 py-4 flex items-start justify-between gap-4 hover:bg-gray-50 cursor-pointer"
+                onClick={() => router.push(`/tickets/${ticket.id}`)}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap mb-1">
+                    <span className="text-xs text-gray-400 font-mono">#{ticket.ticket_number}</span>
+                    <PriorityBadge priority={ticket.priority}/>
+                    <TicketStatusBadge status={ticket.status}/>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900 truncate">{ticket.title}</p>
+                </div>
+                <div className="text-xs text-gray-400 shrink-0">{timeAgo(ticket.created_at)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* New Ticket Modal */}
+      <NewTicketModal
+        open={ticketModal}
+        onClose={() => setTicketModal(false)}
+        onCreated={() => { setTicketModal(false); refetchTickets(); setTab('tickets'); }}
+        defaultCustomerId={id}
+      />
+
     </div>
   );
 }
