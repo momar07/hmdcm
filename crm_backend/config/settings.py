@@ -192,20 +192,37 @@ CELERY_BEAT_SCHEDULE_TICKETS = {
 }
 
 # Merge into main beat schedule if it exists
-if "CELERY_BEAT_SCHEDULE" not in dir():
-    CELERY_BEAT_SCHEDULE = {
+CELERY_BEAT_SCHEDULE = {
+    # Lead scoring decay — every 24 hours
     'run-daily-lead-score-decay': {
-        'task': 'apps.leads.tasks.run_daily_score_decay',
-        'schedule': 86400,  # every 24 hours
+        'task':     'apps.leads.tasks.run_daily_score_decay',
+        'schedule': 86400,
     },
+    # Task reminders — every 60 seconds
     'send-task-reminders': {
         'task':     'apps.tasks.tasks.send_task_reminders',
-        'schedule': 60.0,  # every 60 seconds
-    },}
-CELERY_BEAT_SCHEDULE.update(CELERY_BEAT_SCHEDULE_TICKETS)
-CELERY_BEAT_SCHEDULE["expire-overdue-quotations"] = {
-    "task":     "apps.sales.tasks.expire_overdue_quotations",
-    "schedule": 3600,   # every hour
+        'schedule': 60.0,
+    },
+    # Quotation expiry — every hour
+    'expire-overdue-quotations': {
+        'task':     'apps.sales.tasks.expire_overdue_quotations',
+        'schedule': 3600,
+    },
+    # Tickets SLA — every 5 minutes
+    'check-sla-breaches': {
+        'task':     'apps.tickets.tasks.check_sla_breaches',
+        'schedule': 300,
+    },
+    # Tickets auto-close — every 24 hours
+    'auto-close-resolved': {
+        'task':     'apps.tickets.tasks.auto_close_resolved_tickets',
+        'schedule': 86400,
+    },
+    # Tickets escalation notify — every 30 minutes
+    'notify-escalated': {
+        'task':     'apps.tickets.tasks.notify_escalated_tickets',
+        'schedule': 1800,
+    },
 }
 
 # Timezone
