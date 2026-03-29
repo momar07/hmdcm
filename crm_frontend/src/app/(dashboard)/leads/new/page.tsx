@@ -21,6 +21,7 @@ export default function NewLeadPage() {
     value: '', followup_date: '',
     customer_id: preCustomer,
     status_id: '', priority_id: '', stage_id: '',
+    first_name: '', last_name: '', phone: '', email: '', company: '',
   });
 
   const { data: statusData } = useQuery({
@@ -113,6 +114,45 @@ export default function NewLeadPage() {
 
         {/* ← Customer Dropdown بدل UUID input */}
         <div>
+          {/* Contact Info */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+              <input type="text" value={form.first_name}
+                onChange={(e) => set('first_name', e.target.value)}
+                placeholder="Ahmed"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+              <input type="text" value={form.last_name}
+                onChange={(e) => set('last_name', e.target.value)}
+                placeholder="Sayed"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input type="tel" value={form.phone}
+                onChange={(e) => set('phone', e.target.value)}
+                placeholder="+201xxxxxxxxx"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <input type="email" value={form.email}
+                onChange={(e) => set('email', e.target.value)}
+                placeholder="ahmed@example.com"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+              <input type="text" value={form.company}
+                onChange={(e) => set('company', e.target.value)}
+                placeholder="Company name (optional)"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+          </div>
+
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Customer *
           </label>

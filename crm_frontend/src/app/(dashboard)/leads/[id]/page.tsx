@@ -125,8 +125,18 @@ export default function LeadDetailPage() {
         title={lead.title}
         subtitle={"Source: " + lead.source}
         actions={
-          <Button variant="secondary" icon={<ArrowLeft size={16}/>}
-                  onClick={() => router.back()}>Back</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" icon={<ArrowLeft size={16}/>}
+                    onClick={() => router.back()}>Back</Button>
+            <a
+              href={`/leads/${id}/edit`}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg
+                         border border-gray-300 text-sm font-medium text-gray-700
+                         hover:bg-gray-50 transition-colors"
+            >
+              ✏️ Edit
+            </a>
+          </div>
         }
       />
 
