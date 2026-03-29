@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
 from .models import Lead, LeadStatus, LeadPriority, LeadStage
 from .serializers import (LeadListSerializer, LeadDetailSerializer,
                            LeadStatusSerializer, LeadPrioritySerializer,
@@ -13,9 +14,13 @@ from .services import create_lead, assign_lead, update_lead_status, update_lead_
 
 class LeadViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    filter_backends    = [DjangoFilterBackend]
+    filter_backends    = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields   = ['status', 'priority', 'source',
-                          'assigned_to', 'campaign', 'customer', 'stage']
+                          'assigned_to', 'campaign', 'customer', 'stage',
+                          'lifecycle_stage', 'classification']
+    search_fields      = ['title', 'first_name', 'last_name', 'email', 'phone', 'company']
+    ordering_fields    = ['created_at', 'score', 'followup_date']
+    ordering           = ['-created_at']
 
     def get_queryset(self):
         return get_all_leads(user=self.request.user)
