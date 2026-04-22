@@ -72,8 +72,8 @@
 - [x] `[3.3]` 🔴 فورم إنشاء Lead جديد بدون Customer field
 - [x] `[3.4]` 🔴 Kanban Board لمراحل الـ Pipeline
 - [x] `[3.5]` 🔴 صفحة تفاصيل Lead تعرض البيانات + Timeline
-- [ ] `[3.6]` 🔴 زرار **Mark as WON** مع فورم `won_amount`
-- [ ] `[3.7]` 🔴 زرار **Mark as LOST** مع فورم `lost_reason`
+- [x] `[3.6]` 🔴 زرار **Mark as WON** مع فورم `won_amount`
+- [x] `[3.7]` 🔴 زرار **Mark as LOST** مع فورم `lost_reason`
 - [ ] `[3.8]` 🟡 عرض Lead Score بشكل visual (progress bar + badge)
 - [x] `[3.9]` 🟡 Drag & Drop بين مراحل الـ Pipeline
 

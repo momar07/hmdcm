@@ -1,158 +1,149 @@
 'use client';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { leadsApi } from '@/lib/api/leads';
-import type { Lead } from '@/types';
-import Link from 'next/link';
+interface ConvertedLead {
+  id: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  email: string;
+  company: string;
+  converted_at: string | null;
+  customer_id: string | null;
+  stage_name: string;
+  score: number;
+  assigned_name: string | null;
+}
 
-const CLASS_COLOR: Record<string, string> = {
-  none:     'bg-gray-100 text-gray-500',
-  cold:     'bg-sky-100 text-sky-600',
-  warm:     'bg-yellow-100 text-yellow-700',
-  hot:      'bg-orange-100 text-orange-700',
-  very_hot: 'bg-red-100 text-red-700',
-};
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
-function ScoreBar({ score, cls }: { score: number; cls: string }) {
-  const color =
-    cls === 'very_hot' ? 'bg-red-500' :
-    cls === 'hot'      ? 'bg-orange-400' :
-    cls === 'warm'     ? 'bg-yellow-400' : 'bg-sky-400';
-  return (
-    <div className="flex items-center gap-1.5">
-      <div className="w-14 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${score}%` }} />
-      </div>
-      <span className="text-xs text-gray-500">{score}</span>
-    </div>
-  );
+async function fetchConverted(search = ''): Promise<ConvertedLead[]> {
+  const token = typeof window !== 'undefined'
+    ? localStorage.getItem('access_token') : null;
+  const qs = search ? `?search=${encodeURIComponent(search)}` : '';
+  const res = await fetch(`${BASE}/api/customers/converted/${qs}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return data.results ?? [];
 }
 
 export default function CustomersPage() {
-  const [search, setSearch] = useState('');
-  const [page,   setPage]   = useState(1);
+  const router  = useRouter();
+  const [customers, setCustomers] = useState<ConvertedLead[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [search,    setSearch]    = useState('');
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['customers', search, page],
-    queryFn:  () => leadsApi.list({
-      page,
-      search:          search || undefined,
-      lifecycle_stage: 'customer',
-    }),
-  });
+  const load = async (q = '') => {
+    setLoading(true);
+    try { setCustomers(await fetchConverted(q)); }
+    finally { setLoading(false); }
+  };
 
-  const payload = (data as any)?.data ?? data;
-  const leads: Lead[] = Array.isArray(payload) ? payload : (payload?.results ?? []);
-  const total: number = payload?.count ?? leads.length;
+  useEffect(() => { load(); }, []);
 
   return (
-    <div className="p-6 space-y-5">
-
+    <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Customers</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{total} customer{total !== 1 ? 's' : ''}</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Only leads that were marked as <strong>WON</strong> appear here
+        </p>
       </div>
 
       {/* Search */}
-      <input
-        type="text"
-        placeholder="Search customers…"
-        value={search}
-        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-        className="w-full max-w-sm border border-gray-300 rounded-lg px-3 py-2
-                   text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <div className="flex items-center gap-3">
+        <input
+          type="text"
+          placeholder="Search customers..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && load(search)}
+          className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-64
+                     focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={() => load(search)}
+          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Search
+        </button>
+        <span className="text-sm text-gray-500">{customers.length} customers</span>
+      </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-40 text-gray-400">Loading…</div>
-        ) : leads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
-            <span className="text-3xl">🏆</span>
-            <p className="text-sm">No customers yet — win a deal to see them here!</p>
-          </div>
-        ) : (
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50">
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        </div>
+      ) : customers.length === 0 ? (
+        <div className="text-center py-20 text-gray-400">
+          <p className="text-4xl mb-3">👥</p>
+          <p className="text-sm">No customers yet. Mark a lead as WON to create one.</p>
+          <button
+            onClick={() => router.push('/leads')}
+            className="mt-4 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Go to Leads Pipeline
+          </button>
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 border-b">
               <tr>
-                {['Name','Phone','Email','Company','Classification','Score','Actions'].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                {['Customer', 'Phone', 'Email', 'Company',
+                  'Converted', 'Assigned To', 'Actions'].map(h => (
+                  <th key={h}
+                    className="text-left px-4 py-3 text-gray-600 font-medium">
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {leads.map((l: Lead) => {
-                const ld = l as any;
-                const name = `${ld.first_name ?? ''} ${ld.last_name ?? ''}`.trim() || ld.title || '—';
-                const cls  = ld.classification ?? 'none';
-                return (
-                  <tr key={l.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-gray-900">
-                      <Link href={`/leads/${l.id}`} className="hover:text-blue-600">{name}</Link>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{ld.phone || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{ld.email || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">{ld.company || '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${CLASS_COLOR[cls]}`}>
-                        {cls}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <ScoreBar score={ld.score ?? 0} cls={cls} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <Link
-                          href={`/leads/${l.id}`}
-                          className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700"
-                        >
-                          View
-                        </Link>
-                        <Link
-                          href={`/deals/new?lead=${l.id}`}
-                          className="text-xs px-2 py-1 rounded bg-blue-100 hover:bg-blue-200 text-blue-700"
-                        >
-                          + Deal
-                        </Link>
+              {customers.map(c => (
+                <tr key={c.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full bg-purple-100 text-purple-700
+                                      flex items-center justify-center text-xs font-bold">
+                        {c.first_name?.[0]}{c.last_name?.[0]}
                       </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <span className="font-medium text-gray-900">
+                        {c.first_name} {c.last_name}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">{c.phone || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500">{c.email || '—'}</td>
+                  <td className="px-4 py-3 text-gray-500">{c.company || '—'}</td>
+                  <td className="px-4 py-3 text-gray-400 text-xs">
+                    {c.converted_at
+                      ? new Date(c.converted_at).toLocaleDateString('en-EG')
+                      : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">{c.assigned_name || '—'}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => router.push(`/leads/${c.id}`)}
+                      className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                    >
+                      View Lead →
+                    </button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
-        )}
-      </div>
-
-      {/* Pagination */}
-      {total > 25 && (
-        <div className="flex items-center gap-3 justify-end text-sm">
-          <button
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            className="px-3 py-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50"
-          >
-            Previous
-          </button>
-          <span className="text-gray-500">Page {page}</span>
-          <button
-            onClick={() => setPage((p) => p + 1)}
-            disabled={leads.length < 25}
-            className="px-3 py-1.5 rounded border border-gray-300 disabled:opacity-40 hover:bg-gray-50"
-          >
-            Next
-          </button>
         </div>
       )}
-
     </div>
   );
 }
