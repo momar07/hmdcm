@@ -70,12 +70,12 @@
 
 ### صفحة Lead
 - [x] `[3.3]` 🔴 فورم إنشاء Lead جديد بدون Customer field
-- [ ] `[3.4]` 🔴 Kanban Board لمراحل الـ Pipeline
+- [x] `[3.4]` 🔴 Kanban Board لمراحل الـ Pipeline
 - [x] `[3.5]` 🔴 صفحة تفاصيل Lead تعرض البيانات + Timeline
 - [ ] `[3.6]` 🔴 زرار **Mark as WON** مع فورم `won_amount`
 - [ ] `[3.7]` 🔴 زرار **Mark as LOST** مع فورم `lost_reason`
 - [ ] `[3.8]` 🟡 عرض Lead Score بشكل visual (progress bar + badge)
-- [ ] `[3.9]` 🟡 Drag & Drop بين مراحل الـ Pipeline
+- [x] `[3.9]` 🟡 Drag & Drop بين مراحل الـ Pipeline
 
 ### صفحة Customer
 - [x] `[3.10]` 🔴 Customer List يعرض بس الـ Leads المحولين (WON)
@@ -88,7 +88,7 @@
 
 ### Navigation
 - [x] `[3.15]` 🟡 تحديث الـ Sidebar — Leads أول حاجة
-- [ ] `[3.16]` 🟢 فلتر على Lead List (lifecycle / classification / source)
+- [x] `[3.16]` 🟢 فلتر على Lead List (lifecycle / classification / source)
 
 ---
 

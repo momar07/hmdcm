@@ -1,0 +1,78 @@
+import type {
+  Lead, LeadCreatePayload, MarkWonPayload,
+  MarkLostPayload, TimelineEvent, LeadStage,
+} from '@/types/leads';
+
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
+function authHeaders(): HeadersInit {
+  if (typeof window === 'undefined') return { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('access_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    ...opts,
+    headers: { ...authHeaders(), ...(opts.headers ?? {}) },
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail ?? err.error ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── CRUD ──────────────────────────────────────────────────────
+export const leadsApi = {
+  list: (params?: Record<string, string>) => {
+    const qs = params ? '?' + new URLSearchParams(params).toString() : '';
+    return req<{ count: number; results: Lead[] }>(`/api/leads/${qs}`);
+  },
+
+  get: (id: string) =>
+    req<Lead>(`/api/leads/${id}/`),
+
+  create: (data: LeadCreatePayload) =>
+    req<Lead>('/api/leads/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: Partial<LeadCreatePayload>) =>
+    req<Lead>(`/api/leads/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // ── Pipeline actions ────────────────────────────────────────
+  markWon: (id: string, payload: MarkWonPayload) =>
+    req<{ lead: Lead; customer_id: string; message: string }>(
+      `/api/leads/${id}/mark-won/`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+
+  markLost: (id: string, payload: MarkLostPayload) =>
+    req<{ lead: Lead; message: string }>(
+      `/api/leads/${id}/mark-lost/`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+
+  moveStage: (id: string, stage_id: string) =>
+    req<Lead>(`/api/leads/${id}/move_stage/`, {
+      method: 'PATCH',
+      body: JSON.stringify({ stage_id }),
+    }),
+
+  timeline: (id: string) =>
+    req<{ count: number; results: TimelineEvent[] }>(
+      `/api/leads/${id}/timeline/`
+    ),
+
+  // ── Config ──────────────────────────────────────────────────
+  stages: () =>
+    req<{ results: LeadStage[] }>('/api/leads/stages/'),
+};
