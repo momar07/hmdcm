@@ -3,45 +3,85 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const NAV = [
-  { href: '/leads',        icon: '🎯', label: 'Leads Pipeline' },
-  { href: '/customers',    icon: '👥', label: 'Customers'       },
-  { href: '/calls',        icon: '📞', label: 'Calls'           },
-  { href: '/followups',    icon: '📅', label: 'Follow-ups'      },
-  { href: '/tasks',        icon: '✅', label: 'Tasks'           },
-  { href: '/quotations',   icon: '📄', label: 'Quotations'      },
-  { href: '/tickets',      icon: '🎫', label: 'Tickets'         },
-  { href: '/reports',      icon: '📊', label: 'Reports'         },
+  { href: '/leads',             icon: '🎯', label: 'Leads Pipeline' },
+  { href: '/customers',         icon: '👥', label: 'Customers'       },
+  { href: '/calls',             icon: '📞', label: 'Calls'           },
+  { href: '/followups',         icon: '📅', label: 'Follow-ups'      },
+  { href: '/tasks',             icon: '✅', label: 'Tasks'           },
+  { href: '/sales/quotations',  icon: '📄', label: 'Quotations'      },
+  { href: '/deals',             icon: '💰', label: 'Deals'           },
+  { href: '/tickets',           icon: '🎫', label: 'Tickets'         },
+  { href: '/campaigns',         icon: '📣', label: 'Campaigns'       },
+  { href: '/reports',           icon: '📊', label: 'Reports'         },
 ] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-60 bg-white border-r border-gray-200 h-screen flex flex-col">
+    <aside
+      style={{
+        width: '240px',
+        minWidth: '240px',
+        backgroundColor: '#ffffff',
+        borderRight: '1px solid #e5e7eb',
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        flexShrink: 0,
+      }}
+    >
       {/* Logo */}
-      <div className="px-6 py-5 border-b border-gray-100">
-        <h1 className="text-lg font-bold text-gray-900">HMDCM</h1>
-        <p className="text-xs text-gray-400 mt-0.5">Call Center CRM</p>
+      <div style={{
+        padding: '20px 24px',
+        borderBottom: '1px solid #f3f4f6',
+      }}>
+        <h1 style={{ fontSize: '16px', fontWeight: 700, color: '#111827', margin: 0 }}>
+          HMDCM
+        </h1>
+        <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px', marginBottom: 0 }}>
+          Call Center CRM
+        </p>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <nav style={{
+        flex: 1,
+        padding: '12px 8px',
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px',
+      }}>
         {NAV.map(item => {
-          const active = pathname.startsWith(item.href);
+          const active = pathname === item.href || pathname.startsWith(item.href + '/');
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm
-                          font-medium transition-colors
-                ${active
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 500,
+                textDecoration: 'none',
+                transition: 'background 0.15s',
+                backgroundColor: active ? '#eff6ff' : 'transparent',
+                color: active ? '#1d4ed8' : '#4b5563',
+              }}
             >
-              <span className="text-lg">{item.icon}</span>
-              {item.label}
+              <span style={{ fontSize: '16px', lineHeight: 1 }}>{item.icon}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
               {active && (
-                <span className="ml-auto w-1.5 h-1.5 bg-blue-600 rounded-full" />
+                <span style={{
+                  width: '6px', height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: '#2563eb',
+                  flexShrink: 0,
+                }} />
               )}
             </Link>
           );
@@ -49,13 +89,25 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-4 py-4 border-t border-gray-100">
+      <div style={{
+        padding: '12px 8px',
+        borderTop: '1px solid #f3f4f6',
+      }}>
         <Link
           href="/settings"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm
-                     text-gray-500 hover:bg-gray-50 hover:text-gray-700"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '8px 12px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            color: '#6b7280',
+            textDecoration: 'none',
+          }}
         >
-          <span>⚙️</span> Settings
+          <span>⚙️</span>
+          <span>Settings</span>
         </Link>
       </div>
     </aside>

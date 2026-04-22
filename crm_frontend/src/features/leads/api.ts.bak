@@ -5,20 +5,9 @@ import type {
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
-function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  // Try multiple storage keys used by the project
-  return (
-    localStorage.getItem('access_token') ??
-    localStorage.getItem('accessToken')  ??
-    localStorage.getItem('token')        ??
-    sessionStorage.getItem('access_token') ??
-    null
-  );
-}
-
 function authHeaders(): HeadersInit {
-  const token = getToken();
+  if (typeof window === 'undefined') return { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('access_token');
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -59,6 +48,7 @@ export const leadsApi = {
       body: JSON.stringify(data),
     }),
 
+  // ── Pipeline actions ────────────────────────────────────────
   markWon: (id: string, payload: MarkWonPayload) =>
     req<{ lead: Lead; customer_id: string; message: string }>(
       `/api/leads/${id}/mark-won/`,
@@ -82,6 +72,7 @@ export const leadsApi = {
       `/api/leads/${id}/timeline/`
     ),
 
+  // ── Config ──────────────────────────────────────────────────
   stages: () =>
     req<{ results: LeadStage[] }>('/api/leads/stages/'),
 };

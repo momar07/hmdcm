@@ -20,12 +20,7 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 async function fetchConverted(search = ''): Promise<ConvertedLead[]> {
   const token = typeof window !== 'undefined'
-    ? (localStorage.getItem('access_token') ??
-       localStorage.getItem('accessToken')  ??
-       localStorage.getItem('token')        ??
-       sessionStorage.getItem('access_token') ??
-       null)
-    : null;
+    ? localStorage.getItem('access_token') : null;
   const qs = search ? `?search=${encodeURIComponent(search)}` : '';
   const res = await fetch(`${BASE}/api/customers/converted/${qs}`, {
     headers: {
