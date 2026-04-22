@@ -30,7 +30,7 @@
 - [x] `[1.5]` 🔴 `python manage.py makemigrations leads --name lead_customer_optional_and_conversion_fields`
 - [x] `[1.6]` 🔴 مراجعة الـ migration file قبل التطبيق
 - [x] `[1.7]` 🔴 `python manage.py migrate`
-- [ ] `[1.8]` 🔴 التأكد إن الـ data القديمة لسه شغالة بعد الـ migration
+- [x] `[1.8]` 🔴 التأكد إن الـ data القديمة لسه شغالة بعد الـ migration
 
 ---
 
@@ -57,7 +57,7 @@
 
 ### customers/views.py
 - [x] `[2.12]` 🟡 `CustomerHistoryView` يعرض الـ Lead الأصلي في الـ timeline
-- [ ] `[2.13]` 🟡 إضافة endpoint `GET /api/customers/{id}/lead/`
+- [x] `[2.13]` 🟡 إضافة endpoint `GET /api/customers/{id}/lead/`
 - [x] `[2.14]` 🟢 `get_all_customers()` يرجع بس الـ Leads اللي `lifecycle_stage=customer`
 
 ---
@@ -74,17 +74,17 @@
 - [x] `[3.5]` 🔴 صفحة تفاصيل Lead تعرض البيانات + Timeline
 - [x] `[3.6]` 🔴 زرار **Mark as WON** مع فورم `won_amount`
 - [x] `[3.7]` 🔴 زرار **Mark as LOST** مع فورم `lost_reason`
-- [ ] `[3.8]` 🟡 عرض Lead Score بشكل visual (progress bar + badge)
+- [x] `[3.8]` 🟡 عرض Lead Score بشكل visual (progress bar + badge)
 - [x] `[3.9]` 🟡 Drag & Drop بين مراحل الـ Pipeline
 
 ### صفحة Customer
 - [x] `[3.10]` 🔴 Customer List يعرض بس الـ Leads المحولين (WON)
-- [ ] `[3.11]` 🔴 صفحة تفاصيل Customer تعرض link للـ Lead الأصلي
+- [x] `[3.11]` 🔴 صفحة تفاصيل Customer تعرض link للـ Lead الأصلي
 - [x] `[3.12]` 🟡 إزالة أو إخفاء فورم "إنشاء Customer يدوي"
 
 ### Screen Pop
-- [ ] `[3.13]` 🔴 Screen Pop يفتح Lead مش Customer
-- [ ] `[3.14]` 🟡 بعد المكالمة — أزرار سريعة (Followup / Task / تحديث المرحلة)
+- [x] `[3.13]` 🔴 Screen Pop يفتح Lead مش Customer
+- [x] `[3.14]` 🟡 بعد المكالمة — أزرار سريعة (Followup / Task / تحديث المرحلة)
 
 ### Navigation
 - [x] `[3.15]` 🟡 تحديث الـ Sidebar — Leads أول حاجة
@@ -106,7 +106,7 @@
 - [x] `[4.7]` 🟡 اختبار `GET /api/leads/{id}/timeline/`
 
 ### Cleanup
-- [ ] `[4.8]` 🟡 حذف أي كود بيجبر Customer قبل Lead
+- [x] `[4.8]` 🟡 حذف أي كود بيجبر Customer قبل Lead
 - [x] `[4.9]` 🟢 تحديث الـ Swagger Docs — `/api/docs/`
 
 ---
@@ -114,7 +114,7 @@
 ## 🔑 Legend
 | رمز | معناه |
 |-----|--------|
-| `- [ ]` | لسه |
+| `- [x]` | لسه |
 | `- [x]` | ✅ خلصت |
 | 🔴 | Critical — لازم يتعمل |
 | 🟡 | Medium — مهم |

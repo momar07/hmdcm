@@ -13,7 +13,7 @@ const NAV = [
   { href: '/reports',      icon: '📊', label: 'Reports'         },
 ] as const;
 
-export default function Sidebar() {
+export function Sidebar() {
   const pathname = usePathname();
 
   return (
@@ -61,3 +61,5 @@ export default function Sidebar() {
     </aside>
   );
 }
+
+export default Sidebar;
