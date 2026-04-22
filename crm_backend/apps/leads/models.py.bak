@@ -168,7 +168,6 @@ class Lead(BaseModel):
         indexes  = [
             models.Index(fields=['stage',       'assigned_to'], name='leads_status__64a296_idx'),
             models.Index(fields=['followup_date'],               name='leads_followu_b0a7a5_idx'),
-            models.Index(fields=['converted_to_customer', 'lifecycle_stage'], name='leads_converted_lifecycle_idx'),
         ]
 
     def __str__(self):
