@@ -6,7 +6,6 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from .models import Lead, LeadStatus, LeadPriority, LeadStage
 from .serializers import (LeadListSerializer, LeadDetailSerializer,
-                           LeadCreateSerializer,
                            LeadStatusSerializer, LeadPrioritySerializer,
                            LeadStageSerializer)
 from .selectors import get_all_leads
@@ -34,23 +33,7 @@ class LeadViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'list':
             return LeadListSerializer
-        if self.action == 'create':
-            return LeadCreateSerializer
         return LeadDetailSerializer
-
-
-    def create(self, request, *args, **kwargs):
-        """
-        POST /api/leads/
-        Create a Lead without requiring a Customer.
-        Uses LeadCreateSerializer + create_lead service.
-        """
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        lead = serializer.save()
-        # Return full detail
-        out = LeadDetailSerializer(lead, context={'request': request})
-        return Response(out.data, status=http_status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['patch'], url_path='assign')
     def assign(self, request, pk=None):

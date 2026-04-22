@@ -95,6 +95,9 @@ class LeadDetailSerializer(serializers.ModelSerializer):
 
 
 class LeadCreateSerializer(serializers.ModelSerializer):
+    # title is auto-generated if not provided
+    title = serializers.CharField(required=False, allow_blank=True, default='')
+
     """
     Used for creating a new Lead — NO customer field required.
     All contact info is stored directly on the Lead.
@@ -122,6 +125,13 @@ class LeadCreateSerializer(serializers.ModelSerializer):
         from apps.leads.services import create_lead
         request = self.context.get('request')
         actor   = request.user if request else None
+        # Auto-generate title if not provided
+        if not validated_data.get('title'):
+            first = validated_data.get('first_name', '')
+            last  = validated_data.get('last_name', '')
+            phone = validated_data.get('phone', '')
+            name  = f"{first} {last}".strip() or phone or 'New Lead'
+            validated_data['title'] = name
         return create_lead(data=validated_data, actor=actor)
 
 
