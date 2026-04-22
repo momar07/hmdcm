@@ -1,4 +1,3 @@
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import viewsets, permissions, status
@@ -361,64 +360,3 @@ class CustomerBulkActionView(APIView):
                 {'error': f'Unknown action: {action}'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
-
-class CustomerLeadView(APIView):
-    """
-    GET /api/customers/{id}/lead/
-    Returns the original Lead that was converted to this Customer.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, pk):
-        from apps.leads.models import Lead
-        from apps.leads.serializers import LeadDetailSerializer
-
-        # Find lead linked to this customer
-        lead = Lead.objects.filter(customer_id=pk).order_by('-created_at').first()
-        if not lead:
-            return Response(
-                {'detail': 'No lead found for this customer.'},
-                status=404
-            )
-        serializer = LeadDetailSerializer(lead, context={'request': request})
-        return Response(serializer.data)
-
-
-class CustomerListByLifecycleView(APIView):
-    """
-    GET /api/customers/converted/
-    Returns only Leads that have been converted to Customers
-    (lifecycle_stage='customer' OR converted_to_customer=True).
-    Useful for the Customers list page — shows real customers only.
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        from apps.leads.models import Lead
-        from apps.leads.serializers import LeadListSerializer
-
-        qs = Lead.objects.filter(
-            converted_to_customer=True,
-            is_active=True,
-        ).select_related(
-            'stage', 'status', 'priority', 'assigned_to', 'customer'
-        ).order_by('-converted_at')
-
-        # Optional filters
-        search = request.query_params.get('search', '')
-        if search:
-            from django.db.models import Q
-            qs = qs.filter(
-                Q(first_name__icontains=search) |
-                Q(last_name__icontains=search)  |
-                Q(email__icontains=search)       |
-                Q(phone__icontains=search)       |
-                Q(company__icontains=search)
-            )
-
-        serializer = LeadListSerializer(qs, many=True, context={'request': request})
-        return Response({
-            'count':   qs.count(),
-            'results': serializer.data,
-        })

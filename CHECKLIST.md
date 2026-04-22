@@ -37,9 +37,9 @@
 ## 🏃 Sprint 2 — Services & APIs
 
 ### leads/services.py
-- [ ] `[2.1]` 🔴 إضافة دالة `convert_lead_to_customer()`
-- [ ] `[2.2]` 🔴 إضافة دالة `mark_won()` تستدعي التحويل أوتوماتيك
-- [ ] `[2.3]` 🔴 إضافة دالة `mark_lost()`
+- [x] `[2.1]` 🔴 إضافة دالة `convert_lead_to_customer()`
+- [x] `[2.2]` 🔴 إضافة دالة `mark_won()` تستدعي التحويل أوتوماتيك
+- [x] `[2.3]` 🔴 إضافة دالة `mark_lost()`
 - [x] `[2.4]` 🔴 تعديل `create_lead()` يشتغل بدون Customer
 
 ### leads/views.py
@@ -48,15 +48,15 @@
 - [x] `[2.7]` 🟡 إضافة action `timeline` — `GET /api/leads/{id}/timeline/`
 
 ### calls/services.py
-- [ ] `[2.8]` 🔴 `find_lead_by_phone()` — Screen Pop يدور على Lead مش Customer
-- [ ] `[2.9]` 🔴 `get_or_create_lead_for_call()` — ينشئ Lead جديد لو مفيش
+- [x] `[2.8]` 🔴 `find_lead_by_phone()` — Screen Pop يدور على Lead مش Customer
+- [x] `[2.9]` 🔴 `get_or_create_lead_for_call()` — ينشئ Lead جديد لو مفيش
 
 ### leads/serializers.py
 - [x] `[2.10]` 🟡 إضافة `converted_to_customer` و `converted_at` و `customer_id` للـ `LeadDetailSerializer`
 - [x] `[2.11]` 🟡 إنشاء `LeadCreateSerializer` بدون Customer field
 
 ### customers/views.py
-- [ ] `[2.12]` 🟡 `CustomerHistoryView` يعرض الـ Lead الأصلي في الـ timeline
+- [x] `[2.12]` 🟡 `CustomerHistoryView` يعرض الـ Lead الأصلي في الـ timeline
 - [ ] `[2.13]` 🟡 إضافة endpoint `GET /api/customers/{id}/lead/`
 - [x] `[2.14]` 🟢 `get_all_customers()` يرجع بس الـ Leads اللي `lifecycle_stage=customer`
 
@@ -71,7 +71,7 @@
 ### صفحة Lead
 - [x] `[3.3]` 🔴 فورم إنشاء Lead جديد بدون Customer field
 - [ ] `[3.4]` 🔴 Kanban Board لمراحل الـ Pipeline
-- [ ] `[3.5]` 🔴 صفحة تفاصيل Lead تعرض البيانات + Timeline
+- [x] `[3.5]` 🔴 صفحة تفاصيل Lead تعرض البيانات + Timeline
 - [ ] `[3.6]` 🔴 زرار **Mark as WON** مع فورم `won_amount`
 - [ ] `[3.7]` 🔴 زرار **Mark as LOST** مع فورم `lost_reason`
 - [ ] `[3.8]` 🟡 عرض Lead Score بشكل visual (progress bar + badge)
@@ -95,10 +95,10 @@
 ## 🏃 Sprint 4 — Testing & Cleanup
 
 ### Backend Tests
-- [ ] `[4.1]` 🔴 اختبار `convert_lead_to_customer()`
-- [ ] `[4.2]` 🔴 اختبار `mark_won()`
-- [ ] `[4.3]` 🔴 اختبار `mark_lost()`
-- [ ] `[4.4]` 🔴 اختبار `find_lead_by_phone()`
+- [x] `[4.1]` 🔴 اختبار `convert_lead_to_customer()`
+- [x] `[4.2]` 🔴 اختبار `mark_won()`
+- [x] `[4.3]` 🔴 اختبار `mark_lost()`
+- [x] `[4.4]` 🔴 اختبار `find_lead_by_phone()`
 
 ### API Tests
 - [x] `[4.5]` 🔴 اختبار `POST /api/leads/` بدون `customer_id`

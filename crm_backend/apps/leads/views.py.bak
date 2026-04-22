@@ -9,12 +9,7 @@ from .serializers import (LeadListSerializer, LeadDetailSerializer,
                            LeadStatusSerializer, LeadPrioritySerializer,
                            LeadStageSerializer)
 from .selectors import get_all_leads
-from .services import (
-    create_lead, assign_lead, update_lead, update_lead_status,
-    update_lead_stage, update_lead_followup_date,
-    mark_won, mark_lost, move_stage,
-    convert_lead_to_customer, get_lead_timeline,
-)
+from .services import create_lead, assign_lead, update_lead_status, update_lead_stage, update_lead_followup_date
 
 
 class LeadViewSet(viewsets.ModelViewSet):
@@ -97,88 +92,6 @@ class LeadViewSet(viewsets.ModelViewSet):
         date_val = request.data.get('followup_date')
         update_lead_followup_date(pk, date_val, actor=request.user)
         return Response({'detail': 'Follow-up date set.'})
-
-
-    # ── mark_won ──────────────────────────────────────────────
-    @action(detail=True, methods=['post'], url_path='mark-won')
-    def mark_won_action(self, request, pk=None):
-        """
-        POST /api/leads/{id}/mark-won/
-        Body: {"won_amount": 5000}  (optional)
-        Marks lead as WON and auto-creates Customer.
-        """
-        from .services import mark_won
-        from .serializers import MarkWonSerializer, LeadDetailSerializer
-        from apps.customers.serializers import CustomerDetailSerializer
-
-        ser = MarkWonSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-
-        try:
-            result = mark_won(
-                lead_id    = pk,
-                won_amount = ser.validated_data.get('won_amount'),
-                actor      = request.user,
-            )
-            lead     = result['lead']
-            customer = result['customer']
-            return Response({
-                'status':      'won',
-                'lead_id':     str(lead.id),
-                'customer_id': str(customer.id),
-                'message':     'Lead marked as WON. Customer created successfully.',
-                'lead':        LeadDetailSerializer(lead, context={'request': request}).data,
-            }, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    # ── mark_lost ─────────────────────────────────────────────
-    @action(detail=True, methods=['post'], url_path='mark-lost')
-    def mark_lost_action(self, request, pk=None):
-        """
-        POST /api/leads/{id}/mark-lost/
-        Body: {"lost_reason": "Price too high"}
-        """
-        from .services import mark_lost
-        from .serializers import MarkLostSerializer, LeadDetailSerializer
-
-        ser = MarkLostSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-
-        try:
-            lead = mark_lost(
-                lead_id     = pk,
-                lost_reason = ser.validated_data['lost_reason'],
-                actor       = request.user,
-            )
-            return Response({
-                'status':  'lost',
-                'lead_id': str(lead.id),
-                'message': 'Lead marked as LOST.',
-                'lead':    LeadDetailSerializer(lead, context={'request': request}).data,
-            }, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    # ── timeline ──────────────────────────────────────────────
-    @action(detail=True, methods=['get'], url_path='timeline')
-    def timeline(self, request, pk=None):
-        """
-        GET /api/leads/{id}/timeline/
-        Returns all activity for this lead sorted by date desc.
-        """
-        from .services import get_lead_timeline
-
-        try:
-            events = get_lead_timeline(lead_id=pk)
-            return Response({
-                'lead_id': str(pk),
-                'count':   len(events),
-                'results': events,
-            }, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
 
 class LeadStatusViewSet(viewsets.ModelViewSet):
     queryset         = LeadStatus.objects.all().order_by('order')

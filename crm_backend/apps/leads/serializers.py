@@ -1,157 +1,155 @@
+"""
+leads/serializers.py
+"""
 from rest_framework import serializers
-from .models import Lead, LeadStatus, LeadPriority, LeadStage, LeadEvent
-from apps.customers.serializers import CustomerListSerializer
-
-
-class LeadStatusSerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = LeadStatus
-        fields = '__all__'
-
-
-class LeadPrioritySerializer(serializers.ModelSerializer):
-    class Meta:
-        model  = LeadPriority
-        fields = '__all__'
+from apps.leads.models import Lead, LeadStage, LeadStatus, LeadPriority, LeadEvent, ScoreEvent
 
 
 class LeadStageSerializer(serializers.ModelSerializer):
     class Meta:
         model  = LeadStage
-        fields = ['id', 'name', 'slug', 'order', 'color',
-                  'is_closed', 'is_won', 'is_active']
-        read_only_fields = ['id']
+        fields = ['id', 'name', 'slug', 'order', 'color', 'is_closed', 'is_won']
+
+
+class LeadStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = LeadStatus
+        fields = ['id', 'name', 'color', 'order', 'is_closed']
+
+
+class LeadPrioritySerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = LeadPriority
+        fields = ['id', 'name', 'order']
 
 
 class LeadListSerializer(serializers.ModelSerializer):
-    customer_name = serializers.CharField(
-        source='customer.get_full_name', read_only=True
-    )
-    status_name   = serializers.CharField(source='status.name',   read_only=True)
-    priority_name = serializers.CharField(source='priority.name', read_only=True)
-    assigned_name = serializers.CharField(
-        source='assigned_to.get_full_name', read_only=True
-    )
-    stage_name  = serializers.CharField(source='stage.name',  read_only=True)
-    stage_color = serializers.CharField(source='stage.color', read_only=True)
-    stage_slug  = serializers.CharField(source='stage.slug',  read_only=True)
+    """Lightweight serializer for Kanban / list views."""
+    stage_name    = serializers.CharField(source='stage.name',    read_only=True, default='')
+    stage_color   = serializers.CharField(source='stage.color',   read_only=True, default='')
+    priority_name = serializers.CharField(source='priority.name', read_only=True, default='')
+    assigned_name = serializers.SerializerMethodField()
 
     class Meta:
         model  = Lead
         fields = [
-            'id', 'title',
-            'first_name', 'last_name', 'email', 'phone', 'company',
-            'lifecycle_stage', 'classification', 'score',
-            'customer', 'customer_name',
-            'status',   'status_name',
-            'priority', 'priority_name',
-            'stage',    'stage_name', 'stage_color', 'stage_slug',
-            'source',   'assigned_to', 'assigned_name',
-            'value',    'followup_date',
+            'id', 'title', 'first_name', 'last_name', 'phone', 'email',
+            'company', 'source', 'value', 'score', 'classification',
+            'lifecycle_stage', 'stage', 'stage_name', 'stage_color',
+            'priority', 'priority_name', 'assigned_to', 'assigned_name',
+            'converted_to_customer', 'converted_at',
             'is_active', 'created_at', 'updated_at',
         ]
+        read_only_fields = ['id', 'converted_to_customer', 'converted_at',
+                            'created_at', 'updated_at']
+
+    def get_assigned_name(self, obj):
+        if obj.assigned_to:
+            return f"{obj.assigned_to.first_name} {obj.assigned_to.last_name}".strip()
+        return None
 
 
 class LeadDetailSerializer(serializers.ModelSerializer):
-    customer_detail  = CustomerListSerializer(source='customer',  read_only=True)
-    status_detail    = LeadStatusSerializer(source='status',      read_only=True)
-    priority_detail  = LeadPrioritySerializer(source='priority',  read_only=True)
-    stage_detail     = LeadStageSerializer(source='stage',        read_only=True)
-    customer_name    = serializers.CharField(
-        source='customer.get_full_name', read_only=True
-    )
-    status_name      = serializers.CharField(source='status.name',   read_only=True)
-    priority_name    = serializers.CharField(source='priority.name', read_only=True)
-    assigned_name    = serializers.CharField(
-        source='assigned_to.get_full_name', read_only=True
-    )
-    stage_name       = serializers.CharField(source='stage.name',  read_only=True)
-    stage_color      = serializers.CharField(source='stage.color', read_only=True)
-    stage_slug       = serializers.CharField(source='stage.slug',  read_only=True)
-
-    customer_id  = serializers.UUIDField(write_only=True)
-    status_id    = serializers.UUIDField(write_only=True, allow_null=True, required=False)
-    priority_id  = serializers.UUIDField(write_only=True, allow_null=True, required=False)
-    stage_id     = serializers.UUIDField(write_only=True, allow_null=True, required=False)
+    """Full serializer for Lead detail / update views."""
+    stage_detail    = LeadStageSerializer(source='stage',    read_only=True)
+    status_detail   = LeadStatusSerializer(source='status',  read_only=True)
+    priority_detail = LeadPrioritySerializer(source='priority', read_only=True)
+    assigned_name   = serializers.SerializerMethodField()
+    customer_id     = serializers.UUIDField(source='customer.id', read_only=True, default=None)
+    customer_name   = serializers.SerializerMethodField()
 
     class Meta:
         model  = Lead
         fields = [
             'id', 'title',
-            'customer_id', 'status_id', 'priority_id', 'stage_id',
-            'customer_detail', 'customer_name',
-            'status_detail',   'status_name',
-            'priority_detail', 'priority_name',
-            'stage_detail',    'stage_name', 'stage_color', 'stage_slug',
-            'source', 'assigned_to', 'assigned_name', 'campaign',
-            'description', 'value', 'followup_date',
-            'won_at', 'lost_at', 'won_amount', 'lost_reason',
-            'first_name', 'last_name', 'email', 'phone', 'company',
-            'address', 'city', 'country',
-            'lifecycle_stage', 'classification', 'score',
+            'first_name', 'last_name', 'phone', 'email',
+            'company', 'address', 'city', 'country',
+            'source', 'value', 'description', 'followup_date',
+            'score', 'classification', 'lifecycle_stage',
+            'stage', 'stage_detail',
+            'status', 'status_detail',
+            'priority', 'priority_detail',
+            'assigned_to', 'assigned_name',
+            # Conversion fields
+            'converted_to_customer', 'converted_at',
+            'customer_id', 'customer_name',
+            # Won/Lost
+            'won_amount', 'won_at', 'lost_reason', 'lost_at',
             'is_active', 'created_at', 'updated_at',
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'score', 'classification']
+        read_only_fields = [
+            'id', 'converted_to_customer', 'converted_at',
+            'customer_id', 'customer_name',
+            'won_at', 'lost_at', 'created_at', 'updated_at',
+        ]
 
-    def _get_obj(self, Model, uid, field):
-        if uid is None:
-            return None
-        try:
-            return Model.objects.get(pk=uid)
-        except Model.DoesNotExist:
-            raise serializers.ValidationError({field: f'{field} not found.'})
+    def get_assigned_name(self, obj):
+        if obj.assigned_to:
+            return f"{obj.assigned_to.first_name} {obj.assigned_to.last_name}".strip()
+        return None
+
+    def get_customer_name(self, obj):
+        if obj.customer:
+            return f"{obj.customer.first_name} {obj.customer.last_name}".strip()
+        return None
+
+
+class LeadCreateSerializer(serializers.ModelSerializer):
+    """
+    Used for creating a new Lead — NO customer field required.
+    All contact info is stored directly on the Lead.
+    """
+    class Meta:
+        model  = Lead
+        fields = [
+            'title', 'first_name', 'last_name', 'phone', 'email',
+            'company', 'address', 'city', 'country',
+            'source', 'value', 'description', 'followup_date',
+            'stage', 'status', 'priority', 'assigned_to',
+            'classification', 'lifecycle_stage', 'campaign',
+        ]
+
+    def validate_phone(self, value):
+        if value:
+            import re
+            cleaned = re.sub(r'[^0-9+]', '', value)
+            if len(cleaned) < 7:
+                raise serializers.ValidationError("رقم الهاتف غير صحيح")
+            return cleaned
+        return value
 
     def create(self, validated_data):
-        from .models import LeadStatus, LeadPriority
-        from apps.customers.models import Customer
-
-        customer_id  = validated_data.pop('customer_id')
-        status_id    = validated_data.pop('status_id',   None)
-        priority_id  = validated_data.pop('priority_id', None)
-        stage_id     = validated_data.pop('stage_id',    None)
-
-        validated_data['customer'] = self._get_obj(Customer,     customer_id,  'customer_id')
-        validated_data['status']   = self._get_obj(LeadStatus,   status_id,    'status_id')
-        validated_data['priority'] = self._get_obj(LeadPriority, priority_id,  'priority_id')
-        validated_data['stage']    = self._get_obj(LeadStage,    stage_id,     'stage_id')
-
+        from apps.leads.services import create_lead
         request = self.context.get('request')
-        if not validated_data.get('assigned_to') and request:
-            validated_data['assigned_to'] = request.user
-
-        return Lead.objects.create(**validated_data)
-
-    def update(self, instance, validated_data):
-        from .models import LeadStatus, LeadPriority
-        from apps.customers.models import Customer
-
-        if 'customer_id' in validated_data:
-            instance.customer = self._get_obj(
-                Customer, validated_data.pop('customer_id'), 'customer_id')
-        if 'status_id' in validated_data:
-            instance.status = self._get_obj(
-                LeadStatus, validated_data.pop('status_id'), 'status_id')
-        if 'priority_id' in validated_data:
-            instance.priority = self._get_obj(
-                LeadPriority, validated_data.pop('priority_id'), 'priority_id')
-        if 'stage_id' in validated_data:
-            instance.stage = self._get_obj(
-                LeadStage, validated_data.pop('stage_id'), 'stage_id')
-
-        for attr, val in validated_data.items():
-            setattr(instance, attr, val)
-        instance.save()
-        return instance
+        actor   = request.user if request else None
+        return create_lead(data=validated_data, actor=actor)
 
 
 class LeadEventSerializer(serializers.ModelSerializer):
-    actor_name = serializers.CharField(
-        source='actor.get_full_name', read_only=True, default=None
-    )
+    actor_name = serializers.SerializerMethodField()
 
     class Meta:
         model  = LeadEvent
-        fields = [
-            'id', 'event_type', 'actor_name',
-            'old_value', 'new_value', 'note', 'created_at',
-        ]
+        fields = ['id', 'event_type', 'actor', 'actor_name',
+                  'old_value', 'new_value', 'note', 'created_at']
+
+    def get_actor_name(self, obj):
+        if obj.actor:
+            return f"{obj.actor.first_name} {obj.actor.last_name}".strip()
+        return None
+
+
+class ScoreEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = ScoreEvent
+        fields = ['id', 'event_type', 'points', 'reason', 'created_at']
+
+
+class MarkWonSerializer(serializers.Serializer):
+    won_amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, allow_null=True
+    )
+
+
+class MarkLostSerializer(serializers.Serializer):
+    lost_reason = serializers.CharField(required=True, max_length=500)
