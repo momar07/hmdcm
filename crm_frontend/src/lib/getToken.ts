@@ -1,16 +1,19 @@
 /**
- * getToken — reads JWT access token from wherever the project stores it.
- * Tries multiple keys to be compatible with the existing auth system.
+ * getToken — reads JWT access token from cookies (js-cookie format).
+ * The project stores access_token in cookies via session.save().
  */
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return (
-    localStorage.getItem('access_token') ??
-    localStorage.getItem('accessToken')  ??
-    localStorage.getItem('token')        ??
-    sessionStorage.getItem('access_token') ??
-    null
-  );
+
+  // Read from cookies — same key used by session.ts: 'access_token'
+  const cookies = document.cookie.split(';');
+  for (const cookie of cookies) {
+    const [key, value] = cookie.trim().split('=');
+    if (key === 'access_token' && value) {
+      return decodeURIComponent(value);
+    }
+  }
+  return null;
 }
 
 export function authHeader(): Record<string, string> {
