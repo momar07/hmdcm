@@ -1,0 +1,36 @@
+sudo dnf install python3.12
+
+وبعدين أعد إنشاء الـ venv:
+
+deactivate
+rm -rf venv
+python3.12 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+
+
+
+sudo dnf install postgresql-server postgresql
+sudo postgresql-setup --initdb
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+
+
+CREATE USER crm_user WITH PASSWORD 'crm_pass';
+CREATE DATABASE crm_db OWNER crm_user;
+ALTER USER crm_user CREATEDB;
+\q
+
+
+edit .env.example
+
+
+sudo dnf install redis
+sudo systemctl start redis
+sudo systemctl enable redis
+
+
+
+
