@@ -1,5 +1,5 @@
 import JsSIP from 'jssip';
-import { getAudioCtx, getRingBuffer, setRingBuffer } from './audioContext';
+import { getAudioCtx, getRingBuffer, setRingBuffer, startRingtone, stopRingtone } from './audioContext';
 
 export type SipStatus = 'disconnected' | 'connecting' | 'registered' | 'error';
 export type CallStatus = 'idle' | 'ringing' | 'incoming' | 'active' | 'holding';
@@ -46,60 +46,19 @@ export class SipClient {
     this.onEndCause         = onEndCause;
   }
 
-  // ── Ring audio — uses shared AudioContext from audioContext.ts ─────────
-  private _ringSource: AudioBufferSourceNode | null = null;
-  private _ringing:    boolean                      = false;
+  // ── Ring audio — uses HTML <audio> fallback for reliability ─────────
+  private _ringing: boolean = false;
 
   private _startRinging() {
     this._stopRinging();
     this._ringing = true;
-
-    const play = (buf: AudioBuffer) => {
-      if (!this._ringing) return;
-      const ctx    = getAudioCtx();               // shared, already unlocked
-      const source = ctx.createBufferSource();
-      source.buffer = buf;
-      source.loop   = true;
-
-      const gain = ctx.createGain();
-      gain.gain.value = 0.7;
-      source.connect(gain);
-      gain.connect(ctx.destination);
-
-      // ctx.state should already be 'running' after unlockAudioCtx()
-      if (ctx.state === 'running') {
-        source.start(0);
-        this._ringSource = source;
-        console.log('[SIP] 🔔 Ringing started');
-      } else {
-        ctx.resume().then(() => {
-          if (!this._ringing) { try { source.stop(); } catch (_) {} return; }
-          source.start(0);
-          this._ringSource = source;
-          console.log('[SIP] 🔔 Ringing started (after resume)');
-        }).catch(e => console.warn('[SIP] AudioContext resume failed:', e));
-      }
-    };
-
-    const cached = getRingBuffer();
-    if (cached) {
-      play(cached);
-    } else {
-      const ctx = getAudioCtx();
-      fetch('/sounds/ringing.mp3')
-        .then(r  => r.arrayBuffer())
-        .then(arr => ctx.decodeAudioData(arr))
-        .then(buf => { setRingBuffer(buf); play(buf); })
-        .catch(e  => console.warn('[SIP] Ring fetch failed:', e));
-    }
+    console.log('[SIP] 🔔 Starting ringtone...');
+    startRingtone();
   }
 
   private _stopRinging() {
     this._ringing = false;
-    if (this._ringSource) {
-      try { this._ringSource.stop(); } catch (_) {}
-      this._ringSource = null;
-    }
+    stopRingtone();
     console.log('[SIP] 🔕 Ringing stopped');
   }
 
@@ -129,6 +88,7 @@ export class SipClient {
 
     this.ua.on('newRTCSession', (data: any) => {
       const { session, originator } = data;
+      console.log('[SIP] newRTCSession — originator:', originator, 'session:', session);
 
       // If there's already a pending/active session, terminate it cleanly
       // before accepting the new one (handles re-queue re-ring scenario)
@@ -159,8 +119,11 @@ export class SipClient {
       });
 
       if (originator === 'remote') {
+        // ── INCOMING CALL ──
         const from        = session.remote_identity.uri.user;
         const displayName = session.remote_identity.display_name || from;
+        console.log('[SIP] Incoming call from:', from, 'display:', displayName);
+
         this.onIncoming({ from, displayName, session });
         this.onCallStatusChange('incoming');
         this._startRinging();
@@ -175,19 +138,21 @@ export class SipClient {
           }, 300);
         });
         session.on('ended',  (e: any) => {
+          console.log('[SIP] Incoming call ended');
           this._stopRinging();
           this.session = null;
           this.onEndCause('ended');
           this.onCallStatusChange('idle');
         });
         session.on('failed', (e: any) => {
-          console.error('[SIP] Call failed:', e.cause);
+          console.error('[SIP] Incoming call failed:', e.cause);
           this._stopRinging();
           this.session = null;
           this.onEndCause(e?.cause ?? 'failed');
           this.onCallStatusChange('idle');
         });
       } else {
+        // ── OUTGOING CALL ──
         this.onCallStatusChange('ringing');
         session.on('progress',  () => this.onCallStatusChange('ringing'));
         session.on('accepted',  () => {
@@ -266,25 +231,45 @@ export class SipClient {
   }
 
   answer() {
-    if (!this.session) return;
-
-    // Guard: JsSIP status 5 = STATUS_ANSWERED (already answered or terminated)
-    // Valid statuses for answer() are: STATUS_INVITE_RECEIVED (3) or STATUS_WAITING_FOR_ANSWER (4)
-    const sessionStatus = (this.session as any).status;
-    if (sessionStatus !== undefined && sessionStatus !== 3 && sessionStatus !== 4) {
-      console.warn('[SIP] Cannot answer — invalid session status:', sessionStatus);
+    if (!this.session) {
+      console.warn('[SIP] Cannot answer — no session');
       return;
     }
 
-    this.session.answer({
-      mediaConstraints: { audio: true, video: false },
-      pcConfig: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
-    });
+    const sessionStatus = (this.session as any).status;
+    console.log('[SIP] answer() called — session status:', sessionStatus);
+
+    // JsSIP session statuses:
+    // 1 = STATUS_NULL
+    // 2 = STATUS_INVITE_SENT
+    // 3 = STATUS_INVITE_RECEIVED (waiting for answer)
+    // 4 = STATUS_WAITING_FOR_ANSWER
+    // 5 = STATUS_ANSWERED
+    // 6 = STATUS_WAITING_FOR_ACK
+    // 7 = STATUS_CONFIRMED
+    // 8 = STATUS_TERMINATED
+    //
+    // For incoming calls, we can answer if status is 3, 4, or even 1 (early)
+    // Remove the strict guard — let JsSIP handle invalid states internally
+    if (sessionStatus === 8 || sessionStatus === 5) {
+      console.warn('[SIP] Session already answered or terminated, cannot answer');
+      return;
+    }
+
+    try {
+      this.session.answer({
+        mediaConstraints: { audio: true, video: false },
+        pcConfig: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+          ],
+        },
+      });
+      console.log('[SIP] answer() called successfully');
+    } catch (e) {
+      console.error('[SIP] answer() failed:', e);
+    }
   }
 
   hangup() {
@@ -307,10 +292,6 @@ export class SipClient {
       this.session = null;
       this.onCallStatusChange('idle');
     }, 3000);
-
-    // Override ended/failed to clear the fallback timer
-    const origEnded  = sess._events?.ended;
-    const origFailed = sess._events?.failed;
 
     sess.once('ended', () => {
       console.log('[SIP] session.ended fired after hangup ✅');

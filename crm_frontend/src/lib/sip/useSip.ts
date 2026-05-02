@@ -34,7 +34,10 @@ export function useSip(config: SipConfig | null) {
       config,
       setSipStatus,
       setCallStatus,
-      (info) => setIncoming(info),
+      (info) => {
+        console.log('[useSip] onIncoming called:', info);
+        setIncoming(info);
+      },
       (cause) => {
         window.dispatchEvent(new CustomEvent('sip:endcause', { detail: cause }));
       },
@@ -52,8 +55,37 @@ export function useSip(config: SipConfig | null) {
   }, []);
 
   const answer = useCallback(() => {
-    clientRef.current?.answer();
-    setIncoming(null);
+    const client = clientRef.current;
+    if (!client) {
+      console.warn('[useSip] No SIP client available');
+      return;
+    }
+
+    // If session exists, answer immediately
+    if (client.getSession()) {
+      console.log('[useSip] Session exists, answering immediately');
+      client.answer();
+      setIncoming(null);
+      return;
+    }
+
+    // If no session yet, wait up to 5 seconds for it to arrive
+    console.log('[useSip] No session yet, waiting for incoming call...');
+    let attempts = 0;
+    const waitInterval = setInterval(() => {
+      attempts++;
+      const sess = client.getSession();
+      if (sess) {
+        clearInterval(waitInterval);
+        console.log('[useSip] Session arrived after waiting, answering');
+        client.answer();
+        setIncoming(null);
+      } else if (attempts >= 50) {
+        // 5 seconds * 10 attempts/sec = 50
+        clearInterval(waitInterval);
+        console.error('[useSip] Timed out waiting for SIP session');
+      }
+    }, 100);
   }, []);
 
   const hangup = useCallback(() => {

@@ -54,11 +54,6 @@ function TransferModal({
 }
 
 /* ─────────────────────────────────────────────────────────
-   Audio is managed by audioContext.ts + sipClient.ts
-   unlockAudio is re-exported at top of file
-───────────────────────────────────────────────────────── */
-
-/* ─────────────────────────────────────────────────────────
    Main component
 ───────────────────────────────────────────────────────── */
 export function IncomingCallPopup() {
@@ -94,7 +89,6 @@ export function IncomingCallPopup() {
   /* ── Answer ───────────────────────────────────────────── */
   const handleAnswer = useCallback(() => {
     const call = incomingCallRef.current;
-    // Capture call_id BEFORE answer() clears the session
     const callId     = call?.call_id     || null;
     const customerId = call?.customer_id || null;
     const caller     = call?.caller      || '';
@@ -102,6 +96,7 @@ export function IncomingCallPopup() {
 
     console.log('[Answer] incomingCall:', call);
     console.log('[Answer] call_id:', callId);
+    console.log('[Answer] callStatus:', callStatus);
 
     // Mark call as answered in DB immediately
     if (callId) {
@@ -110,12 +105,29 @@ export function IncomingCallPopup() {
           .then(() => console.log('[Answer] markCallAnswered OK'))
           .catch((e: any) => console.error('[Answer] markCallAnswered FAILED:', e?.response?.data || e));
       });
-    } else {
-      console.warn('[Answer] No call_id found — markCallAnswered skipped');
     }
 
-    actions?.answer();
+    // Primary: Use AMI to bridge the queued call to agent's extension
+    if (callId) {
+      import('@/lib/api/calls').then(({ callsApi }) => {
+        callsApi.answerQueuedCall(callId)
+          .then((res) => {
+            console.log('[Answer] AMI bridge success:', res.data);
+            // Also try SIP answer if session exists
+            actions?.answer?.();
+          })
+          .catch((e) => {
+            console.warn('[Answer] AMI bridge failed, falling back to SIP answer:', e);
+            // Fallback: try SIP answer directly
+            actions?.answer?.();
+          });
+      });
+    } else {
+      // No call_id — just try SIP answer
+      actions?.answer?.();
+    }
 
+    // Close popup and navigate if needed
     if (!customerId) {
       setVisible(false);
       router.push(`/customers/new?phone=${encodeURIComponent(caller)}&uniqueid=${encodeURIComponent(uniqueid)}`);
@@ -140,14 +152,15 @@ export function IncomingCallPopup() {
   useEffect(() => {
     if (incomingCall && agentStatus !== 'away') {
       setVisible(true);
-      // NOTE: ring audio is managed exclusively by SipClient._startRinging()
+      console.log('[Popup] Incoming call from WS event:', incomingCall);
     }
-  }, [incomingCall]);
+  }, [incomingCall, agentStatus]);
 
   /* ── SIP status changes ───────────────────────────────── */
   useEffect(() => {
     if (callStatus === 'incoming' && agentStatus !== 'away') {
       setVisible(true);
+      console.log('[Popup] SIP status: incoming');
     }
     if (callStatus === 'active' && agentStatus !== 'away') {
       setVisible(true);

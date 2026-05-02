@@ -554,3 +554,106 @@ class RejectCallView(APIView):
             call.ended_at = tz.now()
             call.save(update_fields=['status', 'ended_at'])
         return Response({'call_id': str(call.id), 'status': call.status})
+
+
+class AnswerQueuedCallView(APIView):
+    """
+    POST /api/calls/answer-queued/
+    Bridges a queued call to the agent's SIP extension via AMI Redirect.
+    This is the primary mechanism for answering inbound queue calls.
+    Body: { call_id, queue (optional) }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        import socket, time
+        from django.conf import settings
+        from django.utils import timezone as tz
+        from .models import Call
+
+        call_id = request.data.get('call_id')
+        if not call_id:
+            return Response({'error': 'call_id is required'}, status=400)
+
+        try:
+            call = Call.objects.select_related('agent').get(pk=call_id)
+        except Call.DoesNotExist:
+            return Response({'error': 'Call not found'}, status=404)
+
+        # Get agent extension
+        try:
+            from apps.users.models import Extension
+            ext_obj = Extension.objects.get(user=request.user, is_active=True)
+            agent_ext = ext_obj.number
+            agent_channel = f'PJSIP/{agent_ext}'
+        except Exception:
+            return Response({'error': 'No active extension for this agent'}, status=400)
+
+        # AMI Redirect — move the call from queue to agent's extension
+        ami_host   = getattr(settings, 'AMI_HOST', '192.168.2.222')
+        ami_port   = int(getattr(settings, 'AMI_PORT', 5038))
+        ami_user   = getattr(settings, 'AMI_USERNAME', 'admin')
+        ami_secret = getattr(settings, 'AMI_SECRET', 'admin')
+
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(10)
+            s.connect((ami_host, ami_port))
+            s.recv(1024)  # banner
+
+            # Login
+            s.sendall(
+                f'Action: Login\r\nUsername: {ami_user}\r\nSecret: {ami_secret}\r\n\r\n'
+                .encode()
+            )
+            time.sleep(0.3)
+            resp = s.recv(1024).decode(errors='ignore')
+            if 'Success' not in resp:
+                s.close()
+                return Response({'error': f'AMI login failed: {resp[:200]}'}, status=502)
+
+            # First, try to find the channel via QueueStatus or use the uniqueid
+            # We'll use Redirect with the call's uniqueid to find the channel
+            action_id = f'answer-{call_id}-{int(time.time())}'
+
+            # Try redirecting by uniqueid — Asterisk 11+ supports this
+            cmd = (
+                f'Action: Redirect\r\n'
+                f'ActionID: {action_id}\r\n'
+                f'Channel: {call.uniqueid}\r\n'
+                f'Exten: {agent_ext}\r\n'
+                f'Context: from-internal\r\n'
+                f'Priority: 1\r\n'
+                f'ExtraChannel: {call.uniqueid}\r\n'
+                f'ExtraExten: {agent_ext}\r\n'
+                f'ExtraContext: from-internal\r\n'
+                f'ExtraPriority: 1\r\n'
+                f'\r\n'
+            )
+            s.sendall(cmd.encode())
+            time.sleep(0.5)
+            resp = s.recv(2048).decode(errors='ignore')
+            s.close()
+
+            # Update call record
+            call.agent = request.user
+            call.status = 'answered'
+            call.started_at = tz.now()
+            call.save(update_fields=['agent', 'status', 'started_at'])
+
+            if 'Success' in resp or 'Redirect' in resp:
+                return Response({
+                    'message': f'Call bridged to extension {agent_ext}',
+                    'call_id': str(call.id),
+                    'ami_response': resp[:200],
+                })
+            else:
+                # Even if AMI response isn't perfect, we marked the call as answered
+                return Response({
+                    'message': f'Attempted to bridge call to extension {agent_ext}',
+                    'call_id': str(call.id),
+                    'ami_response': resp[:200],
+                })
+
+        except Exception as e:
+            return Response({'error': f'AMI connection failed: {str(e)}'}, status=503)

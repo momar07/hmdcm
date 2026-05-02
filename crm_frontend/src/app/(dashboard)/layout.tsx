@@ -157,7 +157,11 @@ export default function DashboardLayout({
 
 
   // Unlock audio on first user interaction (Chrome Autoplay Policy)
+  // Also try to unlock immediately on mount — works if user has interacted with domain before
   useEffect(() => {
+    // Try immediate unlock
+    unlockAudio();
+
     const unlock = () => { unlockAudio(); };
     window.addEventListener('click',    unlock, { once: true });
     window.addEventListener('keydown',  unlock, { once: true });

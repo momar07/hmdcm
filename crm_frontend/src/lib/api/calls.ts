@@ -40,6 +40,9 @@ export const callsApi = {
   rejectCall: (callId: string) =>
     api.patch(`/calls/reject/${callId}/`),
 
+  answerQueuedCall: (callId: string) =>
+    api.post('/calls/answer-queued/', { call_id: callId }),
+
   dispositionsList: () =>
     api.get<Disposition[]>('/calls/dispositions-list/'),
 

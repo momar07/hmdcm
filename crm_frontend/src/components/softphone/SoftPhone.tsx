@@ -56,17 +56,16 @@ export function SoftPhone() {
   } = useSip(sipConfig);
 
   // Preload ring buffer as soon as SIP registers (so first ring is instant)
-  const sipClientRef = (useSip as any)._clientRef;
   useEffect(() => {
     if (sipStatus === 'registered') {
-      // Access the internal SipClient instance via the hook's exposed ref
-      // and preload the audio buffer to avoid fetch delay on first call
-      import('@/lib/sip/useSip').then(mod => {
-        // The hook exposes _client via window for preload
-        const client = (window as any).__sipClient;
-        if (client?._preloadRingBuffer) {
-          client._preloadRingBuffer();
-        }
+      // Access the internal SipClient instance and preload the audio buffer
+      const client = (window as any).__sipClient;
+      if (client?._preloadRingBuffer) {
+        client._preloadRingBuffer();
+      }
+      // Also ensure audio context is unlocked
+      import('@/lib/sip/audioContext').then(({ unlockAudioCtx }) => {
+        unlockAudioCtx();
       }).catch(() => {});
     }
   }, [sipStatus]);
