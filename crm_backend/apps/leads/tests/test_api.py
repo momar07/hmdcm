@@ -17,8 +17,8 @@ class LeadAPITestCase(TestCase):
         from apps.leads.models import LeadStage
         User = get_user_model()
         self.user = User.objects.create_user(
-            username='api_agent', password='apipass123',
-            email='api@test.com'
+            email='api@test.com', password='apipass123',
+            first_name='API', last_name='Agent'
         )
         self.client = APIClient()
         self.client.force_authenticate(user=self.user)

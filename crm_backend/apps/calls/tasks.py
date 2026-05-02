@@ -206,9 +206,16 @@ def process_ami_event(self, event: dict):
             customer = None
             if caller and len(caller) >= 7:
                 try:
+                    # FIX #5: Try exact normalized match first, then suffix fallback
+                    from apps.common.utils import normalize_phone
+                    caller_normalized = normalize_phone(caller)
                     phone = CustomerPhone.objects.select_related('customer').filter(
-                        normalized__endswith=caller[-9:]
+                        normalized=caller_normalized
                     ).first()
+                    if not phone and len(caller_normalized) >= 9:
+                        phone = CustomerPhone.objects.select_related('customer').filter(
+                            normalized__endswith=caller_normalized[-9:]
+                        ).first()
                     if phone:
                         customer = phone.customer
                         logger.info(f'[AMI] Customer matched: {customer}')
@@ -241,9 +248,16 @@ def process_ami_event(self, event: dict):
             customer = None
             if caller and len(caller) >= 3:
                 try:
+                    # FIX #5: Try exact normalized match first, then suffix fallback
+                    from apps.common.utils import normalize_phone
+                    caller_normalized = normalize_phone(caller)
                     phone = CustomerPhone.objects.select_related('customer').filter(
-                        normalized__endswith=caller[-9:] if len(caller) >= 9 else caller
+                        normalized=caller_normalized
                     ).first()
+                    if not phone and len(caller_normalized) >= 9:
+                        phone = CustomerPhone.objects.select_related('customer').filter(
+                            normalized__endswith=caller_normalized[-9:]
+                        ).first()
                     if phone:
                         customer = phone.customer
                         logger.info(f'[AMI] Customer matched: {customer}')
@@ -315,11 +329,13 @@ def process_ami_event(self, event: dict):
                 # Already marked answered by AgentConnect — keep it
                 status = 'answered'
             else:
-                # Re-fetch from DB to catch AgentConnect that may have just fired
-                # Small sleep to handle race condition with AgentConnect task
-                import time as _time
-                _time.sleep(0.5)
-                fresh = Call.objects.filter(uniqueid=uniqueid).values('status').first()
+                # FIX #4: Re-fetch from DB with row lock to catch AgentConnect
+                # that may have just fired — replaces fragile time.sleep(0.5)
+                from django.db import transaction
+                with transaction.atomic():
+                    fresh = Call.objects.select_for_update(
+                        skip_locked=True
+                    ).filter(uniqueid=uniqueid).values('status').first()
                 if fresh and fresh['status'] == 'answered':
                     status = 'answered'
                 else:

@@ -42,7 +42,7 @@ def unseed_settings(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ('settings_core', '0001_initial'),
+        ('settings_core', '0002_alter_systemsetting_options_and_more'),
     ]
     operations = [
         migrations.RunPython(seed_settings, unseed_settings),

@@ -14,8 +14,8 @@ class TestCreateLead(TestCase):
         from django.contrib.auth import get_user_model
         User = get_user_model()
         self.user = User.objects.create_user(
-            username='agent1', password='pass123',
-            email='agent@test.com'
+            email='agent@test.com', password='pass123',
+            first_name='Agent', last_name='One'
         )
 
     def test_create_lead_without_customer(self):
@@ -63,8 +63,8 @@ class TestConvertLeadToCustomer(TestCase):
         from apps.leads.services import create_lead
         User = get_user_model()
         self.user = User.objects.create_user(
-            username='agent2', password='pass123',
-            email='agent2@test.com'
+            email='agent2@test.com', password='pass123',
+            first_name='Agent', last_name='Two'
         )
         self.lead = create_lead(data={
             'title':      'Conversion Test',
@@ -119,8 +119,8 @@ class TestMarkWon(TestCase):
         from apps.leads.models import LeadStage
         User = get_user_model()
         self.user = User.objects.create_user(
-            username='agent3', password='pass123',
-            email='agent3@test.com'
+            email='agent3@test.com', password='pass123',
+            first_name='Agent', last_name='Three'
         )
         # Create a WON stage
         LeadStage.objects.create(
@@ -170,8 +170,8 @@ class TestMarkLost(TestCase):
         from apps.leads.models import LeadStage
         User = get_user_model()
         self.user = User.objects.create_user(
-            username='agent4', password='pass123',
-            email='agent4@test.com'
+            email='agent4@test.com', password='pass123',
+            first_name='Agent', last_name='Four'
         )
         LeadStage.objects.create(
             name='Lost', slug='lost', order=100,

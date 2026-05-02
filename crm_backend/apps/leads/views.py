@@ -145,9 +145,9 @@ class LeadViewSet(viewsets.ModelViewSet):
                 'customer_id': str(customer.id),
                 'message':     'Lead marked as WON. Customer created successfully.',
                 'lead':        LeadDetailSerializer(lead, context={'request': request}).data,
-            }, status=status.HTTP_200_OK)
+            }, status=http_status.HTTP_200_OK)
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
 
     # ── mark_lost ─────────────────────────────────────────────
     @action(detail=True, methods=['post'], url_path='mark-lost')
@@ -173,9 +173,9 @@ class LeadViewSet(viewsets.ModelViewSet):
                 'lead_id': str(lead.id),
                 'message': 'Lead marked as LOST.',
                 'lead':    LeadDetailSerializer(lead, context={'request': request}).data,
-            }, status=status.HTTP_200_OK)
+            }, status=http_status.HTTP_200_OK)
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
 
     # ── timeline ──────────────────────────────────────────────
     @action(detail=True, methods=['get'], url_path='timeline')
@@ -192,9 +192,9 @@ class LeadViewSet(viewsets.ModelViewSet):
                 'lead_id': str(pk),
                 'count':   len(events),
                 'results': events,
-            }, status=status.HTTP_200_OK)
+            }, status=http_status.HTTP_200_OK)
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': str(e)}, status=http_status.HTTP_400_BAD_REQUEST)
 
 
 class LeadStatusViewSet(viewsets.ModelViewSet):

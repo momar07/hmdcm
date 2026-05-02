@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuthStore } from '@/store';
 
 const NAV = [
   { href: '/leads',             icon: '🎯', label: 'Leads Pipeline' },
@@ -15,8 +16,14 @@ const NAV = [
   { href: '/reports',           icon: '📊', label: 'Reports'         },
 ] as const;
 
+const ADMIN_NAV = [
+  { href: '/users',             icon: '👤', label: 'Users & Teams'  },
+] as const;
+
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === 'admin';
 
   return (
     <aside
@@ -86,6 +93,50 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Admin-only section */}
+        {isAdmin && (
+          <>
+            <div style={{
+              height: '1px',
+              backgroundColor: '#f3f4f6',
+              margin: '8px 12px',
+            }} />
+            {ADMIN_NAV.map(item => {
+              const active = pathname === item.href || pathname.startsWith(item.href + '/');
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    textDecoration: 'none',
+                    transition: 'background 0.15s',
+                    backgroundColor: active ? '#eff6ff' : 'transparent',
+                    color: active ? '#1d4ed8' : '#4b5563',
+                  }}
+                >
+                  <span style={{ fontSize: '16px', lineHeight: 1 }}>{item.icon}</span>
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {active && (
+                    <span style={{
+                      width: '6px', height: '6px',
+                      borderRadius: '50%',
+                      backgroundColor: '#2563eb',
+                      flexShrink: 0,
+                    }} />
+                  )}
+                </Link>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       {/* Footer */}

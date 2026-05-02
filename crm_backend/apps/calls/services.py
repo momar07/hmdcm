@@ -134,6 +134,11 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
 
         call.lead.save()
 
+        # FIX #1: Auto-convert to Customer when lead is marked Won
+        if stage.is_won:
+            from apps.leads.services import convert_lead_to_customer
+            convert_lead_to_customer(call.lead.id, actor=agent)
+
     # ── تنفيذ الـ DispositionActions الديناميكية ───────────────
     disp_actions = DispositionAction.objects.filter(
         disposition=disposition
@@ -203,6 +208,9 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
                     call.lead.won_at   = tz.now()
                     call.lead.won_amount = data.get('won_amount') or call.lead.won_amount
                     call.lead.save(update_fields=['stage', 'won_at', 'won_amount'])
+                    # FIX #2: Auto-convert to Customer when disposition marks Won
+                    from apps.leads.services import convert_lead_to_customer
+                    convert_lead_to_customer(call.lead.id, actor=agent)
 
         # 5) escalate
         elif atype == 'escalate':
@@ -251,6 +259,15 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
         )
         completion.followup_created = followup
         completion.save(update_fields=['followup_created'])
+
+    # FIX #3: Update lead score based on call duration
+    if call.lead and call.duration:
+        if call.duration > 180:
+            add_score_event(call.lead, 'call_long',
+                            reason=f'Call duration: {call.duration}s')
+        elif call.duration > 0:
+            add_score_event(call.lead, 'call_short',
+                            reason=f'Call duration: {call.duration}s')
 
     return completion
 

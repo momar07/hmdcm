@@ -6,8 +6,10 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
-RECONNECT_DELAY = 10   # seconds between reconnect attempts
+RECONNECT_DELAY = 10     # seconds between reconnect attempts
+MAX_RECONNECT_DELAY = 120  # cap for exponential backoff
 BUFFER_SIZE     = 4096
+PING_INTERVAL   = 30     # seconds between keepalive pings
 
 
 class AMIClient:
@@ -24,12 +26,14 @@ class AMIClient:
         self.sock     = None
         self._running = False
         self._lock    = threading.Lock()
+        self._reconnect_count = 0  # FIX #6: track reconnect attempts for backoff
 
     # ── connection ────────────────────────────────────────────
 
     def _connect(self) -> bool:
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
             self.sock.settimeout(30)
             self.sock.connect((self.host, self.port))
 
@@ -48,7 +52,8 @@ class AMIClient:
             resp = self.sock.recv(BUFFER_SIZE).decode('utf-8', errors='ignore')
 
             if 'Success' in resp:
-                logger.info('[AMI] Connected and authenticated ✅')
+                self._reconnect_count = 0  # FIX #6: reset on successful connect
+                logger.info('[AMI] Connected and authenticated')
                 return True
             else:
                 logger.error(f'[AMI] Auth failed: {resp}')
@@ -88,15 +93,22 @@ class AMIClient:
     def run(self):
         """
         Main blocking loop — call this from a Celery task or thread.
-        Reconnects automatically on disconnect.
+        Reconnects automatically on disconnect with exponential backoff.
         """
         self._running = True
         buffer = ''
+        last_ping = 0
 
         while self._running:
             if not self._connect():
-                logger.warning(f'[AMI] Retrying in {RECONNECT_DELAY}s...')
-                time.sleep(RECONNECT_DELAY)
+                # FIX #6: exponential backoff with jitter
+                self._reconnect_count += 1
+                delay = min(
+                    RECONNECT_DELAY * (2 ** min(self._reconnect_count - 1, 6)),
+                    MAX_RECONNECT_DELAY,
+                )
+                logger.warning(f'[AMI] Retrying in {delay}s (attempt {self._reconnect_count})...')
+                time.sleep(delay)
                 continue
 
             try:
@@ -107,6 +119,7 @@ class AMIClient:
                             logger.warning('[AMI] Connection closed by server')
                             break
                         buffer += chunk
+                        last_ping = time.time()  # reset ping timer on any data
 
                         # events are separated by double CRLF
                         while '\r\n\r\n' in buffer:
@@ -116,8 +129,9 @@ class AMIClient:
                                 self._dispatch(event)
 
                     except socket.timeout:
-                        # send keepalive ping
+                        # FIX #6: send keepalive ping on timeout
                         self._send('Action: Ping\r\n\r\n')
+                        last_ping = time.time()
                         continue
 
             except Exception as e:
@@ -126,11 +140,18 @@ class AMIClient:
             finally:
                 self._disconnect()
                 if self._running:
-                    logger.info(f'[AMI] Reconnecting in {RECONNECT_DELAY}s...')
-                    time.sleep(RECONNECT_DELAY)
+                    # FIX #6: exponential backoff on disconnect too
+                    self._reconnect_count += 1
+                    delay = min(
+                        RECONNECT_DELAY * (2 ** min(self._reconnect_count - 1, 6)),
+                        MAX_RECONNECT_DELAY,
+                    )
+                    logger.info(f'[AMI] Reconnecting in {delay}s...')
+                    time.sleep(delay)
 
     def stop(self):
         self._running = False
+        self._reconnect_count = 0
         self._disconnect()
 
     # ── dispatch ──────────────────────────────────────────────
