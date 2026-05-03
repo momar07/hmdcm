@@ -32,7 +32,20 @@ export function useSip(config: SipConfig | null) {
     ;(window as any).__sipClient = null;   // reset before creating new
     const client = new SipClient(
       config,
-      setSipStatus,
+      (status) => {
+        setSipStatus(status);
+        // Auto-reconnect on registration failure or disconnect
+        if (status === 'error' || status === 'disconnected') {
+          console.log('[useSip] SIP disconnected/error — will retry in 5s');
+          setTimeout(() => {
+            // Only reconnect if config hasn't changed
+            if (clientRef.current === client) {
+              console.log('[useSip] Retrying SIP connection...');
+              try { client.connect(); } catch (e) { console.error('[useSip] Retry failed:', e); }
+            }
+          }, 5000);
+        }
+      },
       setCallStatus,
       (info) => setIncoming(info),
       (cause) => {
@@ -52,7 +65,12 @@ export function useSip(config: SipConfig | null) {
   }, []);
 
   const answer = useCallback(() => {
-    clientRef.current?.answer();
+    console.log('[useSip] answer() called, client exists:', !!clientRef.current);
+    if (!clientRef.current) {
+      console.error('[useSip] answer() called but SipClient is null!');
+      return;
+    }
+    clientRef.current.answer();
     setIncoming(null);
   }, []);
 

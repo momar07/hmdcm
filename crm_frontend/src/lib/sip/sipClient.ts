@@ -107,6 +107,7 @@ export class SipClient {
     JsSIP.debug.disable('JsSIP:*');
 
     const socket = new JsSIP.WebSocketInterface(this.config.wsUrl);
+    console.log('[SIP] Connecting to:', this.config.wsUrl, 'as', this.config.sipUri);
 
     this.ua = new JsSIP.UA({
       sockets:        [socket],
@@ -117,18 +118,22 @@ export class SipClient {
       session_timers: false,
     });
 
-    this.ua.on('connecting',        () => this.onStatusChange('connecting'));
-    this.ua.on('connected',         () => this.onStatusChange('connecting'));
-    this.ua.on('registered',        () => this.onStatusChange('registered'));
-    this.ua.on('unregistered',      () => this.onStatusChange('disconnected'));
+    this.ua.on('connecting',        () => { console.log('[SIP] Connecting...'); this.onStatusChange('connecting'); });
+    this.ua.on('connected',         () => { console.log('[SIP] Connected to WebSocket'); this.onStatusChange('connecting'); });
+    this.ua.on('registered',        () => { console.log('[SIP] ✅ Registered'); this.onStatusChange('registered'); });
+    this.ua.on('unregistered',      (e: any) => { console.log('[SIP] Unregistered:', e?.cause); this.onStatusChange('disconnected'); });
     this.ua.on('registrationFailed', (e: any) => {
-      console.error('[SIP] Registration failed:', e.cause);
+      console.error('[SIP] ❌ Registration failed:', e.cause, e);
       this.onStatusChange('error');
     });
-    this.ua.on('disconnected', () => this.onStatusChange('disconnected'));
+    this.ua.on('disconnected', (e: any) => {
+      console.log('[SIP] Disconnected:', e?.cause || 'unknown');
+      this.onStatusChange('disconnected');
+    });
 
     this.ua.on('newRTCSession', (data: any) => {
       const { session, originator } = data;
+      console.log('[SIP] newRTCSession — originator:', originator, 'session:', !!session);
 
       // If there's already a pending/active session, terminate it cleanly
       // before accepting the new one (handles re-queue re-ring scenario)
@@ -266,25 +271,37 @@ export class SipClient {
   }
 
   answer() {
-    if (!this.session) return;
-
-    // Guard: JsSIP status 5 = STATUS_ANSWERED (already answered or terminated)
-    // Valid statuses for answer() are: STATUS_INVITE_RECEIVED (3) or STATUS_WAITING_FOR_ANSWER (4)
-    const sessionStatus = (this.session as any).status;
-    if (sessionStatus !== undefined && sessionStatus !== 3 && sessionStatus !== 4) {
-      console.warn('[SIP] Cannot answer — invalid session status:', sessionStatus);
+    if (!this.session) {
+      console.warn('[SIP] Cannot answer — no session exists');
       return;
     }
 
-    this.session.answer({
-      mediaConstraints: { audio: true, video: false },
-      pcConfig: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
-    });
+    const sessionStatus = (this.session as any).status;
+    console.log('[SIP] answer() called — session status:', sessionStatus);
+
+    // Valid statuses for answer(): STATUS_INVITE_RECEIVED (3) or STATUS_WAITING_FOR_ANSWER (4)
+    if (sessionStatus !== undefined && sessionStatus !== 3 && sessionStatus !== 4) {
+      console.warn('[SIP] Cannot answer — invalid session status:', sessionStatus,
+        '(expected 3=INVITE_RECEIVED or 4=WAITING_FOR_ANSWER)');
+      return;
+    }
+
+    try {
+      this.session.answer({
+        mediaConstraints: { audio: true, video: false },
+        pcConfig: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+          ],
+        },
+      });
+      console.log('[SIP] session.answer() called successfully ✅');
+    } catch (err) {
+      console.error('[SIP] session.answer() threw exception:', err);
+      this.session = null;
+      this.onCallStatusChange('idle');
+    }
   }
 
   hangup() {

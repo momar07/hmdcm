@@ -12,6 +12,7 @@ import { useAgentStatusStore } from '@/store/agentStatusStore';
 import { useCallStore }  from '@/store';
 import { useSipStore }   from '@/store/sipStore';
 import { useRouter }     from 'next/navigation';
+import toast             from 'react-hot-toast';
 
 /* ─────────────────────────────────────────────────────────
    Transfer Modal
@@ -80,7 +81,11 @@ export function IncomingCallPopup() {
   /* ── Dismiss (reject / close) ─────────────────────────── */
   const handleDismiss = useCallback(() => {
     const call = incomingCallRef.current;
-    actions?.hangup?.();
+    if (!actions) {
+      console.warn('[Popup] Cannot dismiss — SIP actions not registered');
+    } else {
+      actions.hangup?.();
+    }
     setVisible(false);
     clearIncoming();
     // Mark call as no_answer in DB
@@ -94,14 +99,20 @@ export function IncomingCallPopup() {
   /* ── Answer ───────────────────────────────────────────── */
   const handleAnswer = useCallback(() => {
     const call = incomingCallRef.current;
-    // Capture call_id BEFORE answer() clears the session
     const callId     = call?.call_id     || null;
     const caller     = call?.caller      || '';
     const uniqueid   = call?.uniqueid    || '';
-    const leadId     = call?.lead_id     || null;
 
-    console.log('[Answer] incomingCall:', call);
-    console.log('[Answer] call_id:', callId);
+    console.log('[Popup] handleAnswer called');
+    console.log('[Popup] incomingCall:', call);
+    console.log('[Popup] callStatus:', callStatus);
+    console.log('[Popup] actions available:', !!actions);
+
+    if (!actions) {
+      console.error('[Popup] Cannot answer — SIP actions not registered (SoftPhone may not be mounted)');
+      toast.error('Phone system not ready. Try again in a moment.');
+      return;
+    }
 
     // Mark call as answered in DB immediately
     if (callId) {
@@ -114,14 +125,11 @@ export function IncomingCallPopup() {
       console.warn('[Answer] No call_id found — markCallAnswered skipped');
     }
 
-    // Answer the SIP call — DO NOT redirect here
-    // The redirect happens in the useEffect when callStatus becomes 'active'
-    // Redirecting before audio is ready kills the WebRTC stream
-    actions?.answer();
+    // Answer the SIP call
+    actions.answer();
 
     // Store info for post-answer navigation
     if (!call?.lead_id) {
-      // Will navigate to new lead page after call is active
       sessionStorage.setItem('postAnswerPhone', caller);
       sessionStorage.setItem('postAnswerUniqueid', uniqueid);
     }
@@ -141,17 +149,18 @@ export function IncomingCallPopup() {
     clearIncoming();
   }, [actions, clearIncoming]);
 
-  /* ── WS event: incomingCall set → show popup only ────────── */
+  /* ── WS event: incomingCall set → show popup ─────────── */
   useEffect(() => {
     if (incomingCall && agentStatus !== 'away') {
+      console.log('[Popup] WS event arrived — showing popup (callStatus:', callStatus, ')');
       setVisible(true);
-      // NOTE: ring audio is managed exclusively by SipClient._startRinging()
     }
-  }, [incomingCall]);
+  }, [incomingCall, agentStatus]);
 
   /* ── SIP status changes ───────────────────────────────── */
   useEffect(() => {
     if (callStatus === 'incoming' && agentStatus !== 'away') {
+      console.log('[Popup] SIP incoming — ensuring popup is visible');
       setVisible(true);
     }
     if (callStatus === 'active' && agentStatus !== 'away') {
@@ -190,6 +199,7 @@ export function IncomingCallPopup() {
   const leadStage     = incomingCall?.lead_stage ?? null;
   const leadCompany   = incomingCall?.lead_company ?? null;
   const isActive      = callStatus === 'active' || callStatus === 'holding';
+  const sipNotReady   = !actions || callStatus === 'idle';
 
   /* ════════════ INCOMING ════════════ */
   if (!isActive) {
@@ -230,12 +240,26 @@ export function IncomingCallPopup() {
               title="Reject">
               <PhoneOff size={20} className="text-white" />
             </button>
-            <button onClick={handleAnswer}
-              className="w-12 h-12 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center shadow-md transition-all active:scale-95"
-              title="Answer">
-              <Phone size={20} className="text-white" />
-            </button>
+            {sipNotReady ? (
+              <div className="w-12 h-12 rounded-full bg-green-300 flex items-center justify-center shadow-md cursor-not-allowed"
+                   title="Phone system not connected — cannot answer">
+                <Phone size={20} className="text-white/60" />
+              </div>
+            ) : (
+              <button onClick={handleAnswer}
+                className="w-12 h-12 rounded-full bg-green-500 hover:bg-green-600 flex items-center justify-center shadow-md transition-all active:scale-95"
+                title="Answer">
+                <Phone size={20} className="text-white" />
+              </button>
+            )}
           </div>
+          {sipNotReady && (
+            <div className="px-5 pb-4">
+              <p className="text-xs text-center text-red-500 font-medium bg-red-50 rounded-lg py-1.5">
+                ⚠ Phone system not connected — cannot answer calls
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
