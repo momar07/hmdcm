@@ -137,6 +137,9 @@ export interface Lead {
   first_name:     string;
   last_name:      string;
   company:        string;
+  address:        string;
+  city:           string;
+  country:        string;
   status:         string | LeadStatus;
   status_name:    string;
   status_detail?: LeadStatus;

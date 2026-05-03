@@ -17,7 +17,7 @@ from .services import (
 class FollowupViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends    = [DjangoFilterBackend]
-    filterset_fields   = ['status', 'followup_type', 'assigned_to']
+    filterset_fields   = ['status', 'followup_type', 'assigned_to', 'lead']
 
     def get_queryset(self):
         return get_followups(user=self.request.user)
