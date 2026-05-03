@@ -2,17 +2,16 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { X, Ticket, Phone, Clock, Radio, Search, User } from "lucide-react";
 import { ticketsApi }    from "@/lib/api/tickets";
-import { customersApi }  from "@/lib/api/customers";
 import { useCallStore }  from "@/store";
 import { useSipStore }   from "@/store/sipStore";
 import type { TicketCreatePayload, TicketType } from "@/types/tickets";
-import type { Customer } from "@/types";
+import api from "@/lib/api/axios";
 
 interface Props {
   open               : boolean;
   onClose            : () => void;
   onCreated          : () => void;
-  defaultCustomerId? : string;
+  defaultLeadId?     : string;
   // kept for future recording attachment — pass call DB uuid when available
   defaultCallId?     : string;
 }
@@ -25,7 +24,7 @@ const TYPE_OPTIONS: { value: TicketType | "technical" | "billing"; label: string
   { value: "billing",    label: "Billing" },
 ];
 
-export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, defaultCallId }: Props) {
+export function NewTicketModal({ open, onClose, onCreated, defaultLeadId, defaultCallId }: Props) {
   const { incomingCall }    = useCallStore();
   const { callStatus }      = useSipStore();
 
@@ -48,7 +47,7 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
       ticket_type      : "inquiry",
       priority         : "medium",
       source           : fromCall ? "call"   : "manual",
-      customer         : defaultCustomerId,
+      lead             : defaultLeadId,
       call             : defaultCallId,
       // call-center fields — filled from store when active
       phone_number     : fromCall ? (incomingCall?.caller      ?? "") : "",
@@ -62,46 +61,46 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState<string | null>(null);
 
-  // Customer search
-  const [custSearch,   setCustSearch]   = useState("");
-  const [custResults,  setCustResults]  = useState<Customer[]>([]);
-  const [custLoading,  setCustLoading]  = useState(false);
-  const [selectedCust, setSelectedCust] = useState<Customer | null>(null);
+  // Lead search
+  const [leadSearch,   setLeadSearch]   = useState("");
+  const [leadResults,  setLeadResults]  = useState<any[]>([]);
+  const [leadLoading,  setLeadLoading]  = useState(false);
+  const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const searchTimer = useRef<NodeJS.Timeout | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Search customers with debounce
-  const searchCustomers = useCallback((q: string) => {
+  // Search leads with debounce
+  const searchLeads = useCallback((q: string) => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!q.trim()) { setCustResults([]); setShowDropdown(false); return; }
+    if (!q.trim()) { setLeadResults([]); setShowDropdown(false); return; }
     searchTimer.current = setTimeout(async () => {
-      setCustLoading(true);
+      setLeadLoading(true);
       try {
-        const res = await customersApi.list({ search: q, page_size: 6 } as any);
+        const res = await api.get('/leads/', { params: { search: q, page_size: 6 } });
         const list = (res.data as any).results ?? res.data ?? [];
-        setCustResults(list);
+        setLeadResults(list);
         setShowDropdown(list.length > 0);
-      } catch { setCustResults([]); }
-      finally { setCustLoading(false); }
+      } catch { setLeadResults([]); }
+      finally { setLeadLoading(false); }
     }, 350);
   }, []);
 
-  // Select customer
-  const handleSelectCust = (c: Customer) => {
-    setSelectedCust(c);
-    const phone = (c as any).primary_phone ?? "";
-    setCustSearch(`${c.first_name} ${c.last_name}`.trim());
+  // Select lead
+  const handleSelectLead = (l: any) => {
+    setSelectedLead(l);
+    const phone = l.phone ?? "";
+    setLeadSearch(l.title ?? `${l.first_name || ''} ${l.last_name || ''}`.trim());
     setShowDropdown(false);
-    setForm(prev => ({ ...prev, customer: c.id, phone_number: phone || prev.phone_number }));
+    setForm(prev => ({ ...prev, lead: l.id, phone_number: phone || prev.phone_number }));
   };
 
-  // Clear customer
-  const handleClearCust = () => {
-    setSelectedCust(null);
-    setCustSearch("");
-    setCustResults([]);
-    setForm(prev => ({ ...prev, customer: undefined }));
+  // Clear lead
+  const handleClearLead = () => {
+    setSelectedLead(null);
+    setLeadSearch("");
+    setLeadResults([]);
+    setForm(prev => ({ ...prev, lead: undefined }));
   };
 
   // Close dropdown on outside click
@@ -120,11 +119,11 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
     if (open) {
       setForm(buildForm());
       setError(null);
-      // Reset customer search unless defaultCustomerId is set
-      if (!defaultCustomerId) {
-        setSelectedCust(null);
-        setCustSearch("");
-        setCustResults([]);
+      // Reset lead search unless defaultLeadId is set
+      if (!defaultLeadId) {
+        setSelectedLead(null);
+        setLeadSearch("");
+        setLeadResults([]);
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -252,30 +251,30 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
             </div>
           </div>
 
-          {/* Customer Search */}
+          {/* Lead Search */}
           {!isCallActive && (
             <div ref={dropdownRef} className="relative">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 <User className="inline h-3.5 w-3.5 mr-1" />
-                Link to Customer
+                Link to Lead
               </label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                 <input
-                  value={custSearch}
-                  onChange={e => { setCustSearch(e.target.value); searchCustomers(e.target.value); setShowDropdown(true); }}
-                  onFocus={() => { if (custResults.length > 0) setShowDropdown(true); }}
+                  value={leadSearch}
+                  onChange={e => { setLeadSearch(e.target.value); searchLeads(e.target.value); setShowDropdown(true); }}
+                  onFocus={() => { if (leadResults.length > 0) setShowDropdown(true); }}
                   placeholder="Search by name or phone..."
                   className="w-full pl-9 pr-8 py-2 text-sm border border-gray-300 rounded-lg
                     focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {selectedCust && (
-                  <button type="button" onClick={handleClearCust}
+                {selectedLead && (
+                  <button type="button" onClick={handleClearLead}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                     <X className="h-4 w-4" />
                   </button>
                 )}
-                {custLoading && (
+                {leadLoading && (
                   <div className="absolute right-2 top-1/2 -translate-y-1/2">
                     <div className="h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                   </div>
@@ -283,13 +282,13 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
               </div>
 
               {/* Dropdown results */}
-              {showDropdown && custResults.length > 0 && (
+              {showDropdown && leadResults.length > 0 && (
                 <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
-                  {custResults.map(c => (
+                  {leadResults.map(l => (
                     <button
-                      key={c.id}
+                      key={l.id}
                       type="button"
-                      onMouseDown={() => handleSelectCust(c)}
+                      onMouseDown={() => handleSelectLead(l)}
                       className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-blue-50 text-left transition-colors"
                     >
                       <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
@@ -297,10 +296,10 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">
-                          {c.first_name} {c.last_name}
+                          {l.title}
                         </p>
                         <p className="text-xs text-gray-400 truncate">
-                          {(c as any).primary_phone ?? (c as any).email ?? ""}
+                          {l.phone ?? l.email ?? ""}
                         </p>
                       </div>
                     </button>
@@ -308,15 +307,15 @@ export function NewTicketModal({ open, onClose, onCreated, defaultCustomerId, de
                 </div>
               )}
 
-              {/* Selected customer badge */}
-              {selectedCust && (
+              {/* Selected lead badge */}
+              {selectedLead && (
                 <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
                   <User className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                   <span className="text-xs font-medium text-blue-800 truncate">
-                    {selectedCust.first_name} {selectedCust.last_name}
+                    {selectedLead.title}
                   </span>
-                  {(selectedCust as any).primary_phone && (
-                    <span className="text-xs text-blue-500">· {(selectedCust as any).primary_phone}</span>
+                  {selectedLead.phone && (
+                    <span className="text-xs text-blue-500">· {selectedLead.phone}</span>
                   )}
                 </div>
               )}

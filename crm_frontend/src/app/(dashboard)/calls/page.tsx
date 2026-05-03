@@ -91,8 +91,8 @@ export default function CallsPage() {
       ),
     },
     {
-      key: 'customer_name', header: 'Customer',
-      render: (c) => <span className="text-sm text-gray-700">{(c as any).customer_name ?? '—'}</span>,
+      key: 'lead_name', header: 'Lead',
+      render: (c) => <span className="text-sm text-gray-700">{(c as any).lead_name ?? '—'}</span>,
     },
     {
       key: 'agent_name', header: 'Agent',
@@ -152,7 +152,7 @@ export default function CallsPage() {
         <div className="relative">
           <input
             type="text"
-            placeholder="Search caller, customer, agent..."
+            placeholder="Search caller, lead, agent..."
             value={searchInput}
             onChange={e => setSearchInput(e.target.value)}
             onKeyDown={e => {

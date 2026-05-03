@@ -59,11 +59,15 @@ function LeadCard({
         {lead.title}
       </p>
 
-      {/* Customer */}
-      {lead.customer_name && (
+      {/* Contact */}
+      {(lead.first_name || lead.last_name || lead.phone) && (
         <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1.5">
           <User size={11} className="text-gray-400 shrink-0" />
-          <span className="truncate">{lead.customer_name}</span>
+          <span className="truncate">
+            {lead.first_name || lead.last_name
+              ? `${lead.first_name} ${lead.last_name}`.trim()
+              : lead.phone}
+          </span>
         </div>
       )}
 

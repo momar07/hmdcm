@@ -153,7 +153,7 @@ export default function QuotationsPage() {
                     <td className="px-4 py-3 text-gray-500">
                       {q.quotation_type === 'price_quote' ? '📄 Quote' : '📋 Contract'}
                     </td>
-                    <td className="px-4 py-3 text-gray-700">{q.customer_name || '—'}</td>
+                    <td className="px-4 py-3 text-gray-700">{q.lead_name || '—'}</td>
                     <td className="px-4 py-3 text-gray-500">{q.agent_name}</td>
                     <td className="px-4 py-3 font-medium text-gray-800">
                       {q.quotation_type === 'price_quote'

@@ -56,7 +56,7 @@ function PostCallModal({ followup, onClose }: { followup: Followup; onClose: () 
         note:        note.trim() || undefined,
       }),
     onSuccess: () => {
-      toast.success('Call logged to customer timeline ✅');
+      toast.success('Call logged to lead timeline ✅');
       onClose();
     },
     onError: () => toast.error('Failed to log call'),
@@ -67,11 +67,11 @@ function PostCallModal({ followup, onClose }: { followup: Followup; onClose: () 
       <div className="space-y-4">
         <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
           <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
-            {followup.customer_name?.charAt(0)?.toUpperCase() ?? '?'}
+            {followup.lead_name?.charAt(0)?.toUpperCase() ?? '?'}
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">{followup.customer_name ?? 'Unknown'}</p>
-            <p className="text-xs text-blue-700 font-mono">{followup.customer_phone ?? ''}</p>
+            <p className="text-sm font-semibold text-gray-900">{followup.lead_name ?? 'Unknown'}</p>
+            <p className="text-xs text-blue-700 font-mono">{followup.lead_phone ?? ''}</p>
           </div>
         </div>
         <div>
@@ -82,7 +82,7 @@ function PostCallModal({ followup, onClose }: { followup: Followup; onClose: () 
             value={note}
             onChange={e => setNote(e.target.value)}
             rows={3}
-            placeholder="e.g. Customer interested, will send offer tomorrow..."
+            placeholder="e.g. Lead interested, will send offer tomorrow..."
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
         </div>
@@ -101,7 +101,7 @@ function PostCallModal({ followup, onClose }: { followup: Followup; onClose: () 
 function WhatsAppModal({ followup, onClose }: { followup: Followup; onClose: () => void }) {
   const qc              = useQueryClient();
   const [note, setNote] = useState('');
-  const phone           = followup.customer_phone ?? '';
+  const phone           = followup.lead_phone ?? '';
 
   const { mutate, isPending } = useMutation({
     mutationFn: () =>
@@ -123,10 +123,10 @@ function WhatsAppModal({ followup, onClose }: { followup: Followup; onClose: () 
       <div className="space-y-4">
         <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-100">
           <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
-            {followup.customer_name?.charAt(0)?.toUpperCase() ?? '?'}
+            {followup.lead_name?.charAt(0)?.toUpperCase() ?? '?'}
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">{followup.customer_name ?? 'Unknown'}</p>
+            <p className="text-sm font-semibold text-gray-900">{followup.lead_name ?? 'Unknown'}</p>
             <p className="text-xs text-green-700 font-mono">{phone}</p>
           </div>
         </div>
@@ -138,7 +138,7 @@ function WhatsAppModal({ followup, onClose }: { followup: Followup; onClose: () 
             value={note}
             onChange={e => setNote(e.target.value)}
             rows={3}
-            placeholder="e.g. Sent price list, customer will review..."
+            placeholder="e.g. Sent price list, lead will review..."
             className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-300"
           />
         </div>
@@ -253,14 +253,13 @@ function FollowupCard({
   };
 
   const handleCall = async () => {
-    if (!f.customer_phone) return toast.error('No phone number available');
+    if (!f.lead_phone) return toast.error('No phone number available');
     if (!sipActions)       return toast.error('SoftPhone not connected');
     if (!sipActions.call)  return toast.error('Call action not available');
     let callId: string | null = null;
     try {
       const res = await callsApi.startWebrtcCall({
-        customer_phone: f.customer_phone,
-        customer_id:    f.customer_id   ?? undefined,
+        customer_phone: f.lead_phone,
         lead_id:        f.lead          ? String(f.lead) : undefined,
       });
       callId = res.data.call_id;
@@ -268,7 +267,7 @@ function FollowupCard({
       // non-blocking — still dial even if DB write fails
     }
     onCallStart(f.id, callId);
-    sipActions.call(f.customer_phone);
+    sipActions.call(f.lead_phone);
   };
 
   const statusBanner = isThisCard ? (() => {
@@ -291,14 +290,14 @@ function FollowupCard({
         <StatusBadge status={f.status} size="xs" />
       </div>
 
-      {(f.customer_name || f.customer_phone) && (
+      {(f.lead_name || f.lead_phone) && (
         <div className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg border border-gray-100">
           <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
-            {f.customer_name?.charAt(0)?.toUpperCase() ?? '?'}
+            {f.lead_name?.charAt(0)?.toUpperCase() ?? '?'}
           </div>
           <div className="min-w-0 flex-1">
-            {f.customer_name && <p className="text-xs font-semibold text-gray-800 truncate">{f.customer_name}</p>}
-            {f.customer_phone && <p className="text-xs text-gray-500 font-mono">{f.customer_phone}</p>}
+            {f.lead_name && <p className="text-xs font-semibold text-gray-800 truncate">{f.lead_name}</p>}
+            {f.lead_phone && <p className="text-xs text-gray-500 font-mono">{f.lead_phone}</p>}
           </div>
         </div>
       )}
@@ -333,7 +332,7 @@ function FollowupCard({
 
       {isPending && (
         <div className="flex flex-col gap-2 pt-1 border-t border-gray-100">
-          {f.customer_phone && (
+          {f.lead_phone && (
             <div className="flex gap-2">
               <button onClick={handleCall}
                 className="flex-1 flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg py-2 text-xs font-semibold transition-colors">

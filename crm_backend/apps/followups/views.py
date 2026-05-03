@@ -82,37 +82,33 @@ class FollowupViewSet(viewsets.ModelViewSet):
         body: {
             action_type : 'call' | 'whatsapp',
             note        : str (optional),
-            call_uniqueid: str (optional) — links the outbound call record to the customer
+            call_uniqueid: str (optional) — links the outbound call record to the lead
         }
-        Creates a Note record linked to the customer + call (if found).
-        This makes the action appear in the customer timeline.
+        Creates a Note record linked to the lead + call (if found).
+        This makes the action appear in the lead timeline.
         """
         followup    = self.get_object()
         action_type = request.data.get('action_type', 'call')
         note_text   = (request.data.get('note') or '').strip()
         call_uniqueid = (request.data.get('call_uniqueid') or '').strip()
 
-        # ── Resolve customer ────────────────────────────────────────
-        customer = None
-        if followup.lead and followup.lead.customer:
-            customer = followup.lead.customer
-        elif followup.call and followup.call.customer:
-            customer = followup.call.customer
+        # ── Resolve lead ────────────────────────────────────────────
+        lead = followup.lead or (followup.call.lead if followup.call else None)
 
-        if not customer:
+        if not lead:
             return Response(
-                {'error': 'No customer linked to this follow-up.'},
+                {'error': 'No lead linked to this follow-up.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # ── Link outbound call record to customer (if uniqueid provided) ─
+        # ── Link outbound call record to lead (if uniqueid provided) ─
         call_record = None
         if call_uniqueid:
             from apps.calls.models import Call
             call_record = Call.objects.filter(uniqueid=call_uniqueid).first()
-            if call_record and call_record.customer is None:
-                call_record.customer = customer
-                call_record.save(update_fields=['customer'])
+            if call_record and call_record.lead is None:
+                call_record.lead = lead
+                call_record.save(update_fields=['lead'])
 
         # ── Build note content ──────────────────────────────────────
         if action_type == 'whatsapp':
@@ -128,16 +124,15 @@ class FollowupViewSet(viewsets.ModelViewSet):
         from apps.notes.models import Note
         note = Note.objects.create(
             author   = request.user,
-            customer = customer,
-            lead     = followup.lead if followup.lead else None,
+            lead     = lead,
             call     = call_record,
             content  = content,
         )
 
         return Response({
             'id'          : str(note.id),
-            'customer_id' : str(customer.id),
+            'lead_id'     : str(lead.id),
             'content'     : note.content,
             'created_at'  : note.created_at,
-            'message'     : 'Action logged to customer timeline.',
+            'message'     : 'Action logged to lead timeline.',
         }, status=status.HTTP_201_CREATED)

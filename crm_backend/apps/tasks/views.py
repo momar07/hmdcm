@@ -22,20 +22,18 @@ class TaskViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs   = Task.objects.select_related(
                    'assigned_to', 'assigned_by',
-                   'customer', 'lead', 'ticket', 'call'
-               ).prefetch_related('logs__actor')
+                   'lead', 'ticket', 'call'
+                ).prefetch_related('logs__actor')
 
         # Agents see only their own tasks
         if user.role == 'agent':
             qs = qs.filter(assigned_to=user)
 
         # Filter by linked object
-        customer_id = self.request.query_params.get('customer')
         lead_id     = self.request.query_params.get('lead')
         ticket_id   = self.request.query_params.get('ticket')
         overdue     = self.request.query_params.get('overdue')
 
-        if customer_id: qs = qs.filter(customer_id=customer_id)
         if lead_id:     qs = qs.filter(lead_id=lead_id)
         if ticket_id:   qs = qs.filter(ticket_id=ticket_id)
         if overdue == 'true':

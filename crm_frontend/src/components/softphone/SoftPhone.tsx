@@ -84,7 +84,7 @@ export function SoftPhone() {
   }, [answer, hangup, toggleMute, toggleHold, call]);
 
   // Track current webrtc call id + external dial context
-  const externalDialRef    = React.useRef<{ phone: string; customerId: string|null; leadId: string|null } | null>(null);
+  const externalDialRef    = React.useRef<{ phone: string; leadId: string|null } | null>(null);
   const webrtcCallIdRef    = React.useRef<string | null>(null);
   const callStartTimeRef   = React.useRef<number>(0);
   const lastEndCauseRef    = React.useRef<string>('ended');
@@ -98,15 +98,15 @@ export function SoftPhone() {
     return () => window.removeEventListener('sip:endcause', handler);
   }, []);
 
-  // Listen for external dial requests (e.g. from customer page "Call Now" button)
+  // Listen for external dial requests (e.g. from lead page "Call Now" button)
   useEffect(() => {
     const handler = (e: Event) => {
-      const { phone, customerId, leadId } = (e as CustomEvent).detail ?? {};
+      const { phone, leadId } = (e as CustomEvent).detail ?? {};
       if (!phone) return;
       setDialNum(phone);
       setOpen(true);
       // Store context for startWebrtcCall
-      externalDialRef.current = { phone, customerId: customerId ?? null, leadId: leadId ?? null };
+      externalDialRef.current = { phone, leadId: leadId ?? null };
       // Small delay so dialNum state settles before call()
       setTimeout(() => { call(phone); }, 100);
     };
@@ -123,7 +123,6 @@ export function SoftPhone() {
       import('@/lib/api/calls').then(({ callsApi }) => {
         callsApi.startWebrtcCall({
           customer_phone: targetPhone,
-          customer_id:    ctx?.customerId ?? null,
           lead_id:        ctx?.leadId     ?? null,
         }).then((res: any) => {
           webrtcCallIdRef.current  = res.data?.call_id ?? null;

@@ -22,7 +22,7 @@ export const callsApi = {
   get: (id: string) =>
     api.get<Call>(`/calls/list/${id}/`),
 
-  originate: (data: { phone_number: string; customer_id?: string; lead_id?: string }) =>
+  originate: (data: { phone_number: string; lead_id?: string }) =>
     api.post('/calls/list/originate/', data),
 
   screenPop: (phone: string) =>
@@ -52,16 +52,11 @@ export const callsApi = {
   dispositions: () =>
     api.get<Disposition[]>('/calls/dispositions/'),
 
-  linkCall: (uniqueid: string, customer_id: string) =>
-    api.post('/calls/link-call/', { uniqueid, customer_id }),
-
   // WebRTC call tracking
   startWebrtcCall: (data: {
     customer_phone: string;
-    customer_id?:   string | null;
     lead_id?:       string | null;
-    followup_id?:   string | null;
-  }) => api.post<{ call_id: string; caller: string; callee: string; customer_id: string | null }>('/calls/start-webrtc-call/', data),
+  }) => api.post<{ call_id: string; caller: string; callee: string; lead_id: string | null }>('/calls/start-webrtc-call/', data),
 
   endWebrtcCall: (call_id: string, data: {
     end_cause: string;

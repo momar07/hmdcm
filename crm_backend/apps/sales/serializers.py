@@ -120,7 +120,7 @@ class QuotationSerializer(serializers.ModelSerializer):
     fields_data   = QuotationFieldSerializer(many=True, read_only=True, source="fields")
     logs          = QuotationLogSerializer(many=True, read_only=True)
     agent_name    = serializers.SerializerMethodField()
-    customer_name = serializers.SerializerMethodField()
+    lead_name     = serializers.SerializerMethodField()
     lead_title    = serializers.SerializerMethodField()
     is_expired    = serializers.SerializerMethodField()
 
@@ -130,8 +130,7 @@ class QuotationSerializer(serializers.ModelSerializer):
             "id", "ref_number", "version", "parent",
             "quotation_type", "status", "title",
             "agent", "agent_name",
-            "customer", "customer_name",
-            "lead", "lead_title",
+            "lead", "lead_name", "lead_title",
             "currency", "tax_rate",
             "subtotal", "tax_amount", "total_amount",
             "valid_until", "terms_body", "internal_note",
@@ -151,8 +150,8 @@ class QuotationSerializer(serializers.ModelSerializer):
     def get_agent_name(self, obj):
         return obj.agent.get_full_name() if obj.agent else ""
 
-    def get_customer_name(self, obj):
-        return obj.customer.get_full_name() if obj.customer else ""
+    def get_lead_name(self, obj):
+        return obj.lead.get_full_name() if obj.lead else ""
 
     def get_lead_title(self, obj):
         return obj.lead.title if obj.lead else ""
@@ -172,7 +171,7 @@ class QuotationCreateSerializer(serializers.ModelSerializer):
         model  = Quotation
         fields = [
             "quotation_type", "title",
-            "customer", "lead",
+            "lead",
             "currency", "tax_rate", "valid_until",
             "terms_body", "internal_note",
             "items", "fields_data",

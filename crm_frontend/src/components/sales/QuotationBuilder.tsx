@@ -10,7 +10,6 @@ import api from '@/lib/api/axios';
 
 interface Props {
   quotation?:  Quotation | null;
-  customerId?: string | null;
   leadId?:     string | null;
 }
 
@@ -22,7 +21,7 @@ const EMPTY_ITEM: Partial<QuotationItem> = {
 
 const EMPTY_FIELD: Partial<QuotationField> = { key: '', value: '', order: 0 };
 
-export default function QuotationBuilder({ quotation, customerId, leadId }: Props) {
+export default function QuotationBuilder({ quotation, leadId }: Props) {
   const router = useRouter();
   const qc     = useQueryClient();
   const isEdit = !!quotation;
@@ -44,12 +43,6 @@ export default function QuotationBuilder({ quotation, customerId, leadId }: Prop
   });
   const products: Product[] = (productsData as any)?.results ?? productsData ?? [];
 
-  const { data: customers = [] } = useQuery({
-    queryKey: ['customers-simple'],
-    queryFn:  () => api.get('/customers/?page_size=200').then((r: any) => r.data?.results ?? r.data),
-    staleTime: 60_000,
-  });
-
   const { data: leadsData } = useQuery({
     queryKey: ['leads-simple'],
     queryFn:  () => api.get('/leads/?page_size=200').then((r: any) => r.data?.results ?? r.data),
@@ -65,7 +58,6 @@ export default function QuotationBuilder({ quotation, customerId, leadId }: Prop
   // ── Form state ────────────────────────────────────────────
   const [qType,       setQType]       = useState<'price_quote' | 'contract'>(quotation?.quotation_type as any ?? 'price_quote');
   const [title,       setTitle]       = useState(quotation?.title ?? '');
-  const [customer,    setCustomer]    = useState(quotation?.customer ?? customerId ?? '');
   const [lead,        setLead]        = useState(quotation?.lead ?? leadId ?? '');
   const [currency,    setCurrency]    = useState(quotation?.currency ?? settings?.default_currency ?? 'EGP');
   const [taxRate,     setTaxRate]     = useState(String(quotation?.tax_rate ?? settings?.default_tax_rate ?? 14));
@@ -118,7 +110,7 @@ export default function QuotationBuilder({ quotation, customerId, leadId }: Prop
     mutationFn: (draft: boolean) => {
       const payload = {
         quotation_type: qType,
-        title, customer: customer || null, lead: lead || null,
+        title, lead: lead || null,
         currency, tax_rate: Number(taxRate),
         valid_until: validUntil || null,
         terms_body: termsBody, internal_note: internalNote,
@@ -140,7 +132,7 @@ export default function QuotationBuilder({ quotation, customerId, leadId }: Prop
     mutationFn: async () => {
       const payload = {
         quotation_type: qType,
-        title, customer: customer || null, lead: lead || null,
+        title, lead: lead || null,
         currency, tax_rate: Number(taxRate),
         valid_until: validUntil || null,
         terms_body: termsBody, internal_note: internalNote,
@@ -225,17 +217,7 @@ export default function QuotationBuilder({ quotation, customerId, leadId }: Prop
               </div>
             )}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Customer</label>
-              <select className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={customer} onChange={e => setCustomer(e.target.value)}>
-                <option value="">Select customer...</option>
-                {(customers as any[]).map((c: any) => (
-                  <option key={c.id} value={c.id}>{c.first_name} {c.last_name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Lead (optional)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Lead</label>
               <select className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={lead} onChange={e => setLead(e.target.value)}>
                 <option value="">No lead linked</option>

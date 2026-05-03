@@ -61,7 +61,7 @@ export default function FollowupDetailPage() {
 
       <PageHeader
         title={followup.title}
-        subtitle={`For ${(followup as any).customer_name ?? ""}`}
+        subtitle={`For ${(followup as any).lead_name ?? ""}`}
         actions={
           <div className="flex gap-2">
             {followup.status === 'pending' && (

@@ -12,7 +12,7 @@ import { Spinner } from '@/components/ui/Spinner';
 const ACTION_LABELS: Record<ActionType, { label: string; icon: string; description: string }> = {
   no_action:        { label: 'No Action',             icon: '⊘',  description: 'Close modal, nothing else' },
   create_followup:  { label: 'Create Follow-up',      icon: '📅', description: 'Show date picker → auto-create Followup' },
-  create_lead:      { label: 'Create Lead',            icon: '🔗', description: 'Auto-create Lead linked to call + customer' },
+  create_lead:      { label: 'Create Lead',            icon: '🔗', description: 'Auto-create Lead linked to call' },
   create_ticket:    { label: 'Create Ticket',          icon: '🎫', description: 'Open ticket modal pre-filled with call info' },
   change_lead_stage:{ label: 'Change Lead Stage',      icon: '📌', description: 'Show stage picker → move linked lead' },
   mark_won:         { label: 'Mark Lead as Won',       icon: '🏆', description: 'Move linked lead to Won stage' },

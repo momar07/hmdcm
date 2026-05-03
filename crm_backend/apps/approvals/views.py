@@ -65,7 +65,7 @@ class ApprovalViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = getattr(user, "role", "agent")
         qs   = ApprovalRequest.objects.select_related(
-            "requested_by", "reviewed_by", "customer", "ticket", "lead"
+            "requested_by", "reviewed_by", "ticket", "lead"
         )
         # Agents see only their own requests
         if role == "agent":
@@ -94,7 +94,7 @@ class ApprovalViewSet(viewsets.ModelViewSet):
             "amount":            str(approval.amount) if approval.amount else None,
             "requested_by_name": approval.requested_by.get_full_name(),
             "requested_by_id":   str(approval.requested_by.id),
-            "customer_name":     approval.customer.get_full_name() if approval.customer else None,
+            "lead_name":         approval.lead.get_full_name() if approval.lead else None,
             "ticket_number":     approval.ticket.ticket_number if approval.ticket else None,
         })
 

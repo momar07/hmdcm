@@ -32,7 +32,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], url_path='members')
     def members(self, request, pk=None):
-        qs = CampaignMember.objects.filter(campaign_id=pk).select_related('customer')
+        qs = CampaignMember.objects.filter(campaign_id=pk).select_related('lead')
         serializer = CampaignMemberSerializer(qs, many=True)
         return Response(serializer.data)
 

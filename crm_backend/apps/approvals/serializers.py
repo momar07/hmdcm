@@ -7,8 +7,7 @@ class ApprovalListSerializer(serializers.ModelSerializer):
         source="requested_by.get_full_name", read_only=True)
     reviewed_by_name  = serializers.CharField(
         source="reviewed_by.get_full_name",  read_only=True)
-    customer_name     = serializers.CharField(
-        source="customer.get_full_name",     read_only=True)
+    lead_name         = serializers.SerializerMethodField()
     ticket_number     = serializers.IntegerField(
         source="ticket.ticket_number",       read_only=True)
 
@@ -19,9 +18,8 @@ class ApprovalListSerializer(serializers.ModelSerializer):
             "title", "description", "amount",
             "requested_by", "requested_by_name",
             "reviewed_by",  "reviewed_by_name",
-            "customer",     "customer_name",
+            "lead",         "lead_name",
             "ticket",       "ticket_number",
-            "lead",
             "review_comment", "reviewed_at",
             "created_at",   "updated_at",
         ]
@@ -30,8 +28,11 @@ class ApprovalListSerializer(serializers.ModelSerializer):
             "requested_by", "requested_by_name",
             "reviewed_by",  "reviewed_by_name",
             "reviewed_at",  "created_at", "updated_at",
-            "customer_name","ticket_number",
+            "lead_name",    "ticket_number",
         ]
+
+    def get_lead_name(self, obj):
+        return obj.lead.get_full_name() if obj.lead else None
 
 
 class ApprovalCreateSerializer(serializers.ModelSerializer):
@@ -39,7 +40,7 @@ class ApprovalCreateSerializer(serializers.ModelSerializer):
         model  = ApprovalRequest
         fields = [
             "approval_type", "title", "description",
-            "amount", "ticket", "customer", "lead",
+            "amount", "ticket", "lead",
         ]
 
     def create(self, validated_data):

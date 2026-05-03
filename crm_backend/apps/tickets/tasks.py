@@ -182,7 +182,7 @@ def notify_escalated_tickets(self):
             escalated_at__lt = cutoff,
         )
         .exclude(status__in=["resolved", "closed"])
-        .select_related("customer", "agent", "escalated_to")
+        .select_related("lead", "agent", "escalated_to")
         .values(
             "id", "ticket_number", "title",
             "priority", "status",

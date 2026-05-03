@@ -162,11 +162,11 @@ export default function TaskDetailPage() {
       </div>
 
       {/* Linked records */}
-      {(task.customer_name || task.lead_title || task.ticket_title) && (
+      {(task.lead_name || task.lead_title || task.ticket_title) && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-5">
           <h2 className="text-sm font-semibold text-gray-700 mb-4">Linked To</h2>
           <div className="flex flex-wrap gap-3">
-            {task.customer_name && <a href={`/customers/${task.customer}`} className="flex items-center gap-2 text-sm px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100">👤 {task.customer_name}</a>}
+            {task.lead_name     && <a href={`/leads/${task.lead}`}         className="flex items-center gap-2 text-sm px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100">👤 {task.lead_name}</a>}
             {task.lead_title    && <a href={`/leads/${task.lead}`}         className="flex items-center gap-2 text-sm px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg text-purple-700 hover:bg-purple-100">🎯 {task.lead_title}</a>}
             {task.ticket_title  && <a href={`/tickets/${task.ticket}`}     className="flex items-center gap-2 text-sm px-3 py-2 bg-orange-50 border border-orange-200 rounded-lg text-orange-700 hover:bg-orange-100">🎫 {task.ticket_title}</a>}
           </div>

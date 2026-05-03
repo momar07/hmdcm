@@ -5,7 +5,7 @@ from .models           import Call
 
 def get_all_calls(user=None) -> QuerySet:
     qs = Call.objects.select_related(
-        'agent', 'customer'
+        'agent', 'lead'
     ).prefetch_related('events').all()
     if user and user.role == 'agent':
         # Agent sees: their own calls + unassigned inbound calls
@@ -15,8 +15,8 @@ def get_all_calls(user=None) -> QuerySet:
         )
     elif user and user.role == 'supervisor':
         # Supervisor: team filter only on /calls/ list page — NOT when
-        # filtering by customer (customer filter is applied by the ViewSet)
-        # so we don't restrict here to avoid hiding calls on customer page
+        # filtering by lead (lead filter is applied by the ViewSet)
+        # so we don't restrict here to avoid hiding calls on lead page
         if user.team_id:
             qs = qs.filter(
                 Q(agent__team=user.team) | Q(agent__isnull=True)
@@ -27,21 +27,21 @@ def get_all_calls(user=None) -> QuerySet:
 
 def get_call_by_id(call_id) -> Call:
     return Call.objects.select_related(
-        'agent', 'customer'
+        'agent', 'lead'
     ).get(pk=call_id)
 
 
 def get_active_calls() -> QuerySet:
     return Call.objects.filter(
         status__in=['ringing', 'answered']
-    ).select_related('agent', 'customer').order_by('-started_at')
+    ).select_related('agent', 'lead').order_by('-started_at')
 
 
 def get_pending_completions(agent=None) -> QuerySet:
     qs = Call.objects.filter(
         status='answered',
         is_completed=False,
-    ).select_related('agent', 'customer')
+    ).select_related('agent', 'lead')
     if agent and agent.role == 'agent':
         qs = qs.filter(agent=agent)
     return qs.order_by('-started_at')
@@ -61,7 +61,7 @@ def get_calls_by_date_range(
     date_from=None, date_to=None,
     agent=None, direction=None, status=None,
 ) -> QuerySet:
-    qs = Call.objects.select_related('agent', 'customer').all()
+    qs = Call.objects.select_related('agent', 'lead').all()
     if date_from:
         qs = qs.filter(started_at__gte=date_from)
     if date_to:
@@ -75,13 +75,13 @@ def get_calls_by_date_range(
     return qs.order_by('-started_at')
 
 
-def get_calls_by_customer(customer_id) -> QuerySet:
+def get_calls_by_lead(lead_id) -> QuerySet:
     return Call.objects.filter(
-        customer_id=customer_id
+        lead_id=lead_id
     ).select_related('agent').order_by('-started_at')
 
 
 def get_calls_by_phone(phone_number: str) -> QuerySet:
     return Call.objects.filter(
         Q(caller=phone_number) | Q(callee=phone_number)
-    ).select_related('agent', 'customer').order_by('-started_at')
+    ).select_related('agent', 'lead').order_by('-started_at')

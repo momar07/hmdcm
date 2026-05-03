@@ -46,7 +46,6 @@ export const productsApi = {
 export interface QuotationCreatePayload {
   quotation_type: string;
   title?:         string;
-  customer?:      string | null;
   lead?:          string | null;
   currency?:      string;
   tax_rate?:      number;
@@ -58,7 +57,7 @@ export interface QuotationCreatePayload {
 }
 
 export const quotationsApi = {
-  list: (params?: { status?: string; quotation_type?: string; customer?: string; search?: string; page?: number; page_size?: number }) =>
+  list: (params?: { status?: string; quotation_type?: string; lead?: string; search?: string; page?: number; page_size?: number }) =>
     api.get<PaginatedResponse<Quotation>>('/sales/quotations/', { params }).then((r: any) => r.data),
   get: (id: string) =>
     api.get<Quotation>(`/sales/quotations/${id}/`).then((r: any) => r.data),

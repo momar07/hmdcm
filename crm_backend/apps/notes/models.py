@@ -4,14 +4,12 @@ from apps.common.models import BaseModel
 
 
 class Note(BaseModel):
-    """Polymorphic notes attached to Customer, Lead, or Call."""
+    """Polymorphic notes attached to Lead or Call."""
     author   = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='notes')
     content  = models.TextField()
     is_pinned = models.BooleanField(default=False)
 
     # Generic relations
-    customer = models.ForeignKey('customers.Customer', null=True, blank=True,
-                                  on_delete=models.CASCADE, related_name='note_set')
     lead     = models.ForeignKey('leads.Lead', null=True, blank=True,
                                   on_delete=models.CASCADE, related_name='note_set')
     call     = models.ForeignKey('calls.Call', null=True, blank=True,

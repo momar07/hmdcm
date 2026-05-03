@@ -78,7 +78,7 @@ function TaskCard({ task, onEdit, onStart, onComplete, onCancel }: {
             {task.assigned_by_name && (
               <span>👤 By {task.assigned_by_name}</span>
             )}
-            {task.customer_name && <span>🏷 {task.customer_name}</span>}
+            {task.lead_name     && <span>🏷 {task.lead_name}</span>}
             {task.lead_title    && <span>🎯 {task.lead_title}</span>}
             {task.ticket_title  && <span>🎫 {task.ticket_title}</span>}
           </div>
@@ -186,7 +186,7 @@ export default function TasksPage() {
 
     // If action is call_lead → originate call automatically
     if (task.action_type === 'call_lead') {
-      const phone = (task as any).lead_phone || (task as any).customer_phone;
+      const phone = (task as any).lead_phone;
       if (!phone) {
         toast.error('No phone number found for this lead');
         return;
@@ -195,7 +195,6 @@ export default function TasksPage() {
         await callsApi.originate({
           phone_number: phone,
           lead_id:      task.lead    ?? undefined,
-          customer_id:  task.customer ?? undefined,
         });
         toast.success(`📞 Calling ${phone}...`);
       } catch (err: any) {

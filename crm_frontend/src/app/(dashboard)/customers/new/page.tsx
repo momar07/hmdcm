@@ -6,7 +6,6 @@ import { useMutation } from '@tanstack/react-query';
 import { Plus, Trash2, ArrowLeft } from 'lucide-react';
 import toast           from 'react-hot-toast';
 import { customersApi } from '@/lib/api/customers';
-import { callsApi }    from '@/lib/api/calls';
 import { PageHeader }   from '@/components/ui/PageHeader';
 import { Button }       from '@/components/ui/Button';
 import { Input }        from '@/components/ui/Input';
@@ -34,24 +33,10 @@ export default function NewCustomerPage() {
     }
   }, [searchParams]);
 
-  // Pending call uniqueid (to link call → customer after creation)
-  const pendingCallUniqueId = searchParams?.get('uniqueid') || '';
-
   const mutation = useMutation({
     mutationFn: () => customersApi.create({ ...form, phones } as any),
     onSuccess:  async (res) => {
       toast.success('Customer created!');
-
-      // If we came from an incoming call, link the call to the new customer
-      if (pendingCallUniqueId) {
-        try {
-          const linkRes = await callsApi.linkCall(pendingCallUniqueId, res.data.id);
-          console.log('[link-call] linked:', linkRes.data);
-        } catch (e) {
-          console.warn('[link-call] Could not link call to customer:', e);
-        }
-      }
-
       router.push(`/customers/${res.data.id}`);
     },
     onError: (err: any) => {

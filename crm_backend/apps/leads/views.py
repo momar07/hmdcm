@@ -15,7 +15,7 @@ class LeadViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends    = [DjangoFilterBackend]
     filterset_fields   = ['status', 'priority', 'source',
-                          'assigned_to', 'campaign', 'customer', 'stage']
+                          'assigned_to', 'campaign', 'stage']
 
     def get_queryset(self):
         return get_all_leads(user=self.request.user)

@@ -18,6 +18,6 @@ def process_campaign_calls(campaign_id: str):
         try:
             originate_call_for_campaign(member)
         except Exception as exc:
-            logger.error(f'Failed to dial {member.customer}: {exc}')
+            logger.error(f'Failed to dial {member.lead}: {exc}')
 
     logger.info(f'Processed {len(members)} campaign calls for campaign {campaign_id}.')

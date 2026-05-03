@@ -3,6 +3,19 @@ from django.db import models
 from apps.common.models import BaseModel
 
 
+class LeadTag(BaseModel):
+    """Tags for leads — replaces CustomerTag"""
+    name  = models.CharField(max_length=100, unique=True)
+    color = models.CharField(max_length=7, default='#6366f1')
+
+    class Meta:
+        db_table = 'lead_tags'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class LeadStage(BaseModel):
     """مراحل البيع — قابلة للتخصيص من الـ admin"""
     STAGE_CHOICES = [
@@ -82,15 +95,28 @@ class Lead(BaseModel):
         ('web',      'Website'),
         ('other',    'Other'),
     ]
+    GENDER_CHOICES = [('M', 'Male'), ('F', 'Female'), ('O', 'Other')]
 
-    # Core fields
+    # ── Core identity ─────────────────────────────────────
     title        = models.CharField(max_length=255)
-    customer     = models.ForeignKey('customers.Customer', on_delete=models.CASCADE,
-                                     related_name='leads')
+    phone        = models.CharField(max_length=30, db_index=True, blank=True,
+                                    help_text='Primary phone — used for incoming call lookup')
+    email        = models.EmailField(blank=True, db_index=True)
+    first_name   = models.CharField(max_length=150, blank=True, db_index=True)
+    last_name    = models.CharField(max_length=150, blank=True, db_index=True)
+    gender       = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True)
+    date_of_birth= models.DateField(null=True, blank=True)
+    company      = models.CharField(max_length=200, blank=True)
+    address      = models.TextField(blank=True)
+    city         = models.CharField(max_length=100, blank=True)
+    country      = models.CharField(max_length=100, default='Egypt')
+
+    # ── Relations ──────────────────────────────────────────
     assigned_to  = models.ForeignKey('users.User', null=True, blank=True,
                                      on_delete=models.SET_NULL, related_name='assigned_leads')
+    tags         = models.ManyToManyField(LeadTag, blank=True, related_name='leads')
 
-    # Pipeline
+    # ── Pipeline ───────────────────────────────────────────
     stage        = models.ForeignKey(LeadStage, null=True, blank=True,
                                      on_delete=models.SET_NULL, related_name='leads')
     status       = models.ForeignKey(LeadStatus, null=True, blank=True,
@@ -98,19 +124,25 @@ class Lead(BaseModel):
     priority     = models.ForeignKey(LeadPriority, null=True, blank=True,
                                      on_delete=models.SET_NULL, related_name='leads')
 
-    # Business fields
+    # ── Business fields ────────────────────────────────────
     source       = models.CharField(max_length=50, choices=SOURCE_CHOICES, default='manual')
     value        = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     description  = models.TextField(blank=True)
+    notes        = models.TextField(blank=True, help_text='Internal notes about this lead')
     followup_date = models.DateTimeField(null=True, blank=True)
+    classification = models.CharField(max_length=50, default='none')
+    lifecycle_stage = models.CharField(max_length=50, default='lead')
+    score        = models.IntegerField(default=0)
+    converted_to_customer = models.BooleanField(default=False)
 
-    # Won/Lost fields — mandatory للـ enforcement
+    # ── Won/Lost fields ────────────────────────────────────
     won_amount   = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     lost_reason  = models.TextField(blank=True)
     lost_at      = models.DateTimeField(null=True, blank=True)
     won_at       = models.DateTimeField(null=True, blank=True)
+    converted_at = models.DateTimeField(null=True, blank=True)
 
-    # Campaign
+    # ── Campaign ───────────────────────────────────────────
     campaign     = models.ForeignKey('campaigns.Campaign', null=True, blank=True,
                                      on_delete=models.SET_NULL, related_name='leads')
     is_active    = models.BooleanField(default=True)
@@ -121,10 +153,26 @@ class Lead(BaseModel):
         indexes  = [
             models.Index(fields=['stage',       'assigned_to'], name='leads_status__64a296_idx'),
             models.Index(fields=['followup_date'],               name='leads_followu_b0a7a5_idx'),
+            models.Index(fields=['phone'],                       name='leads_phone_idx'),
+            models.Index(fields=['first_name', 'last_name'],     name='leads_name_idx'),
         ]
 
     def __str__(self):
-        return f'{self.title} — {self.customer}'
+        name = self.get_full_name() or self.title
+        return f'{name} ({self.phone or "no phone"})'
+
+    def get_full_name(self):
+        if self.first_name or self.last_name:
+            return f'{self.first_name} {self.last_name}'.strip()
+        # Fallback: parse title "Lead from call — Name"
+        if '—' in self.title:
+            return self.title.split('—', 1)[1].strip()
+        return self.title
+
+    @property
+    def primary_phone(self):
+        """Compatibility property — returns the lead's phone field."""
+        return self.phone or None
 
 
 class LeadEvent(BaseModel):

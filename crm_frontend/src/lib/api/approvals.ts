@@ -13,11 +13,10 @@ export interface ApprovalRequest {
   reviewed_by_name:  string | null;
   review_comment:    string;
   reviewed_at:       string | null;
-  customer:          string | null;
-  customer_name:     string | null;
+  lead:              string | null;
+  lead_name:         string | null;
   ticket:            string | null;
   ticket_number:     number | null;
-  lead:              string | null;
   created_at:        string;
   updated_at:        string;
 }
@@ -28,7 +27,6 @@ export interface ApprovalCreatePayload {
   description?:  string;
   amount?:       number | null;
   ticket?:       string | null;
-  customer?:     string | null;
   lead?:         string | null;
 }
 

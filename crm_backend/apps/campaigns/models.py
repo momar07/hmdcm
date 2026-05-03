@@ -42,14 +42,14 @@ class CampaignMember(BaseModel):
         ('do_not_call','Do Not Call'), ('completed','Completed'),
     ]
     campaign  = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name='members')
-    customer  = models.ForeignKey('customers.Customer', on_delete=models.CASCADE)
+    lead      = models.ForeignKey('leads.Lead', on_delete=models.CASCADE, null=True, blank=True)
     status    = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
     attempts  = models.PositiveIntegerField(default=0)
     # last_call FK added in campaigns/0002 (after calls table exists)
 
     class Meta:
         db_table = 'campaign_members'
-        unique_together = [('campaign', 'customer')]
+        unique_together = [('campaign', 'lead')]
 
     def __str__(self):
-        return f'{self.campaign} — {self.customer}'
+        return f'{self.campaign} — {self.lead}'

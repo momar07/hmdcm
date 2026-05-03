@@ -9,7 +9,6 @@ interface Props {
   onClose:          () => void;
   onCreated:        () => void;
   defaultTicketId?: string;
-  defaultCustomerId?: string;
 }
 
 const TYPE_OPTIONS = [
@@ -21,7 +20,7 @@ const TYPE_OPTIONS = [
 ];
 
 export function NewApprovalModal({
-  open, onClose, onCreated, defaultTicketId, defaultCustomerId,
+  open, onClose, onCreated, defaultTicketId,
 }: Props) {
   const [type,        setType]        = useState("other");
   const [title,       setTitle]       = useState("");
@@ -45,7 +44,6 @@ export function NewApprovalModal({
         description:   description.trim(),
         amount:        selectedType?.hasAmount && amount ? parseFloat(amount) : null,
         ticket:        defaultTicketId   ?? null,
-        customer:      defaultCustomerId ?? null,
       });
       toast.success("Approval request sent ✅");
       onCreated();

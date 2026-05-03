@@ -8,7 +8,7 @@ class NoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Note
         fields = ['id', 'author', 'author_name', 'content', 'is_pinned',
-                  'customer', 'lead', 'call', 'created_at', 'updated_at']
+                  'lead', 'call', 'created_at', 'updated_at']
         read_only_fields = ['id', 'author', 'created_at', 'updated_at']
 
     def create(self, validated_data):

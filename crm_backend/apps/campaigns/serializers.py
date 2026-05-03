@@ -27,17 +27,17 @@ class CampaignSerializer(serializers.ModelSerializer):
 
 
 class CampaignMemberSerializer(serializers.ModelSerializer):
-    customer_name  = serializers.CharField(source='customer.get_full_name', read_only=True)
-    customer_phone = serializers.SerializerMethodField()
+    lead_name  = serializers.CharField(source='lead.get_full_name', read_only=True)
+    lead_phone = serializers.SerializerMethodField()
 
     class Meta:
         model  = CampaignMember
         fields = [
-            'id', 'campaign', 'customer', 'customer_name',
-            'customer_phone', 'status', 'attempts', 'last_call',
+            'id', 'campaign', 'lead', 'lead_name',
+            'lead_phone', 'status', 'attempts', 'last_call',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
-    def get_customer_phone(self, obj):
-        return obj.customer.primary_phone
+    def get_lead_phone(self, obj):
+        return obj.lead.phone if obj.lead else None

@@ -11,7 +11,7 @@ def get_campaign_by_id(campaign_id) -> Campaign:
 
 
 def get_pending_members(campaign_id) -> QuerySet:
-    return CampaignMember.objects.select_related('customer').filter(
+    return CampaignMember.objects.select_related('lead').filter(
         campaign_id=campaign_id, status='pending'
     )
 

@@ -4,7 +4,7 @@ from .models import Lead
 
 def get_all_leads(user=None) -> QuerySet:
     qs = Lead.objects.select_related(
-        'customer', 'status', 'priority', 'assigned_to', 'campaign'
+        'status', 'priority', 'assigned_to', 'campaign'
     ).filter(is_active=True)
     if user and user.role == 'agent':
         qs = qs.filter(assigned_to=user)
@@ -15,7 +15,7 @@ def get_all_leads(user=None) -> QuerySet:
 
 def get_lead_by_id(lead_id) -> Lead:
     return Lead.objects.select_related(
-        'customer', 'status', 'priority', 'assigned_to'
+        'status', 'priority', 'assigned_to'
     ).get(pk=lead_id)
 
 
@@ -25,4 +25,4 @@ def get_leads_for_followup() -> QuerySet:
         followup_date__lte=timezone.now(),
         is_active=True,
         status__is_closed=False
-    ).select_related('assigned_to', 'customer')
+    ).select_related('assigned_to')

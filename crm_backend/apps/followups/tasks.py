@@ -39,7 +39,7 @@ def send_followup_reminders(self):
                     'type':         'followup_reminder',
                     'followup_id':  str(f.id),
                     'title':        f.title,
-                    'customer':     f.lead.title if f.lead else '—',
+                    'lead_name':    f.lead.get_full_name() if f.lead else '—',
                     'scheduled_at': f.scheduled_at.isoformat(),
                 }
             )

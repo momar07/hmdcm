@@ -1,5 +1,4 @@
 from .models import Lead, LeadEvent
-from apps.customers.selectors import get_customer_by_id
 
 
 # ── helpers ────────────────────────────────────────────────────────────
@@ -22,7 +21,7 @@ def _notify_agent(agent, lead, message: str):
             'lead_id': str(lead.id),
             'title':   lead.title,
             'message': message,
-            'customer_name': lead.customer.get_full_name() if lead.customer else '',
+            'lead_name': lead.get_full_name() or lead.title,
         }
 
         def _run():
@@ -83,11 +82,10 @@ def _sync_followup(lead, actor=None):
 
 
 # ── public services ────────────────────────────────────────────────────
-def create_lead(customer_id, title, status_id=None, priority_id=None,
+def create_lead(title, status_id=None, priority_id=None,
                 source='manual', assigned_to=None, actor=None, **kwargs) -> Lead:
-    customer = get_customer_by_id(customer_id)
     lead = Lead.objects.create(
-        customer=customer, title=title,
+        title=title,
         status_id=status_id, priority_id=priority_id,
         source=source, assigned_to=assigned_to, **kwargs
     )
@@ -108,7 +106,7 @@ def create_lead(customer_id, title, status_id=None, priority_id=None,
 
 def assign_lead(lead_id, agent_id, actor=None):
     from apps.users.models import User
-    lead = Lead.objects.select_related('assigned_to', 'customer').get(pk=lead_id)
+    lead = Lead.objects.select_related('assigned_to').get(pk=lead_id)
     old_name = lead.assigned_to.get_full_name() if lead.assigned_to else '—'
 
     Lead.objects.filter(pk=lead_id).update(assigned_to_id=agent_id)

@@ -132,9 +132,11 @@ export interface LeadStage {
 export interface Lead {
   id:             string;
   title:          string;
-  customer:       string | Customer;
-  customer_name:  string;
-  customer_detail?: Customer;
+  phone:          string;
+  email:          string;
+  first_name:     string;
+  last_name:      string;
+  company:        string;
   status:         string | LeadStatus;
   status_name:    string;
   status_detail?: LeadStatus;
@@ -176,8 +178,8 @@ export interface Call {
   callee_number: string;
   agent:         string | null;
   agent_name:    string | null;
-  customer:      string | null;
-  customer_name: string | null;
+  lead:          string | null;
+  lead_name:     string | null;
   duration:      number;
   started_at:    string | null;
   ended_at:      string | null;
@@ -199,12 +201,11 @@ export interface Followup {
   id:               string;
   lead:             string | null;
   lead_title:       string | null;
+  lead_name:        string | null;
+  lead_phone:       string | null;
   call:             string | null;
   assigned_to:      string;
   assigned_to_name: string;
-  customer_id:      string | null;
-  customer_name:    string | null;
-  customer_phone:   string | null;
   title:            string;
   description:      string;
   followup_type:    'call' | 'email' | 'meeting' | 'sms' | 'other';
@@ -256,7 +257,6 @@ export interface SupervisorDashboard {
 
 export interface AdminDashboard {
   role:            'admin';
-  total_customers: number;
   total_leads:     number;
   calls_today:     number;
   active_agents:   number;
@@ -276,12 +276,18 @@ export interface IncomingCallEvent {
   queue:           string;
   direction:       'inbound' | 'outbound' | 'internal';
   agent_extension: string;
-  customer_id:     string | null;
-  customer_name:   string | null;
-  customer_phone:  string | null;
-  customer_company?: string | null;
+  // Lead info
   lead_id:         string | null;
   lead_title?:     string | null;
+  lead_phone?:     string | null;
+  lead_stage?:     string | null;
+  lead_status?:    string | null;
+  lead_assigned?:  string | null;
+  lead_value?:     string | null;
+  lead_source?:    string;
+  lead_name?:      string | null;
+  lead_company?:   string | null;
+  lead_email?:     string | null;
 }
 
 export interface CallEndedEvent {
@@ -302,7 +308,8 @@ export interface FollowupReminderEvent {
   type:         'followup_reminder';
   followup_id:  string;
   title:        string;
-  customer:     string;
+  lead_name:    string;
+  lead_phone:   string | null;
   scheduled_at: string;
 }
 
@@ -361,12 +368,10 @@ export interface Task {
   assigned_to_name: string;
   assigned_by:      string | null;
   assigned_by_name: string;
-  customer:         string | null;
-  customer_name:    string | null;
   lead:             string | null;
+  lead_name:        string | null;
   lead_title:       string | null;
   lead_phone:       string | null;
-  customer_phone:   string | null;
   ticket:           string | null;
   ticket_title:     string | null;
   call:             string | null;
@@ -496,9 +501,8 @@ export interface Quotation {
   title:          string;
   agent:          string | null;
   agent_name:     string;
-  customer:       string | null;
-  customer_name:  string;
   lead:           string | null;
+  lead_name:      string;
   lead_title:     string;
   currency:       string;
   tax_rate:       number;

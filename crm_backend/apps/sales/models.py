@@ -188,11 +188,6 @@ class Quotation(BaseModel):
                        on_delete=models.SET_NULL, null=True,
                        related_name="quotations",
                      )
-    customer       = models.ForeignKey(
-                       "customers.Customer",
-                       on_delete=models.SET_NULL, null=True, blank=True,
-                       related_name="quotations",
-                     )
     lead           = models.ForeignKey(
                        "leads.Lead",
                        on_delete=models.SET_NULL, null=True, blank=True,
@@ -236,7 +231,7 @@ class Quotation(BaseModel):
         indexes  = [
             models.Index(fields=["status", "-created_at"], name="idx_quot_status_created"),
             models.Index(fields=["agent", "status"],       name="idx_quot_agent_status"),
-            models.Index(fields=["customer"],              name="idx_quot_customer"),
+            models.Index(fields=["lead"],                  name="idx_quot_lead"),
         ]
 
 

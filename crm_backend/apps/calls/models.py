@@ -84,8 +84,6 @@ class Call(BaseModel):
     ended_at    = models.DateTimeField(null=True, blank=True)
 
     # Relations
-    customer    = models.ForeignKey('customers.Customer', null=True, blank=True,
-                                    on_delete=models.SET_NULL, related_name='calls')
     agent       = models.ForeignKey('users.User', null=True, blank=True,
                                     on_delete=models.SET_NULL, related_name='calls')
     lead        = models.ForeignKey('leads.Lead', null=True, blank=True,
@@ -196,3 +194,103 @@ class CallDisposition(BaseModel):
 
     class Meta:
         db_table = 'call_dispositions'
+
+
+class WebhookEvent(BaseModel):
+    """
+    Idempotency tracker for AMI/webhook events.
+    Prevents duplicate processing when Asterisk sends the same event twice.
+    """
+    EVENT_TYPES = [
+        ('incoming',   'Incoming Call'),
+        ('answered',   'Call Answered'),
+        ('ended',      'Call Ended'),
+        ('recording',  'Recording Ready'),
+    ]
+
+    uniqueid    = models.CharField(max_length=100, db_index=True)
+    event_type  = models.CharField(max_length=20, choices=EVENT_TYPES)
+    processed   = models.BooleanField(default=False)
+    raw_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        db_table = 'webhook_events'
+        unique_together = [('uniqueid', 'event_type')]
+
+    def __str__(self):
+        return f'{self.event_type} — {self.uniqueid}'
+
+
+class AutomationRule(BaseModel):
+    """Configurable automation rules triggered by call events."""
+    TRIGGERS = [
+        ('missed_call',   'Missed Call'),
+        ('no_answer',     'No Answer'),
+        ('vip_call',      'VIP Incoming Call'),
+        ('long_call',     'Call Exceeds Duration'),
+    ]
+    ACTIONS = [
+        ('create_callback',  'Create Callback Task'),
+        ('notify_manager',   'Notify Manager/Supervisor'),
+        ('send_sms',         'Send SMS'),
+        ('assign_priority',  'Assign Priority'),
+    ]
+
+    name        = models.CharField(max_length=100)
+    trigger     = models.CharField(max_length=30, choices=TRIGGERS)
+    action      = models.CharField(max_length=30, choices=ACTIONS)
+    config      = models.JSONField(default=dict, blank=True,
+                                   help_text='Rule-specific config (e.g. delay_hours, vip_tags)')
+    is_active   = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'automation_rules'
+        ordering = ['name']
+
+    def __str__(self):
+        return f'{self.name} ({self.trigger} → {self.action})'
+
+
+class Activity(BaseModel):
+    """Unified timeline for leads — calls, followups, notes, emails."""
+    TYPE_CHOICES = [
+        ('call',     'Call'),
+        ('followup', 'Follow-up'),
+        ('note',     'Note'),
+        ('email',    'Email'),
+        ('sms',      'SMS'),
+    ]
+    STATUS_CHOICES = [
+        ('scheduled',   'Scheduled'),
+        ('in_progress', 'In Progress'),
+        ('completed',   'Completed'),
+        ('cancelled',   'Cancelled'),
+    ]
+
+    lead          = models.ForeignKey('leads.Lead', on_delete=models.CASCADE,
+                                      related_name='activities')
+    call          = models.ForeignKey(Call, null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='activities')
+    followup      = models.ForeignKey('followups.Followup', null=True, blank=True,
+                                      on_delete=models.SET_NULL, related_name='activities')
+    agent         = models.ForeignKey('users.User', null=True, blank=True,
+                                      on_delete=models.SET_NULL)
+    activity_type = models.CharField(max_length=15, choices=TYPE_CHOICES)
+    status        = models.CharField(max_length=15, choices=STATUS_CHOICES, default='completed')
+    title         = models.CharField(max_length=300)
+    description   = models.TextField(blank=True)
+    started_at    = models.DateTimeField(null=True, blank=True)
+    ended_at      = models.DateTimeField(null=True, blank=True)
+    duration      = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'activities'
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['lead', 'activity_type']),
+            models.Index(fields=['lead', 'status']),
+            models.Index(fields=['lead', 'started_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.activity_type} — {self.title}'

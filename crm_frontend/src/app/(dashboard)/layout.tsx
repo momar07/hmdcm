@@ -23,7 +23,7 @@ export default function DashboardLayout({
   const { callStatus }                   = useSipStore();
   const [dispModal, setDispModal]        = useState<{
     callId: string; callerNumber: string;
-    customerName?: string | null; customerId?: string | null;
+    leadName?: string | null; leadId?: string | null;
     callDirection?: 'inbound' | 'outbound';
   } | null>(null);
   const router                       = useRouter();
@@ -71,8 +71,8 @@ export default function DashboardLayout({
                 setDispModal({
                   callId:        latest.id,
                   callerNumber:  (latest as any).caller ?? (latest as any).caller_number ?? 'Unknown',
-                  customerName:  (latest as any).customer_name ?? null,
-                  customerId:    (latest as any).customer   ?? null,
+                  leadName:      (latest as any).lead_name ?? null,
+                  leadId:        (latest as any).lead   ?? null,
                   callDirection: (latest as any).direction ?? 'inbound',
                 });
               } else if (attempt < 3) {
@@ -189,8 +189,8 @@ export default function DashboardLayout({
         <DispositionModal
           callId={dispModal.callId}
           callerNumber={dispModal.callerNumber}
-          customerName={dispModal.customerName}
-          customerId={dispModal.customerId}
+          leadName={dispModal.leadName}
+          leadId={dispModal.leadId}
           callDirection={dispModal.callDirection}
           onClose={() => setDispModal(null)}
         />

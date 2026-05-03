@@ -147,8 +147,8 @@ class Ticket(models.Model):
                 )
 
     # ── Relationships ────────────────────────────────────────────
-    customer   = models.ForeignKey(
-                   "customers.Customer",
+    lead       = models.ForeignKey(
+                   "leads.Lead",
                    on_delete=models.SET_NULL,
                    null=True, blank=True,
                    related_name="tickets",
@@ -234,8 +234,8 @@ class Ticket(models.Model):
                          name="idx_ticket_status_priority"),
             models.Index(fields=["agent", "status", "-updated_at"],
                          name="idx_ticket_agent_status_upd"),
-            models.Index(fields=["customer", "status"],
-                         name="idx_ticket_customer_status"),
+            models.Index(fields=["lead", "status"],
+                         name="idx_ticket_lead_status"),
             models.Index(fields=["status", "-created_at"],
                          name="idx_ticket_status_created"),
             models.Index(fields=["resolution_deadline"],

@@ -11,7 +11,6 @@ interface TaskModalProps {
   open:        boolean;
   onClose:     () => void;
   task?:       Task | null;
-  customerId?: string | null;
   leadId?:     string | null;
   ticketId?:   string | null;
   callId?:     string | null;
@@ -34,7 +33,7 @@ const ACTION_TYPES = [
 
 export default function TaskModal({
   open, onClose, task,
-  customerId, leadId, ticketId, callId,
+  leadId, ticketId, callId,
 }: TaskModalProps) {
   const qc       = useQueryClient();
   const editMode = !!task;
@@ -48,7 +47,6 @@ export default function TaskModal({
     due_date:    '',
     reminder_at: '',
     lead:        leadId   ?? '',
-    customer:    customerId ?? '',
   });
 
   useEffect(() => {
@@ -66,16 +64,15 @@ export default function TaskModal({
                        ? new Date((task as any).reminder_at).toISOString().slice(0, 16)
                        : '',
         lead:        task.lead    ?? '',
-        customer:    task.customer ?? '',
       });
     } else {
       setForm({
         title: '', description: '', priority: 'medium', action_type: 'other',
         assigned_to: '', due_date: '', reminder_at: '',
-        lead: leadId ?? '', customer: customerId ?? '',
+        lead: leadId ?? '',
       });
     }
-  }, [task, open, leadId, customerId]);
+  }, [task, open, leadId]);
 
   // Agents list
   const { data: agents = [] } = useQuery({
@@ -87,9 +84,9 @@ export default function TaskModal({
 
   // Leads list (for linking)
   const { data: leadsData } = useQuery({
-    queryKey: ['leads-simple', form.customer],
+    queryKey: ['leads-simple'],
     queryFn:  () => api.get('/leads/', {
-      params: { customer: form.customer || undefined, page_size: 50 }
+      params: { page_size: 50 }
     }).then((r: any) => r.data?.results ?? r.data),
     enabled:  open,
     staleTime: 30_000,
@@ -103,7 +100,7 @@ export default function TaskModal({
       toast.success(editMode ? 'Task updated ✅' : 'Task created ✅');
       qc.invalidateQueries({ queryKey: ['tasks'] });
       qc.invalidateQueries({ queryKey: ['task-stats'] });
-      qc.invalidateQueries({ queryKey: ['customer-tasks'] });
+      qc.invalidateQueries({ queryKey: ['lead-tasks'] });
       onClose();
     },
     onError: (err: any) => {
@@ -123,7 +120,6 @@ export default function TaskModal({
       assigned_to: form.assigned_to,
       due_date:    form.due_date    || null,
       reminder_at: form.reminder_at || null,
-      customer:    form.customer    || customerId || null,
       lead:        form.lead        || leadId     || null,
       ticket:      ticketId ?? null,
       call:        callId   ?? null,
@@ -261,11 +257,11 @@ export default function TaskModal({
           </div>
 
           {/* Linked badges */}
-          {(customerId || ticketId || callId) && (
+          {(leadId || ticketId || callId) && (
             <div className="flex flex-wrap gap-2">
-              {customerId && <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-3 py-1">📋 Customer linked</span>}
-              {ticketId   && <span className="text-xs bg-orange-50 text-orange-700 border border-orange-200 rounded-full px-3 py-1">🎫 Ticket linked</span>}
-              {callId     && <span className="text-xs bg-green-50 text-green-700 border border-green-200 rounded-full px-3 py-1">📞 Call linked</span>}
+              {leadId   && <span className="text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded-full px-3 py-1">🎯 Lead linked</span>}
+              {ticketId && <span className="text-xs bg-orange-50 text-orange-700 border border-orange-200 rounded-full px-3 py-1">🎫 Ticket linked</span>}
+              {callId   && <span className="text-xs bg-green-50 text-green-700 border border-green-200 rounded-full px-3 py-1">📞 Call linked</span>}
             </div>
           )}
         </div>

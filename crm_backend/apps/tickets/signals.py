@@ -42,12 +42,12 @@ def handle_ticket_save(sender, instance, created, **kwargs):
             resolution_deadline    = instance.resolution_deadline,
             sla_policy             = instance.sla_policy,
             customer_name          = (
-                instance.customer.get_full_name()
-                if instance.customer else ""
+                instance.lead.get_full_name()
+                if instance.lead else ""
             ),
             customer_email         = (
-                instance.customer.email
-                if instance.customer else ""
+                instance.lead.email
+                if instance.lead else ""
             ),
         )
         # ── Log creation ──────────────────────────────────────────

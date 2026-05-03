@@ -38,7 +38,8 @@ def render_terms(template_body, quotation):
     Works for both price_quote (uses totals) and contract (uses fields).
     """
     context = {
-        "customer_name": quotation.customer.get_full_name() if quotation.customer else "",
+        "lead_name":     quotation.lead.get_full_name() if quotation.lead else "",
+        "customer_name": quotation.lead.get_full_name() if quotation.lead else "",  # alias for backwards compat
         "agent_name":    quotation.agent.get_full_name()    if quotation.agent    else "",
         "ref_number":    quotation.ref_number,
         "total_amount":  f"{quotation.total_amount:,.2f} {quotation.currency}",
@@ -69,7 +70,6 @@ def submit_for_approval(quotation, agent):
         description   = f"Agent {agent.get_full_name()} submitted quotation {quotation.ref_number} for approval.",
         amount        = quotation.total_amount,
         requested_by  = agent,
-        customer      = quotation.customer,
         lead          = quotation.lead,
     )
     quotation.approval = approval

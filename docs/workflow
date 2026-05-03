@@ -1,0 +1,146 @@
+Break this call workflow into implementation steps:
+
+
+START of WORKFLOW
+========================
+REQUIREDOW
+========================
+Implement the following steps:
+
+1) Incoming Call Webhook
+- Endpoint: /api/call/incoming
+- Receives:
+  - caller_id
+  - queue_id
+  - agent_ext
+  - call_id
+
+2) Phone Normalization
+- Normalize Egyptian phone numbers
+- Remove country codes, leading zeros, formatting issues
+
+3) Lead Lookup
+- Search lead by phone
+- If exists → return lead
+- If NOT:
+  - Create new lead:
+    - status = NEW
+    - source = CALL
+    - phone = caller_id
+    - tenant_id required
+
+4) Screen Pop (Real-time)
+- Send real-time event to agent UI:
+  - Lead info (or "New Lead")
+  - Phone number
+  - Previous activities (if exist)
+
+5) Auto Assignment
+- Assign lead.owner_id = agent_id
+
+6) Create Call Activity
+- On call start:
+  - type = call
+  - status = in_progress
+  - lead_id
+  - agent_id
+  - start_time
+
+7) Call End Event
+- Endpoint: /api/call/end
+- Receives:
+  - call_id
+  - duration
+  - hangup_cause
+
+8) Update Activity
+- status = completed
+- duration
+- end_time
+
+9) Mandatory Outcome
+- Agent MUST select:
+  - Interested
+  - Not Interested
+  - Callback
+  - Wrong Number
+
+10) Next Action Enforcement
+- If Callback → create scheduled activity
+- If No Answer → retry task
+- If Interested → move to QUALIFIED
+
+11) Lead Status Update
+- NEW → CONTACTED or QUALIFIED or LOST
+
+12) Call Recording
+- Store recording URL
+- Link to activity
+
+13) Automation Rules
+- Missed call → create callback task
+- No response → reminder
+- VIP → notify manager
+
+========================
+OUTPUT REQUIREMENTS
+========================
+Provide:
+
+1) Database Design (Prisma schema)
+- Lead
+- Activity
+- CallLog
+- Agent
+- Queue
+- Include tenant_id
+- Add indexes
+
+2) API Implementation
+- /api/call/incoming
+- /api/call/end
+- Code using Next.js route handlers
+
+3) Service Layer
+- lead.service.ts
+- call.service.ts
+- activity.service.ts
+
+4) Real-time implementation
+- WebSocket or Pusher example
+
+5) Automation handling
+- Using BullMQ or queues
+
+6) Validation
+- Use Zod
+
+7) Error handling
+- Production-level
+
+8) Folder Structure
+- Clean architecture (modules/calls, modules/leads, etc.)
+
+========================
+CONSTRAINTS
+========================
+- Avoid duplicate leads
+- Ensure idempotency for webhooks
+- High performance (handle thousands of calls)
+- Clean and scalable architecture
+
+========================
+GOAL
+========================
+Build a scalable, production-ready call workflow similar to Salesforce / enterprise CRM systems.
+
+END of WORKFLOW
+
+
+
+Output:
+- Step-by-step tasks
+- APIs list
+- DB entities
+- edge cases
+- priorities

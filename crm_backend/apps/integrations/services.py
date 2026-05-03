@@ -70,14 +70,14 @@ def originate_call_for_campaign(member) -> dict:
     Campaign auto-dialer variant — uses first agent in campaign queue.
     member: CampaignMember instance.
     """
-    phone = member.customer.primary_phone
+    phone = member.lead.phone if member.lead else None
     if not phone:
         raise IntegrationException(
-            f'Customer {member.customer} has no primary phone.'
+            f'Lead {member.lead} has no phone number.'
         )
     logger.info(
         f'[Campaign Originate] campaign={member.campaign_id} '
-        f'customer={member.customer}'
+        f'lead={member.lead}'
     )
     # TODO: resolve queue agent and originate
     return {'status': 'queued', 'phone': phone}
@@ -127,7 +127,7 @@ def sync_cdr_records():
 def _upsert_cdr_rows(rows):
     from apps.calls.models import Call
     from django.utils import timezone
-    from apps.customers.selectors import find_customer_by_phone
+    from apps.leads.selectors import get_all_leads
     import datetime
 
     for row in rows:
@@ -149,7 +149,6 @@ def _upsert_cdr_rows(rows):
             rec_url = f'{base}/{recfile}'
 
         started_at = calldate if isinstance(calldate, datetime.datetime) else None
-        customer   = find_customer_by_phone(src)
 
         Call.objects.update_or_create(
             uniqueid=uniqueid,
@@ -163,7 +162,6 @@ def _upsert_cdr_rows(rows):
                 'started_at':     started_at,
                 'recording_file': recfile or '',
                 'recording_url':  rec_url,
-                'customer':       customer,
             }
         )
 
@@ -174,13 +172,13 @@ def handle_call_event(event_data: dict):
     """
     Process a raw AMI event dict and:
       - Create / update Call records.
-      - Resolve customer via phone number.
+      - Resolve lead via phone number.
       - Push real-time WebSocket events to agents and supervisors.
     """
     from channels.layers import get_channel_layer
     from asgiref.sync import async_to_sync
     from apps.calls.services import create_call_from_ami, update_call_status
-    from apps.customers.selectors import find_customer_by_phone
+    from apps.leads.models import Lead
 
     event_type = event_data.get('Event', '')
     uniqueid   = event_data.get('Uniqueid', '')
@@ -196,10 +194,10 @@ def handle_call_event(event_data: dict):
             'exten':       exten,
             'direction':   'inbound',
         })
-        customer = find_customer_by_phone(caller)
-        if customer:
+        lead = _find_lead_by_phone(caller)
+        if lead:
             from apps.calls.models import Call
-            Call.objects.filter(uniqueid=uniqueid).update(customer=customer)
+            Call.objects.filter(uniqueid=uniqueid).update(lead=lead)
 
         ws_payload = {
             'type':            'incoming_call',
@@ -207,8 +205,8 @@ def handle_call_event(event_data: dict):
             'caller':          caller,
             'queue':           event_data.get('Queue', ''),
             'agent_extension': exten,
-            'customer_id':     str(customer.id) if customer else None,
-            'customer_name':   customer.get_full_name() if customer else None,
+            'lead_id':         str(lead.id) if lead else None,
+            'lead_name':       lead.get_full_name() if lead else None,
         }
         async_to_sync(channel_layer.group_send)(
             'supervisors',
@@ -238,12 +236,24 @@ def handle_call_event(event_data: dict):
         logger.info(f'[AMI] Hangup: {uniqueid} cause={cause}')
 
 
-# ─── Resolve Customer ─────────────────────────────────────────────────────────
+def _find_lead_by_phone(phone: str):
+    """Look up existing Lead by phone number."""
+    if not phone or len(phone) < 3:
+        return None
+    suffix = phone[-9:] if len(phone) >= 9 else phone
+    try:
+        lead = Lead.objects.filter(
+            phone__endswith=suffix, is_active=True
+        ).first()
+        return lead
+    except Exception as e:
+        logger.debug(f'[AMI] Lead lookup error: {e}')
+        return None
+
 
 def resolve_customer_from_phone(phone_number: str):
     """
-    Lookup a Customer by phone number.
+    Lookup a Lead by phone number.
     Used by screen-pop API endpoint and AMI handler.
     """
-    from apps.customers.selectors import find_customer_by_phone
-    return find_customer_by_phone(phone_number)
+    return _find_lead_by_phone(phone_number)

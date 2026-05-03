@@ -1,5 +1,4 @@
 export { authApi }      from './auth';
-export { customersApi } from './customers';
 export { leadsApi }     from './leads';
 export { callsApi }     from './calls';
 export { followupsApi } from './followups';

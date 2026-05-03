@@ -32,7 +32,7 @@ class CallDispositionSerializer(serializers.ModelSerializer):
 
 class CallListSerializer(serializers.ModelSerializer):
     agent_name    = serializers.SerializerMethodField()
-    customer_name = serializers.SerializerMethodField()
+    lead_name     = serializers.SerializerMethodField()
     has_recording = serializers.SerializerMethodField()
 
     class Meta:
@@ -41,7 +41,7 @@ class CallListSerializer(serializers.ModelSerializer):
             'id', 'uniqueid', 'direction', 'status',
             'caller', 'callee',
             'agent', 'agent_name',
-            'customer', 'customer_name',
+            'lead', 'lead_name',
             'duration', 'started_at', 'ended_at',
             'is_completed', 'completed_at',
             'has_recording', 'created_at',
@@ -53,11 +53,11 @@ class CallListSerializer(serializers.ModelSerializer):
         full = obj.agent.get_full_name() if hasattr(obj.agent, 'get_full_name') else ''
         return full or obj.agent.email
 
-    def get_customer_name(self, obj):
-        if not obj.customer:
-            return None
-        full = obj.customer.get_full_name() if hasattr(obj.customer, 'get_full_name') else ''
-        return full or str(obj.customer)
+    def get_lead_name(self, obj):
+        if not obj.lead:
+            return obj.caller or 'Unknown'
+        full = obj.lead.get_full_name() if hasattr(obj.lead, 'get_full_name') else ''
+        return full or obj.lead.title or obj.caller or 'Unknown'
 
     def get_has_recording(self, obj):
         return hasattr(obj, 'recording') and bool(obj.recording)
@@ -67,7 +67,7 @@ class CallDetailSerializer(serializers.ModelSerializer):
     events      = CallEventSerializer(many=True, read_only=True)
     recording   = CallRecordingSerializer(read_only=True)
     agent_name  = serializers.SerializerMethodField()
-    customer_name = serializers.SerializerMethodField()
+    lead_name   = serializers.SerializerMethodField()
 
     class Meta:
         model  = Call
@@ -79,16 +79,15 @@ class CallDetailSerializer(serializers.ModelSerializer):
         full = obj.agent.get_full_name() if hasattr(obj.agent, 'get_full_name') else ''
         return full or obj.agent.email
 
-    def get_customer_name(self, obj):
-        if not obj.customer:
-            return None
-        full = obj.customer.get_full_name() if hasattr(obj.customer, 'get_full_name') else ''
-        return full or str(obj.customer)
+    def get_lead_name(self, obj):
+        if not obj.lead:
+            return obj.caller or 'Unknown'
+        full = obj.lead.get_full_name() if hasattr(obj.lead, 'get_full_name') else ''
+        return full or obj.lead.title or obj.caller or 'Unknown'
 
 
 class OriginateCallSerializer(serializers.Serializer):
     phone_number = serializers.CharField(max_length=30)
-    customer_id  = serializers.UUIDField(required=False)
     lead_id      = serializers.UUIDField(required=False)
     campaign_id  = serializers.UUIDField(required=False)
 

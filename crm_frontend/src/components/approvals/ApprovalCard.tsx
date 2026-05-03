@@ -97,9 +97,9 @@ export function ApprovalCard({ approval, canReview, onUpdated }: Props) {
           <User className="h-3 w-3" />
           {approval.requested_by_name}
         </span>
-        {approval.customer_name && (
+        {approval.lead_name && (
           <span className="flex items-center gap-1">
-            👤 {approval.customer_name}
+            👤 {approval.lead_name}
           </span>
         )}
         {approval.ticket_number && (

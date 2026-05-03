@@ -64,18 +64,12 @@ class ApprovalRequest(models.Model):
                  related_name="approval_requests",
                  db_index=True,
                )
-    customer = models.ForeignKey(
-                 "customers.Customer",
-                 on_delete=models.SET_NULL,
-                 null=True, blank=True,
-                 related_name="approval_requests",
-                 db_index=True,
-               )
     lead     = models.ForeignKey(
                  "leads.Lead",
                  on_delete=models.SET_NULL,
                  null=True, blank=True,
                  related_name="approval_requests",
+                 db_index=True,
                )
 
     # ── Review ────────────────────────────────────────────────

@@ -39,11 +39,6 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['admin', 'supervisor', 'agent', 'qa'],
   },
   {
-    href: '/customers', label: 'Customers',
-    icon: <UserCircle size={18} />,
-    roles: ['admin', 'supervisor', 'agent'],
-  },
-  {
     href: '/leads', label: 'Leads',
     icon: <BookOpen size={18} />,
     roles: ['admin', 'supervisor', 'agent'],

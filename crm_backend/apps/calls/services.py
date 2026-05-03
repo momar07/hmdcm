@@ -9,7 +9,7 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
     بيتأكد من كل الـ validation rules قبل الحفظ.
     """
     try:
-        call = Call.objects.select_related('customer', 'lead', 'agent').get(pk=call_id)
+        call = Call.objects.select_related('lead', 'agent').get(pk=call_id)
     except Call.DoesNotExist:
         raise ValidationError('Call not found.')
 
@@ -127,6 +127,15 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
         if stage.is_won:
             call.lead.won_amount = data.get('won_amount')
             call.lead.won_at     = tz.now()
+
+            # Tag as VIP if high value
+            if call.lead.won_amount and call.lead.won_amount > 10000:
+                from apps.leads.models import LeadTag
+                vip_tag, _ = LeadTag.objects.get_or_create(name='VIP')
+                call.lead.tags.add(vip_tag)
+
+            logger.info(f'[CallComplete] Lead won: {call.lead.id}')
+
         elif stage.slug == 'lost':
             call.lead.lost_reason = data.get('lost_reason', '')
             call.lead.lost_at     = tz.now()
@@ -159,32 +168,19 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
                 completion.followup_created = followup
                 completion.save(update_fields=['followup_created'])
 
-        # 2) create_lead
+        # 2) create_lead (skip if lead already exists)
         elif atype == 'create_lead':
-            if call.customer and not call.lead:
-                from apps.leads.models import Lead, LeadStage
-                cfg        = action.config or {}
-                first_stage = LeadStage.objects.filter(is_active=True).order_by('order').first()
-                stage_id   = cfg.get('default_stage') or (first_stage.id if first_stage else None)
-                lead = Lead.objects.create(
-                    title       = f'Lead from call — {call.customer.get_full_name()}',
-                    customer    = call.customer,
-                    assigned_to = agent,
-                    source      = 'call',
-                    stage_id    = stage_id,
-                    description = note,
-                )
-                call.lead = lead
-                call.save(update_fields=['lead'])
+            if not call.lead and call.lead:
+                pass  # lead already exists, skip
 
         # 3) create_ticket
         elif atype == 'create_ticket':
-            if call.customer:
+            if call.lead:
                 from apps.tickets.models import Ticket
                 cfg = action.config or {}
                 Ticket.objects.create(
-                    title       = f'Ticket from call — {call.customer.get_full_name()}',
-                    customer    = call.customer,
+                    title       = f'Ticket from call — {call.lead.get_full_name()}',
+                    lead        = call.lead,
                     assigned_to = agent,
                     priority    = cfg.get('default_priority', 'medium'),
                     description = note,
@@ -257,7 +253,7 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
 def get_pending_completions(agent=None):
     """المكالمات المجاوبة اللي لسه ما اتكملتش"""
     qs = Call.objects.filter(status='answered', is_completed=False)\
-                     .select_related('customer', 'agent', 'lead')
+                     .select_related('agent', 'lead')
     if agent:
         # Supervisors/admins see all pending — agents only see their own
         role = getattr(agent, 'role', 'agent')

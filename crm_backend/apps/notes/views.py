@@ -8,7 +8,7 @@ class NoteViewSet(viewsets.ModelViewSet):
     serializer_class = NoteSerializer
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['customer', 'lead', 'call']
+    filterset_fields = ['lead', 'call']
 
     def get_queryset(self):
         return Note.objects.select_related('author').all()

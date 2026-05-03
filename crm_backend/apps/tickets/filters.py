@@ -11,7 +11,7 @@ class TicketFilter(django_filters.FilterSet):
     ticket_type = django_filters.MultipleChoiceFilter(choices=TicketType.choices)
     source      = django_filters.MultipleChoiceFilter(choices=TicketSource.choices)
     agent       = django_filters.UUIDFilter(field_name="agent__id")
-    customer    = django_filters.UUIDFilter(field_name="customer__id")
+    lead        = django_filters.UUIDFilter(field_name="lead__id")
     queue       = django_filters.CharFilter(lookup_expr="iexact")
 
     # ── Boolean filters ───────────────────────────────────────────
@@ -37,12 +37,12 @@ class TicketFilter(django_filters.FilterSet):
         model  = Ticket
         fields = [
             "status", "priority", "ticket_type", "source",
-            "agent", "customer", "queue",
+            "agent", "lead", "queue",
             "sla_breached", "is_escalated",
         ]
 
     def filter_search(self, queryset, name, value):
-        """Search across title, customer name, phone number."""
+        """Search across title, lead name, phone number."""
         from django.db.models import Q
         return queryset.filter(
             Q(title__icontains=value)          |

@@ -38,7 +38,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         user = self.request.user
         qs   = (
             Ticket.objects
-            .select_related("customer", "agent", "created_by", "sla_policy", "call")
+            .select_related("lead", "agent", "created_by", "sla_policy", "call")
             .prefetch_related("tags")
         )
         # Agents only see their own tickets

@@ -124,7 +124,7 @@ export default function CallDetailPage() {
         <InfoRow label="Direction" value={<span className="flex items-center gap-1">{dirIcon} {c.direction}</span>} />
         <InfoRow label="Duration"  value={formatDuration(c.duration)} />
         <InfoRow label="Agent"     value={c.agent_name || '—'} />
-        <InfoRow label="Customer"  value={c.customer_name || '—'} />
+        <InfoRow label="Lead"      value={c.lead_name || '—'} />
         {c.started_at && (
           <InfoRow
             label="Started"

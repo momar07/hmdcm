@@ -127,7 +127,7 @@ class TicketListSerializer(serializers.ModelSerializer):
             "id", "ticket_number", "title",
             "ticket_type", "category", "source",
             "status", "priority",
-            "customer_id", "customer_name", "customer_email",
+            "lead", "customer_name", "customer_email",
             "phone_number", "asterisk_call_id", "queue", "direction",
             "agent_id", "agent_name",
             "created_by_name",
@@ -163,7 +163,7 @@ class TicketCreateSerializer(serializers.ModelSerializer):
         fields = [
             "title", "description",
             "ticket_type", "category", "source", "priority",
-            "customer", "agent",
+            "lead", "agent",
             "phone_number", "asterisk_call_id", "call", "queue", "direction",
             "sla_policy", "meta",
             "tag_ids",
@@ -177,11 +177,13 @@ class TicketCreateSerializer(serializers.ModelSerializer):
         if not validated_data.get("agent"):
             validated_data["agent"] = self.context["request"].user
 
-        # Snapshot customer info
-        customer = validated_data.get("customer")
-        if customer:
-            validated_data["customer_name"]  = customer.get_full_name()
-            validated_data["customer_email"] = customer.email or ""
+        # Snapshot lead info
+        lead = validated_data.get("lead")
+        if lead:
+            validated_data["customer_name"]  = lead.get_full_name() or lead.title
+            validated_data["customer_email"] = lead.email or ""
+            if not validated_data.get("phone_number") and lead.phone:
+                validated_data["phone_number"] = lead.phone
 
         ticket = Ticket.objects.create(**validated_data)
         if tags:
@@ -245,7 +247,7 @@ class TicketDetailSerializer(serializers.ModelSerializer):
             "id", "ticket_number", "title", "description",
             "ticket_type", "category", "source",
             "status", "priority",
-            "customer", "customer_name", "customer_email",
+            "lead", "customer_name", "customer_email",
             "phone_number", "phone_number_normalized",
             "asterisk_call_id", "call", "queue",
             "agent", "agent_name",

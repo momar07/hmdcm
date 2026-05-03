@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, User, Calendar, Tag, Clock, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, User, Calendar, Tag, Clock, ChevronDown, ChevronUp, Phone } from 'lucide-react';
 import toast         from 'react-hot-toast';
 import { leadsApi }  from '@/lib/api/leads';
 import { PageHeader }  from '@/components/ui/PageHeader';
@@ -109,7 +109,7 @@ export default function LeadDetailPage() {
     <div className="text-center py-20 text-gray-400">Lead not found.</div>
   );
 
-  const customer = lead.customer_detail ?? lead.customer;
+  const customer = null; // Customer model removed — all data is on Lead now
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -248,32 +248,75 @@ export default function LeadDetailPage() {
         </div>
       </div>
 
-      {/* ── Customer Info ──────────────────────────────────────── */}
-      {customer && typeof customer === 'object' && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-          <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Customer</p>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-medium text-gray-900">
-                {'first_name' in customer
-                  ? customer.first_name + ' ' + customer.last_name
-                  : lead.customer_name}
-              </p>
-              {'primary_phone' in customer && customer.primary_phone && (
-                <p className="text-sm text-gray-500 font-mono mt-0.5">
-                  {customer.primary_phone}
-                </p>
-              )}
+      {/* ── Lead Contact Info ──────────────────────────────── */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+        <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Contact Info</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center">
+              <Phone size={18} className="text-green-600" />
             </div>
-            {'id' in customer && (
-              <Button variant="secondary" size="sm"
-                      onClick={() => router.push('/customers/' + customer.id)}>
-                View Profile
-              </Button>
-            )}
+            <div>
+              <p className="text-xs text-gray-400">Phone</p>
+              <p className="font-medium text-gray-900 font-mono">
+                {lead.phone || '—'}
+              </p>
+            </div>
           </div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
+              <svg className="w-[18px] h-[18px] text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Email</p>
+              <p className="font-medium text-gray-900">
+                {lead.email || '—'}
+              </p>
+            </div>
+          </div>
+          {(lead.first_name || lead.last_name) && (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center">
+                <User size={18} className="text-purple-600" />
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Name</p>
+                <p className="font-medium text-gray-900">
+                  {lead.first_name} {lead.last_name}
+                </p>
+              </div>
+            </div>
+          )}
+          {lead.company && (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center">
+                <svg className="w-[18px] h-[18px] text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs text-gray-400">Company</p>
+                <p className="font-medium text-gray-900">{lead.company}</p>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+        {lead.phone && (
+          <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('sip:dial', {
+                detail: { phone: lead.phone, leadId: id, customerId: null },
+              }))}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors"
+            >
+              <Phone size={16} />
+              Call Now
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* ── Audit Trail / Events ───────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">

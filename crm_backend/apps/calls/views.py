@@ -19,9 +19,10 @@ from apps.leads.models import LeadStage
 class CallViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends    = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields   = ['direction', 'status', 'agent', 'queue', 'customer']
+    filterset_fields   = ['direction', 'status', 'agent', 'queue', 'lead']
     search_fields      = ['caller', 'callee', 'uniqueid',
-                          'customer__first_name', 'customer__last_name',
+                          'lead__first_name', 'lead__last_name', 'lead__phone',
+                          'lead__title',
                           'agent__first_name', 'agent__last_name',
                           'queue']
     ordering_fields    = ['started_at', 'created_at', 'duration']
@@ -29,31 +30,13 @@ class CallViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = get_all_calls(user=self.request.user)
-        # When filtering by customer, show ALL calls for that customer
-        # regardless of agent assignment (for customer detail page)
-        customer_id = self.request.query_params.get('customer')
-        if customer_id:
-            from django.db.models import Q as _Q
-            from apps.customers.models import CustomerPhone as _CP
-            # Build all phone variants (raw, normalized, +prefix, 9-digit suffix)
-            phone_rows = _CP.objects.filter(customer_id=customer_id).values_list('number', 'normalized')
-            phone_variants = set()
-            for number, normalized in phone_rows:
-                for val in [number, normalized]:
-                    if not val: continue
-                    phone_variants.add(val)
-                    digits = ''.join(c for c in val if c.isdigit())
-                    if digits:
-                        phone_variants.add(digits)
-                        if not val.startswith('+'): phone_variants.add('+' + digits)
-                        if len(digits) >= 9: phone_variants.add(digits[-9:])
-
+        # When filtering by lead, show ALL calls for that lead
+        lead_id = self.request.query_params.get('lead')
+        if lead_id:
             qs = Call.objects.select_related(
-                'agent', 'customer'
+                'agent', 'lead'
             ).prefetch_related('events').filter(
-                _Q(customer_id=customer_id) |
-                _Q(caller__in=phone_variants) |
-                _Q(callee__in=phone_variants)
+                lead_id=lead_id
             ).distinct().order_by('-created_at')
         return qs
 
@@ -159,8 +142,8 @@ class CallViewSet(viewsets.ModelViewSet):
 class ScreenPopView(APIView):
     """
     GET /api/calls/screen-pop/?phone=+201001234567
-    Returns customer + open leads matching the caller number.
-    Used by the frontend IncomingCallPopup to show caller info.
+    Lead-first lookup: searches Lead by phone.
+    Returns: lead info + last 5 call activities.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -172,42 +155,65 @@ class ScreenPopView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # normalise — keep last 9 digits for fuzzy match
         digits = ''.join(c for c in phone if c.isdigit())
         suffix = digits[-9:] if len(digits) >= 9 else digits
 
-        from apps.customers.models import CustomerPhone
+        from apps.common.utils import normalize_phone
         from apps.leads.models import Lead
+        from .models import Call
 
-        phone_obj = CustomerPhone.objects.select_related('customer').filter(
-            normalized__endswith=suffix
-        ).first()
-
-        if not phone_obj:
-            return Response({'found': False, 'customer': None, 'leads': []})
-
-        customer = phone_obj.customer
+        # ── Lead lookup by phone ──────────────────────────
         leads = Lead.objects.filter(
-            customer=customer, is_active=True
+            phone__endswith=suffix, is_active=True
         ).select_related('stage', 'status', 'assigned_to').order_by('-created_at')[:5]
 
+        # ── Build response ──────────────────────────────────
+        leads_data = []
+
+        for lead in leads:
+            lead_data = {
+                'id':           str(lead.id),
+                'title':        lead.title,
+                'phone':        lead.phone,
+                'first_name':   lead.first_name,
+                'last_name':    lead.last_name,
+                'company':      lead.company,
+                'email':        lead.email,
+                'stage_name':   lead.stage.name  if lead.stage  else None,
+                'stage_color':  lead.stage.color if lead.stage  else None,
+                'status_name':  lead.status.name if lead.status else None,
+                'assigned_to':  lead.assigned_to.get_full_name() if lead.assigned_to else None,
+                'value':        str(lead.value)  if lead.value  else None,
+                'source':       lead.source,
+            }
+            leads_data.append(lead_data)
+
+        # Last 5 call activities — by lead
+        if leads_data:
+            lead_ids = [l.id for l in leads]
+            calls = Call.objects.filter(
+                lead_id__in=lead_ids
+            ).select_related('agent').order_by('-started_at')[:5]
+        else:
+            calls = Call.objects.none()
+
+        activities_data = [{
+            'type':       'call',
+            'direction':  c.direction,
+            'status':     c.status,
+            'duration':   c.duration,
+            'started_at': c.started_at.isoformat() if c.started_at else None,
+            'agent':      c.agent.get_full_name() if c.agent else None,
+            'queue':      c.queue or '',
+            'is_completed': c.is_completed,
+        } for c in calls]
+
+        found = bool(leads_data)
+
         return Response({
-            'found': True,
-            'customer': {
-                'id':        str(customer.id),
-                'name':      customer.get_full_name(),
-                'phone':     phone_obj.number,
-                'email':     customer.email,
-            },
-            'leads': [{
-                'id':           str(l.id),
-                'title':        l.title,
-                'stage_name':   l.stage.name  if l.stage  else None,
-                'stage_color':  l.stage.color if l.stage  else None,
-                'status_name':  l.status.name if l.status else None,
-                'assigned_to':  l.assigned_to.get_full_name() if l.assigned_to else None,
-                'value':        str(l.value)  if l.value  else None,
-            } for l in leads],
+            'found':      found,
+            'leads':      leads_data,
+            'activities': activities_data,
         })
 
 
@@ -247,8 +253,8 @@ class PendingCompletionsView(APIView):
             'id':            str(c.id),
             'caller':        c.caller,
             'direction':     c.direction,
-            'customer':      str(c.customer_id) if c.customer_id else None,
-            'customer_name': c.customer.get_full_name() if c.customer else None,
+            'lead':          str(c.lead_id) if c.lead_id else None,
+            'lead_name':     c.lead.get_full_name() if c.lead else None,
             'started_at':    c.started_at,
             'duration':      c.duration,
         } for c in calls])
@@ -288,44 +294,6 @@ class LeadStagesListView(APIView):
         } for s in stages])
 
 
-class LinkCallToCustomerView(APIView):
-    """POST /api/calls/link-call/ — attach an open call to a newly-created customer"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        uniqueid    = request.data.get('uniqueid')
-        customer_id = request.data.get('customer_id')
-
-        if not uniqueid or not customer_id:
-            return Response(
-                {'error': 'uniqueid and customer_id are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            from apps.customers.models import Customer
-            customer = Customer.objects.get(id=customer_id)
-        except Exception:
-            return Response({'error': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
-
-        updated = Call.objects.filter(uniqueid=uniqueid).update(customer=customer)
-
-        if updated == 0:
-            # Try matching by caller phone number as fallback
-            from apps.customers.models import CustomerPhone
-            phones = CustomerPhone.objects.filter(customer=customer).values_list('number', flat=True)
-            updated = Call.objects.filter(
-                caller__in=list(phones),
-                customer__isnull=True
-            ).order_by('-started_at').update(customer=customer)
-
-        return Response({
-            'linked': updated,
-            'customer_id': str(customer_id),
-            'uniqueid': uniqueid,
-        }, status=status.HTTP_200_OK)
-
-
 # ── WebRTC Call Tracking ──────────────────────────────────────────────────
 
 class StartWebrtcCallView(APIView):
@@ -333,16 +301,14 @@ class StartWebrtcCallView(APIView):
     POST /api/calls/start-webrtc-call/
     Called by the frontend the moment the agent fires a WebRTC/JsSIP outbound call.
     Creates the Call record immediately so it appears in the timeline and calls page.
-    body: { customer_phone, customer_id?, lead_id?, followup_id? }
+    body: { customer_phone, lead_id?, followup_id? }
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         from django.utils import timezone as tz
-        from apps.customers.models import Customer, CustomerPhone
 
         phone       = (request.data.get('customer_phone') or '').strip()
-        customer_id = request.data.get('customer_id')
         lead_id     = request.data.get('lead_id')
 
         if not phone:
@@ -356,23 +322,6 @@ class StartWebrtcCallView(APIView):
             caller = ext.number
         except Exception:
             caller = str(request.user.id)[:8]
-
-        # Resolve customer
-        customer = None
-        if customer_id:
-            try:
-                customer = Customer.objects.get(pk=customer_id)
-            except Customer.DoesNotExist:
-                pass
-
-        if not customer:
-            digits = ''.join(c for c in phone if c.isdigit())
-            suffix = digits[-9:] if len(digits) >= 9 else digits
-            phone_obj = CustomerPhone.objects.select_related('customer').filter(
-                normalized__endswith=suffix
-            ).first()
-            if phone_obj:
-                customer = phone_obj.customer
 
         # Resolve lead
         lead = None
@@ -391,7 +340,6 @@ class StartWebrtcCallView(APIView):
             callee     = phone,
             direction  = 'outbound',
             status     = 'ringing',
-            customer   = customer,
             agent      = request.user,
             lead       = lead,
             started_at = tz.now(),
@@ -401,7 +349,7 @@ class StartWebrtcCallView(APIView):
             'call_id':     str(call.id),
             'caller':      caller,
             'callee':      phone,
-            'customer_id': str(customer.id) if customer else None,
+            'lead_id':     str(lead.id) if lead else None,
             'message':     'Call record created.',
         }, status=201)
 

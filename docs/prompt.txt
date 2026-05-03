@@ -1,0 +1,23 @@
+you are an expert developer and sales force , i need to Refactor the HMDM CRM project to follow the Salesforce data model instead of the current HubSpot-like model. The core change: Lead becomes the primary entry point, the customer is the final stage of won lead only
+Current flow: Call → Customer (match) → Lead (opportunity) → Won/Lost
+Target flow: Lead (unqualified) → Qualify → Convert → Account + Contact + Opportunity → Won
+Backend changes needed:
+1. Lead model — Add contact fields (first_name, last_name, email, phone, company, title, address) that currently live on Customer. Add is_converted, converted_date, converted_account, converted_contact, converted_opportunity, lead_score, rating fields.
+2. New Account model — Represents the company/organization. Has billing/shipping addresses, account_type (prospect/customer/partner), industry, revenue, employees. Linked to source_lead.
+3. New Contact model — Represents a person within an Account. Has first/last name, email, phone, title, department, mailing address. FK to Account.
+4. New Opportunity model — The real pipeline entity (not Lead). Has amount, close_date, stage, probability, type, is_closed, is_won, lost_reason. FK to Account and Contact.
+5. Lead Conversion Service — Atomic transaction that converts one Lead into Account + Contact + Opportunity. Migrates related calls, tickets, followups, notes. Marks Lead as converted and locks it.
+6. Call matching logic — Search Contact first, then unconverted Lead. Update Call model FKs from customer to contact, lead, account, opportunity.
+7. Lead Scoring — Auto-calculate score based on email, company, calls, dispositions, followups. Set rating (hot/warm/cold).
+8. New API endpoints — POST /leads/{id}/convert/, POST /leads/{id}/score/, full CRUD for Accounts, Contacts, Opportunities. POST /opportunities/{id}/close-won/, close-lost/.
+9. Data migration — Convert existing Customer records into Account + Contact pairs.
+Frontend changes needed:
+1. New TypeScript types — Lead, Account, Contact, Opportunity interfaces.
+2. Restructured navigation — Replace "Customers" with "Leads", "Accounts", "Contacts", "Opportunities". Move Kanban pipeline from Leads to Opportunities.
+3. Incoming Call Popup — Screen pop to Contact detail (if matched), Lead detail (if unconverted Lead), or new Lead form (if no match).
+4. Lead Conversion Modal — Form with checkboxes to create Account/Contact/Opportunity, with editable fields for each.
+5. Opportunity Pipeline — Kanban board for Opportunities (drag-drop between stages).
+6. Lead Detail page — Show lead score/rating, convert button (if not converted), links to converted entities.
+7. New API clients — leadsApi.convert(), leadsApi.score(), opportunitiesApi, accountsApi, contactsApi.
+
+please note ... any changes should saved in changelog md file create it if not exist

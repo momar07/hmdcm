@@ -5,7 +5,6 @@ export interface TaskFilters {
   status?:      string;
   priority?:    string;
   assigned_to?: string;
-  customer?:    string;
   lead?:        string;
   ticket?:      string;
   overdue?:     boolean;
@@ -20,7 +19,6 @@ export interface CreateTaskData {
   priority:     string;
   assigned_to:  string;
   due_date?:    string | null;
-  customer?:    string | null;
   lead?:        string | null;
   ticket?:      string | null;
   call?:        string | null;

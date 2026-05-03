@@ -134,12 +134,6 @@ function AdminDashboardView({ data }: { data: AdminDashboard }) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
       <StatCard
-        title="Total Customers"
-        value={data.total_customers.toLocaleString()}
-        icon={<Users size={20} />}
-        color="blue"
-      />
-      <StatCard
         title="Total Leads"
         value={data.total_leads.toLocaleString()}
         icon={<BookOpen size={20} />}

@@ -10,8 +10,7 @@ import toast from 'react-hot-toast';
 interface DispositionModalProps {
   callId:         string;
   callerNumber:   string;
-  customerName?:  string | null;
-  customerId?:    string | null;
+  leadName?:      string | null;
   leadId?:        string | null;
   callDirection?: 'inbound' | 'outbound';
   onClose:        () => void;
@@ -38,7 +37,7 @@ const ACTION_LABELS: Record<ActionType, string> = {
 };
 
 export function DispositionModal({
-  callId, callerNumber, customerName, customerId, leadId, callDirection, onClose,
+  callId, callerNumber, leadName, leadId, callDirection, onClose,
 }: DispositionModalProps) {
   const qc = useQueryClient();
   const [selectedDisp, setSelectedDisp] = useState('');
@@ -90,8 +89,8 @@ export function DispositionModal({
       qc.invalidateQueries({ queryKey: ['followups-overdue'] });
       qc.invalidateQueries({ queryKey: ['followups-upcoming'] });
       qc.invalidateQueries({ queryKey: ['leads'] });
-      qc.invalidateQueries({ queryKey: ['customer-history'] });
-      qc.invalidateQueries({ queryKey: ['customer-calls'] });
+      qc.invalidateQueries({ queryKey: ['lead-history'] });
+      qc.invalidateQueries({ queryKey: ['lead-calls'] });
       onClose();
     },
     onError: (err: any) => {
@@ -126,11 +125,11 @@ export function DispositionModal({
 
           <div className="px-6 py-4 space-y-5">
 
-            {/* Customer */}
-            {customerName && (
+            {/* Lead */}
+            {leadName && (
               <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-xl">
                 <User size={15} className="text-blue-500 shrink-0" />
-                <span className="text-sm font-medium text-blue-800">{customerName}</span>
+                <span className="text-sm font-medium text-blue-800">{leadName}</span>
               </div>
             )}
 

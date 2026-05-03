@@ -86,7 +86,7 @@ class CallEventConsumer(AsyncWebsocketConsumer):
             'type':         'followup_reminder',
             'followup_id':  event.get('followup_id'),
             'title':        event.get('title'),
-            'customer':     event.get('customer'),
+            'lead_name':    event.get('lead_name'),
             'scheduled_at': event.get('scheduled_at'),
         }))
 

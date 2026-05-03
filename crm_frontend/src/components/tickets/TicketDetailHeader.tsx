@@ -102,7 +102,6 @@ export function TicketDetailHeader({ ticket, saving, onUpdate }: Props) {
         onClose={() => setShowApproval(false)}
         onCreated={() => setShowApproval(false)}
         defaultTicketId={ticket.id}
-        defaultCustomerId={ticket.customer ?? undefined}
       />
     </div>
   );

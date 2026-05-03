@@ -8,16 +8,15 @@ User = get_user_model()
 class FollowupListSerializer(serializers.ModelSerializer):
     assigned_to_name = serializers.SerializerMethodField()
     lead_title       = serializers.SerializerMethodField()
-    customer_id      = serializers.SerializerMethodField()
-    customer_name    = serializers.SerializerMethodField()
-    customer_phone   = serializers.SerializerMethodField()
+    lead_name        = serializers.SerializerMethodField()
+    lead_phone       = serializers.SerializerMethodField()
 
     class Meta:
         model = Followup
         fields = [
             'id', 'lead', 'lead_title', 'call',
             'assigned_to', 'assigned_to_name',
-            'customer_id', 'customer_name', 'customer_phone',
+            'lead_name', 'lead_phone',
             'title', 'description', 'followup_type',
             'scheduled_at', 'completed_at', 'status',
             'reminder_sent', 'created_at', 'updated_at',
@@ -30,29 +29,22 @@ class FollowupListSerializer(serializers.ModelSerializer):
     def get_lead_title(self, obj):
         return obj.lead.title if obj.lead else None
 
-    def _get_customer(self, obj):
-        if obj.lead and obj.lead.customer:
-            return obj.lead.customer
-        if obj.call and obj.call.customer:
-            return obj.call.customer
+    def _get_lead(self, obj):
+        if obj.lead:
+            return obj.lead
+        if obj.call and obj.call.lead:
+            return obj.call.lead
         return None
 
-    def get_customer_id(self, obj):
-        c = self._get_customer(obj)
-        return str(c.id) if c else None
+    def get_lead_name(self, obj):
+        lead = self._get_lead(obj)
+        if not lead: return None
+        return lead.get_full_name() or lead.title or None
 
-    def get_customer_name(self, obj):
-        c = self._get_customer(obj)
-        if not c: return None
-        return f"{c.first_name} {c.last_name}".strip() or getattr(c, 'company', None) or None
-
-    def get_customer_phone(self, obj):
-        c = self._get_customer(obj)
-        if not c: return None
-        primary = c.phones.filter(is_primary=True, is_active=True).first()
-        if primary: return primary.number
-        any_phone = c.phones.filter(is_active=True).first()
-        return any_phone.number if any_phone else getattr(c, 'primary_phone', None)
+    def get_lead_phone(self, obj):
+        lead = self._get_lead(obj)
+        if not lead: return None
+        return lead.phone or (obj.call.caller if obj.call else None)
 
 
 class FollowupDetailSerializer(serializers.ModelSerializer):

@@ -11,7 +11,6 @@ from .views import (
     DispositionsListView,
     LeadStagesListView,
     ScreenPopView,
-    LinkCallToCustomerView,
     DispositionViewSet,
     DispositionActionViewSet,
 )
@@ -32,7 +31,6 @@ urlpatterns = [
     path('dispositions-list/',               DispositionsListView.as_view(),   name='dispositions-list'),
     path('lead-stages/',                     LeadStagesListView.as_view(),     name='lead-stages'),
     path('screen-pop/',                      ScreenPopView.as_view(),          name='screen-pop'),
-    path('link-call/',                       LinkCallToCustomerView.as_view(), name='link-call'),
     path('start-webrtc-call/',               StartWebrtcCallView.as_view(),    name='start-webrtc-call'),
     path('end-webrtc-call/<uuid:call_id>/',  EndWebrtcCallView.as_view(),      name='end-webrtc-call'),
     path('mark-answered/<uuid:call_id>/',    MarkCallAnsweredView.as_view(),   name='mark-answered'),

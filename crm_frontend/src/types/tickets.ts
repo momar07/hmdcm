@@ -98,7 +98,7 @@ export interface TicketListItem {
   source                : TicketSource
   status                : TicketStatus
   priority              : TicketPriority
-  customer_id           : string | null
+  lead                  : string | null
   customer_name         : string
   customer_email        : string
   phone_number          : string
@@ -130,7 +130,7 @@ export interface TicketListItem {
 
 export interface TicketDetail extends TicketListItem {
   description           : string
-  customer              : string | null
+  lead                  : string | null
   agent                 : string | null
   created_by            : string | null
   sla_policy            : string | null
@@ -160,7 +160,7 @@ export interface TicketCreatePayload {
   category?        : string
   source           : TicketSource
   priority         : TicketPriority
-  customer?        : string | null
+  lead?            : string | null
   agent?           : string | null
   phone_number?    : string
   asterisk_call_id?: string
@@ -246,7 +246,7 @@ export interface TicketFilters {
   ticket_type?  : TicketType[]
   source?       : TicketSource[]
   agent?        : string
-  customer?     : string
+  lead?         : string
   queue?        : string
   sla_breached? : boolean
   is_escalated? : boolean

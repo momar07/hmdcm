@@ -71,19 +71,13 @@ class Task(models.Model):
                          help_text='When to remind the agent about this task')
     reminder_sent    = models.BooleanField(default=False)
 
-    # ── Optional Links (same pattern as ApprovalRequest) ─────
-    customer    = models.ForeignKey(
-                    'customers.Customer',
-                    on_delete=models.SET_NULL,
-                    null=True, blank=True,
-                    related_name='tasks',
-                    db_index=True,
-                  )
+    # ── Optional Links ───────────────────────────────────────
     lead        = models.ForeignKey(
                     'leads.Lead',
                     on_delete=models.SET_NULL,
                     null=True, blank=True,
                     related_name='tasks',
+                    db_index=True,
                   )
     ticket      = models.ForeignKey(
                     'tickets.Ticket',

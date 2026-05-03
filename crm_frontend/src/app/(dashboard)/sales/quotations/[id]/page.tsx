@@ -112,11 +112,10 @@ export default function QuotationDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {[
           { label: 'Agent',       value: qa.agent_name ?? '—' },
-          { label: 'Customer',    value: qa.customer_name ?? '—' },
-          { label: 'Lead',        value: qa.lead_title ?? '—' },
+          { label: 'Lead',        value: (qa.lead_name || qa.lead_title) ?? '—' },
           { label: 'Valid Until', value: q.valid_until ?? '—' },
         ].map(({ label, value }) => (
           <div key={label} className="bg-white rounded-2xl border p-4">

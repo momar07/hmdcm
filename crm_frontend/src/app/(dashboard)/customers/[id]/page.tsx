@@ -92,7 +92,7 @@ export default function CustomerDetailPage() {
 
   const { data: callsDataAll } = useQuery({
     queryKey: ['customer-calls-count', id],
-    queryFn:  () => callsApi.list({ customer: id, page_size: 1 }).then(r => r.data),
+    queryFn:  () => callsApi.list({ lead: id, page_size: 1 }).then(r => r.data),
     enabled:  !!id,
     staleTime: 60_000,
   });
@@ -100,7 +100,7 @@ export default function CustomerDetailPage() {
   const { data: callsData } = useQuery({
     queryKey: ['customer-calls', id],
     queryFn:  async () => {
-      const r = await callsApi.list({ customer: id, page_size: 50 });
+      const r = await callsApi.list({ lead: id, page_size: 50 });
       const d = (r as any)?.data ?? r;
       const results = Array.isArray(d) ? d : (d?.results ?? []);
       const count   = d?.count ?? results.length;
@@ -112,19 +112,19 @@ export default function CustomerDetailPage() {
 
   const { data: leadsData } = useQuery({
     queryKey: ['customer-leads', id],
-    queryFn:  () => leadsApi.list({ customer: id, page_size: 25 }).then(r => r.data),
+    queryFn:  () => leadsApi.list({ page_size: 25 }).then(r => r.data),
     enabled:  !!id && tab === 'leads',
   });
 
   const { data: ticketsData, isLoading: ticketsLoading, refetch: refetchTickets } = useQuery({
     queryKey: ['customer-tickets', id],
-    queryFn:  () => ticketsApi.list({ customer: id, page_size: 50 }).then(r => r.data),
+    queryFn:  () => ticketsApi.list({ lead: id, page_size: 50 }).then(r => r.data),
     enabled:  !!id && tab === 'tickets',
   });
 
   const { data: tasksData, isLoading: tasksLoading } = useQuery({
     queryKey: ['customer-tasks', id],
-    queryFn:  () => tasksApi.list({ customer: id, page_size: 25 }),
+    queryFn:  () => tasksApi.list({ lead: id, page_size: 25 }),
     enabled:  !!id && tab === 'tasks',
     staleTime: 10_000,
   });
@@ -620,7 +620,7 @@ export default function CustomerDetailPage() {
           refetchTickets();
           if (tab !== 'tickets') setTab('tickets');
         }}
-        defaultCustomerId={id}
+        defaultLeadId={id}
       />
 
     </div>

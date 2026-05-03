@@ -101,7 +101,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 class QuotationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends    = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields   = ["status", "quotation_type", "agent", "customer"]
+    filterset_fields   = ["status", "quotation_type", "agent", "lead"]
     search_fields      = ["ref_number", "title"]
     ordering_fields    = ["created_at", "total_amount", "valid_until"]
     ordering           = ["-created_at"]
@@ -109,7 +109,7 @@ class QuotationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs   = Quotation.objects.select_related(
-                   "agent", "customer", "lead", "approval"
+                   "agent", "lead", "approval"
                ).prefetch_related("items", "fields", "logs__actor")
         if user.role == "agent":
             qs = qs.filter(agent=user)
@@ -183,21 +183,15 @@ class QuotationViewSet(viewsets.ModelViewSet):
     def whatsapp_link(self, request, pk=None):
         quotation = self.get_object()
         phone = None
-        if quotation.customer:
-            from apps.customers.models import CustomerPhone
-            p = CustomerPhone.objects.filter(
-                customer=quotation.customer, is_primary=True
-            ).first() or CustomerPhone.objects.filter(
-                customer=quotation.customer
-            ).first()
-            phone = p.normalized or p.number if p else None
+        if quotation.lead and quotation.lead.phone:
+            phone = quotation.lead.phone
 
         if not phone:
-            return Response({"detail": "No phone number for customer."}, status=400)
+            return Response({"detail": "No phone number for lead."}, status=400)
 
         lines = [f"📄 Quotation {quotation.ref_number}"]
-        if quotation.customer:
-            lines.append(f"Customer: {quotation.customer.get_full_name()}")
+        if quotation.lead:
+            lines.append(f"Lead: {quotation.lead.get_full_name() or quotation.lead.title}")
         if quotation.quotation_type == "price_quote":
             lines.append(f"Total: {quotation.total_amount:,.2f} {quotation.currency}")
         if quotation.valid_until:

@@ -10,9 +10,8 @@ interface ReminderEvent {
   title:          string;
   followup_type:  string;
   scheduled_at:   string;
-  customer:       string;
-  customer_id:    string | null;
-  customer_phone: string | null;
+  lead_name:      string;
+  lead_phone:     string | null;
   lead_id:        string | null;
 }
 
@@ -69,13 +68,13 @@ export function ReminderToastListener() {
 
             {/* Body */}
             <div className="px-4 py-3 space-y-1">
-              {ev.customer && (
+              {ev.lead_name && (
                 <p className="text-sm text-gray-700">
-                  👤 <span className="font-medium">{ev.customer}</span>
+                  👤 <span className="font-medium">{ev.lead_name}</span>
                 </p>
               )}
-              {ev.customer_phone && (
-                <p className="text-xs text-gray-500 font-mono">{ev.customer_phone}</p>
+              {ev.lead_phone && (
+                <p className="text-xs text-gray-500 font-mono">{ev.lead_phone}</p>
               )}
               <p className="text-xs text-blue-600 font-medium">
                 🕐 {(() => {
@@ -92,14 +91,13 @@ export function ReminderToastListener() {
 
             {/* Actions */}
             <div className="flex gap-2 px-4 pb-4">
-              {ev.customer_phone && sipStatusRef.current === 'registered' && callStatusRef.current === 'idle' && (
+              {ev.lead_phone && sipStatusRef.current === 'registered' && callStatusRef.current === 'idle' && (
                 <button
                   onClick={() => {
                     toast.dismiss(toastId);
                     window.dispatchEvent(new CustomEvent('sip:dial', {
                       detail: {
-                        phone:      ev.customer_phone,
-                        customerId: ev.customer_id,
+                        phone:      ev.lead_phone,
                         leadId:     ev.lead_id,
                       },
                     }));

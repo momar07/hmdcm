@@ -48,10 +48,6 @@ class ActivityLog(models.Model):
     timestamp   = models.DateTimeField(auto_now_add=True, db_index=True)
 
     # Optional targets
-    customer    = models.ForeignKey(
-        'customers.Customer', null=True, blank=True,
-        on_delete=models.SET_NULL, related_name='activity_logs'
-    )
     lead        = models.ForeignKey(
         'leads.Lead', null=True, blank=True,
         on_delete=models.SET_NULL, related_name='activity_logs'

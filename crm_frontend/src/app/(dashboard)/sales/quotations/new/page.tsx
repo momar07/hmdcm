@@ -5,8 +5,7 @@ import QuotationBuilder from '@/components/sales/QuotationBuilder';
 
 export default function NewQuotationPage() {
   const params     = useSearchParams();
-  const customerId = params.get('customer');
   const leadId     = params.get('lead');
 
-  return <QuotationBuilder customerId={customerId} leadId={leadId} />;
+  return <QuotationBuilder leadId={leadId} />;
 }

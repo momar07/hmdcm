@@ -12,48 +12,40 @@ logger = logging.getLogger(__name__)
 def notify_incoming_call(self, call_id: str):
     """
     Called by the AMI listener when a new inbound call arrives.
-    Pushes an incoming_call event to the assigned agent via WebSocket.
+    Sends lead info via WebSocket.
     """
     from .models import Call
 
     try:
-        call = Call.objects.select_related(
-            'customer', 'agent', 'lead'
-        ).get(pk=call_id)
+        call = Call.objects.select_related('agent', 'lead').get(pk=call_id)
     except Call.DoesNotExist:
         logger.error(f'[Notify] Call {call_id} not found')
         return
 
-    # ── Build rich customer payload ──────────────────────────
-    customer     = call.customer
-    customer_data = {}
-    if customer:
-        customer_data = {
-            'customer_id':      str(customer.id),
-            'customer_name':    customer.get_full_name(),
-            'customer_phone':   customer.primary_phone or call.caller,
-            'customer_company': getattr(customer, 'company', None) or '',
-        }
-    else:
-        customer_data = {
-            'customer_id':      None,
-            'customer_name':    None,
-            'customer_phone':   call.caller,
-            'customer_company': None,
-        }
-
-    # ── Lead info ─────────────────────────────────────────────
+    # ── Lead info ────────────────────────────────────────────
+    lead = call.lead
     lead_data = {}
-    if call.lead_id:
-        try:
-            lead_data = {
-                'lead_id':    str(call.lead_id),
-                'lead_title': call.lead.title if call.lead else None,
-            }
-        except Exception:
-            lead_data = {'lead_id': str(call.lead_id), 'lead_title': None}
+    if lead:
+        lead_data = {
+            'lead_id':        str(lead.id),
+            'lead_title':     lead.title,
+            'lead_phone':     lead.phone or call.caller,
+            'lead_stage':     lead.stage.name  if lead.stage  else None,
+            'lead_status':    lead.status.name if lead.status else None,
+            'lead_assigned':  lead.assigned_to.get_full_name() if lead.assigned_to else None,
+            'lead_value':     str(lead.value) if lead.value else None,
+            'lead_source':    lead.source,
+            'lead_name':      lead.get_full_name(),
+            'lead_company':   lead.company or '',
+            'lead_email':     lead.email or '',
+        }
     else:
-        lead_data = {'lead_id': None, 'lead_title': None}
+        lead_data = {
+            'lead_id': None, 'lead_title': None, 'lead_phone': call.caller,
+            'lead_stage': None, 'lead_status': None, 'lead_assigned': None,
+            'lead_value': None, 'lead_source': 'call',
+            'lead_name': None, 'lead_company': None, 'lead_email': None,
+        }
 
     payload = {
         'type':      'incoming_call',
@@ -63,7 +55,6 @@ def notify_incoming_call(self, call_id: str):
         'callee':    call.callee,
         'queue':     call.queue or '',
         'direction': call.direction,
-        **customer_data,
         **lead_data,
     }
 
@@ -163,31 +154,93 @@ def notify_call_ended(self, call_id: str, status: str):
 def process_ami_event(self, event: dict):
     """
     Processes a raw AMI event dict from the Asterisk listener.
-    Creates/updates Call records accordingly.
+    Creates/updates Call records, auto-creates Leads, assigns agents,
+    and triggers automation rules.
     """
     from django.utils import timezone
     from .models import Call
-    from apps.customers.models import CustomerPhone
+    from apps.common.utils import normalize_phone
     from apps.users.models import Extension
 
     event_name = event.get('Event', '')
     uniqueid   = event.get('Uniqueid') or event.get('Linkedid', '')
 
     try:
+        # ── helpers ───────────────────────────────────────────
+        def _find_lead_by_phone(phone: str):
+            """Look up existing Lead by phone number."""
+            if not phone or len(phone) < 3:
+                return None
+            suffix = phone[-9:] if len(phone) >= 9 else phone
+            try:
+                lead = Lead.objects.select_related('assigned_to').filter(
+                    phone__endswith=suffix, is_active=True
+                ).first()
+                return lead
+            except Exception as e:
+                logger.debug(f'[AMI] Lead lookup error: {e}')
+                return None
+
+        def _get_or_create_lead(phone: str):
+            """
+            Lookup existing Lead by phone, or create a new one.
+            """
+            lead = _find_lead_by_phone(phone)
+            if lead:
+                return lead
+
+            first_stage = LeadStage.objects.filter(is_active=True).order_by('order').first()
+            lead = Lead.objects.create(
+                title       = f'Lead from call — {phone}',
+                phone       = phone,
+                assigned_to = None,
+                source      = 'call',
+                stage       = first_stage,
+            )
+            logger.info(f'[AMI] Auto-created lead: {lead.id} for {phone}')
+            return lead
+
+        def _create_call_activity(call_obj, status='in_progress'):
+            """Create an Activity record linked to the call's lead."""
+            if call_obj.lead_id:
+                from .models import Activity
+                Activity.objects.create(
+                    lead          = call_obj.lead,
+                    call          = call_obj,
+                    agent         = call_obj.agent,
+                    activity_type = 'call',
+                    status        = status,
+                    title         = f'{call_obj.direction} call — {call_obj.caller}',
+                    started_at    = call_obj.started_at,
+                )
+
+        def _assign_lead_to_agent(call_obj, agent):
+            """Auto-assign lead to the answering agent and log LeadEvent."""
+            if call_obj.lead and not call_obj.lead.assigned_to_id:
+                call_obj.lead.assigned_to = agent
+                call_obj.lead.save(update_fields=['assigned_to'])
+                LeadEvent.objects.create(
+                    lead       = call_obj.lead,
+                    event_type = 'assigned',
+                    actor      = agent,
+                    new_value  = str(agent.id),
+                    note       = f'Auto-assigned from call {call_obj.uniqueid}',
+                )
+                logger.info(f'[AMI] Lead {call_obj.lead.id} auto-assigned to {agent}')
+
+        # ── event handlers ────────────────────────────────────
+        from apps.leads.models import Lead, LeadStage, LeadEvent
+
         if event_name == 'Newchannel':
-            # Skip internal leg channels (Local/ channels created by queue)
             chan_name = event.get('Channel', '')
             if chan_name.startswith('Local/'):
                 logger.debug(f'[AMI] Skipping Local channel: {chan_name}')
                 return
 
-            # Skip extension-to-extension internal calls (short exten, from-internal)
             caller_num = event.get('CallerIDNum', '')
             context    = event.get('Context', '')
             exten      = event.get('Exten', '')
 
-            # Only create call record for truly inbound trunk calls here
-            # Queue calls are handled by QueueCallerJoin instead
             INBOUND_CONTEXTS = {
                 'from-trunk', 'from-pstn', 'from-did',
                 'from-sip-external', 'ext-did', 'from-external',
@@ -201,19 +254,7 @@ def process_ami_event(self, event: dict):
             callee    = exten
             direction = 'inbound'
 
-            # Agent detection — not known yet at Newchannel for trunk calls
-            agent    = None
-            customer = None
-            if caller and len(caller) >= 7:
-                try:
-                    phone = CustomerPhone.objects.select_related('customer').filter(
-                        normalized__endswith=caller[-9:]
-                    ).first()
-                    if phone:
-                        customer = phone.customer
-                        logger.info(f'[AMI] Customer matched: {customer}')
-                except Exception as e:
-                    logger.debug(f'[AMI] Screen pop error: {e}')
+            lead = _get_or_create_lead(caller)
 
             call, created = Call.objects.get_or_create(
                 uniqueid=uniqueid,
@@ -222,35 +263,22 @@ def process_ami_event(self, event: dict):
                     'callee':     callee,
                     'direction':  direction,
                     'status':     'ringing',
-                    'customer':   customer,
-                    'agent':      agent,
+                    'lead':       lead,
+                    'agent':      None,
                     'started_at': timezone.now(),
                 }
             )
             if created:
+                _create_call_activity(call, status='in_progress')
                 notify_incoming_call.delay(str(call.id))
                 logger.info(f'[AMI] New trunk call: {uniqueid} | {caller} → {callee}')
 
         elif event_name == 'QueueCallerJoin':
-            # ── This is the correct event for queue inbound calls ──
-            # Fired when caller enters the queue — has real CallerIDNum
-            caller    = event.get('CallerIDNum', '')
-            queue     = event.get('Queue', '')
+            caller = event.get('CallerIDNum', '')
+            queue  = event.get('Queue', '')
 
-            # Customer lookup
-            customer = None
-            if caller and len(caller) >= 3:
-                try:
-                    phone = CustomerPhone.objects.select_related('customer').filter(
-                        normalized__endswith=caller[-9:] if len(caller) >= 9 else caller
-                    ).first()
-                    if phone:
-                        customer = phone.customer
-                        logger.info(f'[AMI] Customer matched: {customer}')
-                except Exception as e:
-                    logger.debug(f'[AMI] Screen pop error: {e}')
+            lead = _get_or_create_lead(caller)
 
-            # Always update/create — Newchannel may have created a wrong record first
             call, created = Call.objects.update_or_create(
                 uniqueid=uniqueid,
                 defaults={
@@ -259,16 +287,22 @@ def process_ami_event(self, event: dict):
                     'direction':  'inbound',
                     'status':     'ringing',
                     'queue':      queue,
-                    'customer':   customer,
+                    'lead':       lead,
                     'started_at': timezone.now(),
                 }
             )
-            # Always notify — whether new or updated from Newchannel
+            # Create activity only for new calls
+            if created:
+                _create_call_activity(call, status='in_progress')
+
             notify_incoming_call.delay(str(call.id))
+
+            # VIP check — trigger automation
+            handle_vip_call.delay(str(call.id))
+
             logger.info(f'[AMI] Queue call: {uniqueid} | caller={caller} queue={queue} new={created}')
 
         elif event_name == 'Bridge':
-            # Asterisk 11: Bridge has Uniqueid1 and Uniqueid2
             uid1 = event.get('Uniqueid1', '')
             uid2 = event.get('Uniqueid2', '')
             for uid in filter(None, [uid1, uid2, uniqueid]):
@@ -283,20 +317,17 @@ def process_ami_event(self, event: dict):
         elif event_name in ('Hangup', 'SoftHangupRequest'):
             duration = int(event.get('Duration', 0))
 
-            # Skip WebRTC calls — their status is managed by endWebrtcCall endpoint
             if uniqueid and uniqueid.startswith('webrtc-'):
                 logger.debug(f'[AMI] Skipping Hangup for WebRTC call: {uniqueid}')
                 return
 
-            # Cause 16 = Normal Clearing — used for ALL hangups including unanswered
-            # We check the current call status to determine the real outcome
             cause = str(event.get('Cause', '16'))
             cause_status_map = {
                 '17': 'busy',
                 '19': 'no_answer',
                 '21': 'failed',
-                '3':  'no_answer',   # No route to destination
-                '18': 'no_answer',   # No user responding
+                '3':  'no_answer',
+                '18': 'no_answer',
             }
 
             now = timezone.now()
@@ -305,18 +336,11 @@ def process_ami_event(self, event: dict):
             if not call_obj:
                 return
 
-            # Determine real status:
-            # - If cause explicitly maps to something, use it
-            # - If cause is 16 (normal) AND call was never answered → no_answer
-            # - If cause is 16 AND call was answered → answered
             if cause in cause_status_map:
                 status = cause_status_map[cause]
             elif call_obj.status == 'answered':
-                # Already marked answered by AgentConnect — keep it
                 status = 'answered'
             else:
-                # Re-fetch from DB to catch AgentConnect that may have just fired
-                # Small sleep to handle race condition with AgentConnect task
                 import time as _time
                 _time.sleep(0.5)
                 fresh = Call.objects.filter(uniqueid=uniqueid).values('status').first()
@@ -325,7 +349,6 @@ def process_ami_event(self, event: dict):
                 else:
                     status = 'no_answer'
 
-            # Calculate duration from started_at if Asterisk didn't send it
             if duration == 0 and call_obj.started_at and status == 'answered':
                 delta = (now - call_obj.started_at).total_seconds()
                 duration = max(0, int(delta))
@@ -342,17 +365,30 @@ def process_ami_event(self, event: dict):
             if updated:
                 call = Call.objects.filter(uniqueid=uniqueid).first()
                 if call:
+                    # Update activity status
+                    if call.lead_id:
+                        from .models import Activity
+                        Activity.objects.filter(
+                            lead=call.lead, call=call, status='in_progress'
+                        ).update(
+                            status='completed',
+                            ended_at=now,
+                            duration=duration,
+                        )
+
                     notify_call_ended.delay(str(call.id), status)
+
+                    # Missed call automation
+                    if status == 'no_answer':
+                        handle_missed_call.delay(str(call.id))
+
                 logger.info(f'[AMI] Call ended: {uniqueid} → {status} (cause={cause}, duration={duration}s)')
 
-
         elif event_name == 'QueueMemberAdded':
-            # Agent logged in to queue
             interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             if '/' in interface:
                 ext_num = interface.split('/')[1]
                 try:
-                    from apps.users.models import Extension
                     from apps.users.services import update_user_status, _notify_status_change
                     ext_obj = Extension.objects.select_related('user').get(
                         number=ext_num, is_active=True
@@ -364,12 +400,10 @@ def process_ami_event(self, event: dict):
                     logger.debug(f'[AMI] AgentLogin error: {e}')
 
         elif event_name == 'QueueMemberRemoved':
-            # Agent logged off from queue
             interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             if '/' in interface:
                 ext_num = interface.split('/')[1]
                 try:
-                    from apps.users.models import Extension
                     from apps.users.services import update_user_status, _notify_status_change
                     ext_obj = Extension.objects.select_related('user').get(
                         number=ext_num, is_active=True
@@ -381,13 +415,11 @@ def process_ami_event(self, event: dict):
                     logger.debug(f'[AMI] AgentLogoff error: {e}')
 
         elif event_name in ('QueueMemberPaused', 'QueueMemberStatus'):
-            # Agent paused/unpaused
             interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             paused    = event.get('Paused', '0')
             if '/' in interface:
                 ext_num = interface.split('/')[1]
                 try:
-                    from apps.users.models import Extension
                     from apps.users.services import update_user_status, _notify_status_change
                     ext_obj = Extension.objects.select_related('user').get(
                         number=ext_num, is_active=True
@@ -400,7 +432,6 @@ def process_ami_event(self, event: dict):
                     logger.debug(f'[AMI] QueueMemberPause error: {e}')
 
         elif event_name == 'AgentCalled':
-            # Agent is being rung for a queue call — assign agent to the call record
             member_name = event.get('MemberName', '')
             linkedid    = event.get('Linkedid', '') or uniqueid
             if member_name:
@@ -409,7 +440,6 @@ def process_ami_event(self, event: dict):
                         number=member_name, is_active=True
                     )
                     agent = ext_obj.user
-                    # Update call record with agent
                     Call.objects.filter(uniqueid=linkedid, agent__isnull=True).update(agent=agent)
                     logger.info(f'[AMI] Agent assigned to call: {member_name} → {linkedid}')
                 except Extension.DoesNotExist:
@@ -418,7 +448,6 @@ def process_ami_event(self, event: dict):
                     logger.debug(f'[AMI] AgentCalled error: {e}')
 
         elif event_name == 'AgentConnect':
-            # Agent answered a queue call — update call status + agent status
             member_name = event.get('MemberName', '')
             linkedid    = event.get('Linkedid', '') or uniqueid
             if member_name:
@@ -427,12 +456,18 @@ def process_ami_event(self, event: dict):
                         number=member_name, is_active=True
                     )
                     agent = ext_obj.user
-                    # Assign agent and mark answered
+
                     Call.objects.filter(uniqueid=linkedid).update(
                         agent=agent,
                         status='answered',
                         started_at=timezone.now(),
                     )
+
+                    # Auto-assign lead to agent
+                    call_obj = Call.objects.filter(uniqueid=linkedid).select_related('lead').first()
+                    if call_obj:
+                        _assign_lead_to_agent(call_obj, agent)
+
                     from apps.users.services import update_user_status, _notify_status_change
                     update_user_status(str(agent.id), 'on_call')
                     _notify_status_change(agent, 'on_call')
@@ -443,12 +478,10 @@ def process_ami_event(self, event: dict):
                     logger.debug(f'[AMI] AgentConnect error: {e}')
 
         elif event_name in ('AgentComplete', 'AgentRinghangup'):
-            # Call completed — set back to available
             interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             if '/' in interface:
                 ext_num = interface.split('/')[1]
                 try:
-                    from apps.users.models import Extension
                     from apps.users.services import update_user_status, _notify_status_change
                     ext_obj = Extension.objects.select_related('user').get(
                         number=ext_num, is_active=True
@@ -483,35 +516,27 @@ def send_followup_reminders(self):
         scheduled_at__gte = now,
         scheduled_at__lte = window,
         reminder_sent = False,
-    ).select_related('assigned_to', 'lead__customer', 'call__customer')
+    ).select_related('assigned_to', 'lead', 'call__lead')
 
     if not due_followups.exists():
         return 'No reminders due'
 
     channel_layer = get_channel_layer()
 
-    def _get_customer(f):
-        if f.lead and f.lead.customer:
-            return f.lead.customer
-        if f.call and f.call.customer:
-            return f.call.customer
+    def _get_lead_phone(f):
+        if f.lead and f.lead.phone:
+            return f.lead.phone
+        if f.call and f.call.lead and f.call.lead.phone:
+            return f.call.lead.phone
+        if f.call and f.call.caller:
+            return f.call.caller
         return None
-
-    def _get_customer_phone(customer):
-        if not customer:
-            return None
-        primary = customer.phones.filter(is_primary=True, is_active=True).first()
-        if primary:
-            return primary.number
-        any_p = customer.phones.filter(is_active=True).first()
-        return any_p.number if any_p else None
 
     sent_ids = []
     for f in due_followups:
-        customer     = _get_customer(f)
-        customer_id  = str(customer.id) if customer else None
-        customer_name= f'{customer.first_name} {customer.last_name}'.strip() if customer else None
-        customer_phone = _get_customer_phone(customer)
+        lead = f.lead or (f.call.lead if f.call else None)
+        lead_name = lead.get_full_name() if lead else 'Unknown'
+        lead_phone = _get_lead_phone(f)
 
         # Ensure scheduled_at is always a proper ISO string with timezone
         scheduled_str = f.scheduled_at.isoformat() if f.scheduled_at else ''
@@ -524,9 +549,8 @@ def send_followup_reminders(self):
             'title':        f.title,
             'followup_type':f.followup_type,
             'scheduled_at': scheduled_str,
-            'customer':     customer_name or 'Unknown',
-            'customer_id':  customer_id,
-            'customer_phone': customer_phone,
+            'lead_name':    lead_name,
+            'lead_phone':   lead_phone,
             'lead_id':      str(f.lead_id) if f.lead_id else None,
         }
 
@@ -560,3 +584,123 @@ def send_followup_reminders(self):
     # Mark reminders as sent
     Followup.objects.filter(id__in=sent_ids).update(reminder_sent=True)
     return f'Sent {len(sent_ids)} reminders'
+
+
+@shared_task(bind=True, max_retries=2)
+def handle_missed_call(self, call_id: str):
+    """
+    Triggered when a call ends as no_answer.
+    Creates a callback followup for the assigned agent.
+    """
+    import datetime
+    from django.utils import timezone as tz
+    from .models import Call, AutomationRule
+    from apps.followups.models import Followup
+
+    try:
+        call = Call.objects.select_related('agent', 'lead').get(pk=call_id)
+    except Call.DoesNotExist:
+        return
+
+    rule = AutomationRule.objects.filter(
+        trigger__in=['missed_call', 'no_answer'],
+        action='create_callback',
+        is_active=True,
+    ).first()
+    if not rule:
+        logger.info(f'[Automation] No missed-call rule active — skipping {call_id}')
+        return
+
+    config = rule.config or {}
+    delay_hours = config.get('callback_delay_hours', 2)
+
+    agent = call.agent
+    if not agent and call.lead and call.lead.assigned_to:
+        agent = call.lead.assigned_to
+
+    if not agent:
+        logger.warning(f'[Automation] No agent for missed call {call_id} — skipping')
+        return
+
+    name = call.lead.get_full_name() if call.lead else call.caller
+    Followup.objects.create(
+        lead          = call.lead,
+        call          = call,
+        assigned_to   = agent,
+        title         = f'Callback: {name}',
+        description   = f'Missed call — duration: {call.duration}s, cause: {call.status}',
+        followup_type = 'call',
+        scheduled_at  = tz.now() + datetime.timedelta(hours=delay_hours),
+        status        = 'pending',
+    )
+
+    logger.info(f'[Automation] Callback created for missed call {call_id} → agent {agent}')
+    return f'Callback created for {call_id}'
+
+
+@shared_task(bind=True, max_retries=2)
+def handle_vip_call(self, call_id: str):
+    """
+    Triggered on incoming call. If lead is VIP, notify all supervisors.
+    """
+    from .models import Call
+    from apps.users.models import User
+
+    try:
+        call = Call.objects.select_related('lead').get(pk=call_id)
+    except Call.DoesNotExist:
+        return
+
+    lead = call.lead
+    if not lead:
+        return
+
+    # Check VIP: tag named 'VIP' or has a company
+    is_vip = lead.tags.filter(name__iexact='vip').exists()
+    if not is_vip and lead.company:
+        is_vip = True
+
+    if not is_vip:
+        return
+
+    supervisors = User.objects.filter(
+        role__in=['supervisor', 'admin'], is_active=True
+    )
+    if not supervisors.exists():
+        return
+
+    payload = {
+        'type':           'vip_incoming',
+        'call_id':        str(call.id),
+        'lead_name':      lead.get_full_name(),
+        'lead_phone':     lead.phone or call.caller,
+        'company':        lead.company or '',
+    }
+
+    channel_layer = get_channel_layer()
+
+    for sup in supervisors:
+        async def _push(sid=str(sup.id)):
+            try:
+                await channel_layer.group_send(
+                    f'agent_{sid}',
+                    {'type': 'call_event', 'payload': payload}
+                )
+                logger.info(f'[Automation] VIP alert sent to supervisor {sid}')
+            except Exception as exc:
+                logger.error(f'[Automation] VIP push failed for {sid}: {exc}')
+
+        import threading, asyncio
+        def _run():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(_push())
+            finally:
+                loop.close()
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+    logger.info(f'[Automation] VIP alert for {call.lead.get_full_name() if call.lead else "Unknown"} ({lead.company or "No company"})')
+    return f'VIP alert: {call.lead.get_full_name() if call.lead else "Unknown"}'

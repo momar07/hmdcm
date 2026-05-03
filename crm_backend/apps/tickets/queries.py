@@ -8,7 +8,7 @@ def get_open_tickets():
     return (
         Ticket.objects
         .filter(status="open")
-        .select_related("customer", "agent", "sla_policy")
+        .select_related("lead", "agent", "sla_policy")
         .prefetch_related("tags")
         .order_by("-updated_at")
     )
@@ -20,7 +20,7 @@ def get_tickets_by_agent(agent_id: str):
         Ticket.objects
         .filter(agent_id=agent_id)
         .exclude(status="closed")
-        .select_related("customer", "agent")
+        .select_related("lead", "agent")
         .prefetch_related("tags")
         .order_by("priority", "-updated_at")
     )
@@ -35,16 +35,16 @@ def get_overdue_sla_tickets():
             sla_breached=False,
         )
         .exclude(status__in=["resolved", "closed"])
-        .select_related("customer", "agent")
+        .select_related("lead", "agent")
         .order_by("resolution_deadline")
     )
 
 
-def get_tickets_for_customer(customer_id: str):
-    """All tickets for a customer — used in customer timeline."""
+def get_tickets_for_lead(lead_id: str):
+    """All tickets for a lead — used in lead timeline."""
     return (
         Ticket.objects
-        .filter(customer_id=customer_id)
+        .filter(lead_id=lead_id)
         .select_related("agent")
         .prefetch_related("tags")
         .only(
@@ -123,7 +123,7 @@ def get_tickets_by_phone(phone: str):
         Ticket.objects
         .filter(phone_number_normalized__endswith=normalized)
         .exclude(status="closed")
-        .select_related("customer", "agent")
+        .select_related("lead", "agent")
         .order_by("-created_at")
     )
 
@@ -133,6 +133,6 @@ def get_tickets_by_call_id(asterisk_call_id: str):
     return (
         Ticket.objects
         .filter(asterisk_call_id=asterisk_call_id)
-        .select_related("customer", "agent")
+        .select_related("lead", "agent")
         .order_by("-created_at")
     )

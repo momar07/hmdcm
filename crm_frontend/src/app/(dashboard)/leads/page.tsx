@@ -57,11 +57,11 @@ export default function LeadsPage() {
   const columns: Column<Lead>[] = [
     {
       key:    'title',
-      header: 'Title',
+      header: 'Lead',
       render: (l) => (
         <div>
           <p className="font-medium text-gray-900 truncate max-w-xs">{l.title}</p>
-          <p className="text-xs text-gray-400">{l.customer_name}</p>
+          <p className="text-xs text-gray-400 font-mono">{l.phone || '—'}</p>
         </div>
       ),
     },

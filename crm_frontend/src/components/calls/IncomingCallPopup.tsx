@@ -96,9 +96,9 @@ export function IncomingCallPopup() {
     const call = incomingCallRef.current;
     // Capture call_id BEFORE answer() clears the session
     const callId     = call?.call_id     || null;
-    const customerId = call?.customer_id || null;
     const caller     = call?.caller      || '';
     const uniqueid   = call?.uniqueid    || '';
+    const leadId     = call?.lead_id     || null;
 
     console.log('[Answer] incomingCall:', call);
     console.log('[Answer] call_id:', callId);
@@ -114,13 +114,18 @@ export function IncomingCallPopup() {
       console.warn('[Answer] No call_id found — markCallAnswered skipped');
     }
 
+    // Answer the SIP call — DO NOT redirect here
+    // The redirect happens in the useEffect when callStatus becomes 'active'
+    // Redirecting before audio is ready kills the WebRTC stream
     actions?.answer();
 
-    if (!customerId) {
-      setVisible(false);
-      router.push(`/customers/new?phone=${encodeURIComponent(caller)}&uniqueid=${encodeURIComponent(uniqueid)}`);
+    // Store info for post-answer navigation
+    if (!call?.lead_id) {
+      // Will navigate to new lead page after call is active
+      sessionStorage.setItem('postAnswerPhone', caller);
+      sessionStorage.setItem('postAnswerUniqueid', uniqueid);
     }
-  }, [actions, router]);
+  }, [actions]);
 
   /* ── Transfer ─────────────────────────────────────────── */
   const handleTransfer = useCallback((ext: string) => {
@@ -152,11 +157,20 @@ export function IncomingCallPopup() {
     if (callStatus === 'active' && agentStatus !== 'away') {
       setVisible(true);
       const call = incomingCallRef.current;
-      if (call?.customer_id) {
+
+      // Navigate to lead page or new lead page
+      if (call?.lead_id) {
         const path = window.location.pathname;
-        if (!path.includes('/customers/') && !path.includes('/calls/')) {
-          router.push(`/customers/${call.customer_id}`);
+        if (!path.includes('/leads/') && !path.includes('/calls/')) {
+          router.push(`/leads/${call.lead_id}`);
         }
+      } else {
+        // No lead — go to new lead page with phone pre-filled
+        const phone = sessionStorage.getItem('postAnswerPhone') || call?.caller || '';
+        const uniqueid = sessionStorage.getItem('postAnswerUniqueid') || call?.uniqueid || '';
+        sessionStorage.removeItem('postAnswerPhone');
+        sessionStorage.removeItem('postAnswerUniqueid');
+        router.push(`/leads/new?phone=${encodeURIComponent(phone)}&uniqueid=${encodeURIComponent(uniqueid)}`);
       }
     }
     if (callStatus === 'idle') {
@@ -170,9 +184,11 @@ export function IncomingCallPopup() {
 
   if (!visible) return null;
 
-  const callerName    = incomingCall?.customer_name ?? incomingCall?.caller ?? 'Unknown Caller';
-  const callerPhone   = incomingCall?.caller ?? '';
-  const callerCompany = incomingCall?.customer_company ?? null;
+  // Lead-first display
+  const leadName      = incomingCall?.lead_name ?? incomingCall?.lead_title ?? incomingCall?.caller ?? 'Unknown Caller';
+  const leadPhone     = incomingCall?.lead_phone ?? incomingCall?.caller ?? '';
+  const leadStage     = incomingCall?.lead_stage ?? null;
+  const leadCompany   = incomingCall?.lead_company ?? null;
   const isActive      = callStatus === 'active' || callStatus === 'holding';
 
   /* ════════════ INCOMING ════════════ */
@@ -191,11 +207,16 @@ export function IncomingCallPopup() {
               <User size={26} className="text-gray-400" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xl font-bold text-gray-900 truncate leading-tight">{callerName}</p>
-              {callerPhone && callerPhone !== callerName && (
-                <p className="text-sm text-gray-400 mt-0.5">Mobile&nbsp; {callerPhone}</p>
+              <p className="text-xl font-bold text-gray-900 truncate leading-tight">{leadName}</p>
+              {leadPhone && leadPhone !== leadName && (
+                <p className="text-sm text-gray-400 mt-0.5">Mobile&nbsp; {leadPhone}</p>
               )}
-              {callerCompany && <p className="text-xs text-gray-400 truncate">{callerCompany}</p>}
+              {leadStage && (
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Stage: <span className="font-medium text-gray-600">{leadStage}</span>
+                </p>
+              )}
+              {leadCompany && <p className="text-xs text-gray-400 truncate">{leadCompany}</p>}
               {incomingCall?.queue && (
                 <p className="text-xs text-gray-400">
                   Queue <span className="font-medium text-gray-600">{incomingCall.queue}</span>
@@ -234,9 +255,9 @@ export function IncomingCallPopup() {
                 <User size={16} className="text-white" />
               </div>
               <div>
-                <p className="text-white font-semibold text-sm truncate max-w-[180px]">{callerName}</p>
-                {callerPhone && callerPhone !== callerName && (
-                  <p className="text-white/70 text-xs">{callerPhone}</p>
+                <p className="text-white font-semibold text-sm truncate max-w-[180px]">{leadName}</p>
+                {leadPhone && leadPhone !== leadName && (
+                  <p className="text-white/70 text-xs">{leadPhone}</p>
                 )}
               </div>
             </div>
@@ -246,9 +267,9 @@ export function IncomingCallPopup() {
             </div>
           </div>
 
-          {(callerCompany || incomingCall?.queue) && (
+          {(leadCompany || incomingCall?.queue) && (
             <div className="px-5 py-2 bg-gray-50 border-b border-gray-100 flex items-center gap-3 text-xs text-gray-500">
-              {callerCompany && <span>🏢 {callerCompany}</span>}
+              {leadCompany && <span>🏢 {leadCompany}</span>}
               {incomingCall?.queue && (
                 <span>Queue <span className="font-medium text-gray-700">{incomingCall.queue}</span></span>
               )}
