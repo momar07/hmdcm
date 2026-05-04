@@ -96,50 +96,47 @@ export function IncomingCallPopup() {
     }
   }, [actions, clearIncoming]);
 
-  /* ── Answer ───────────────────────────────────────────── */
+  const answeringRef = useRef(false);
+
   const handleAnswer = useCallback(() => {
+    if (answeringRef.current) return;
+    answeringRef.current = true;
+
     const call = incomingCallRef.current;
     const callId     = call?.call_id     || null;
     const caller     = call?.caller      || '';
     const uniqueid   = call?.uniqueid    || '';
 
-    console.log('[Popup] handleAnswer called');
-    console.log('[Popup] incomingCall:', call);
-    console.log('[Popup] callStatus:', callStatus);
-    console.log('[Popup] actions available:', !!actions);
-
     if (!actions) {
-      console.error('[Popup] Cannot answer — SIP actions not registered (SoftPhone may not be mounted)');
+      console.error('[Popup] Cannot answer — SIP actions not registered');
       toast.error('Phone system not ready. Try again in a moment.');
+      answeringRef.current = false;
       return;
     }
 
-    // Mark call as answered in DB immediately
     if (callId) {
       import('@/lib/api/calls').then(({ callsApi }) => {
         callsApi.markCallAnswered(callId)
           .then(() => console.log('[Answer] markCallAnswered OK'))
           .catch((e: any) => console.error('[Answer] markCallAnswered FAILED:', e?.response?.data || e));
       });
-    } else {
-      console.warn('[Answer] No call_id found — markCallAnswered skipped');
     }
 
-    // Answer the SIP call
     actions.answer();
 
-    // Store info for post-answer navigation
     if (!call?.lead_id) {
       sessionStorage.setItem('postAnswerPhone', caller);
       sessionStorage.setItem('postAnswerUniqueid', uniqueid);
     }
+
+    setTimeout(() => { answeringRef.current = false; }, 3000);
   }, [actions]);
 
   /* ── Transfer ─────────────────────────────────────────── */
   const handleTransfer = useCallback((ext: string) => {
     const session = (actions as any)?.getSession?.();
     if (session?.refer) {
-      const domain = session.remote_identity?.uri?.host || '192.168.2.222';
+      const domain = session.remote_identity?.uri?.host || process.env.NEXT_PUBLIC_SIP_DOMAIN || '192.168.2.222';
       session.refer(`sip:${ext}@${domain}`);
     } else {
       actions?.hangup?.();
@@ -160,21 +157,18 @@ export function IncomingCallPopup() {
   /* ── SIP status changes ───────────────────────────────── */
   useEffect(() => {
     if (callStatus === 'incoming' && agentStatus !== 'away') {
-      console.log('[Popup] SIP incoming — ensuring popup is visible');
       setVisible(true);
     }
     if (callStatus === 'active' && agentStatus !== 'away') {
       setVisible(true);
       const call = incomingCallRef.current;
 
-      // Navigate to lead page or new lead page
       if (call?.lead_id) {
         const path = window.location.pathname;
         if (!path.includes('/leads/') && !path.includes('/calls/')) {
           router.push(`/leads/${call.lead_id}`);
         }
       } else {
-        // No lead — go to new lead page with phone pre-filled
         const phone = sessionStorage.getItem('postAnswerPhone') || call?.caller || '';
         const uniqueid = sessionStorage.getItem('postAnswerUniqueid') || call?.uniqueid || '';
         sessionStorage.removeItem('postAnswerPhone');
@@ -182,11 +176,10 @@ export function IncomingCallPopup() {
         router.push(`/leads/new?phone=${encodeURIComponent(phone)}&uniqueid=${encodeURIComponent(uniqueid)}`);
       }
     }
-    if (callStatus === 'idle') {
+    if (callStatus === 'idle' && !incomingCall) {
       setVisible(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [callStatus]);
+  }, [callStatus, incomingCall, agentStatus, router]);
 
   /* ── Cleanup on unmount ───────────────────────────────── */
   useEffect(() => { return () => {}; }, []);

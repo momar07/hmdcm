@@ -59,9 +59,17 @@ export function AgentStatusDropdown() {
 
   const { mutate, isPending } = useMutation({
     mutationFn: (target: AgentStatus) => agentStatusApi.set(target),
-    onSuccess: (_, target) => {
+    onSuccess: (response, target) => {
+      const data = response as any;
+      if (data?.success === false) {
+        toast.error(data.message || 'Failed to update status');
+        return;
+      }
       setStatus(target);
-      toast.success(`Status: ${STATUS_CONFIG[target]?.label ?? target}`);
+      const queues = data?.queues?.length
+        ? ` (${data.queues.join(', ')})`
+        : '';
+      toast.success(`${STATUS_CONFIG[target]?.label ?? target}${queues}`);
       setOpen(false);
     },
     onError: () => toast.error('Failed to update status'),

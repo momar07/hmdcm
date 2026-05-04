@@ -104,7 +104,21 @@ export class SipClient {
   }
 
   connect() {
-    JsSIP.debug.disable('JsSIP:*');
+    if (process.env.NODE_ENV === 'development') {
+      JsSIP.debug.enable('JsSIP:*');
+    } else {
+      JsSIP.debug.disable('JsSIP:*');
+    }
+
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      console.error('[SIP] *** NOT A SECURE CONTEXT ***');
+      console.error('[SIP] getUserMedia (microphone) REQUIRES HTTPS or localhost.');
+      console.error('[SIP] Current origin:', window.location.origin);
+      console.error('[SIP] Any incoming call will FAIL to answer because mic access will be denied.');
+      console.error('[SIP] FIX: Access the app via https://localhost:3000 or http://localhost:3000');
+    } else {
+      console.log('[SIP] Secure context confirmed. Microphone access should work.');
+    }
 
     const socket = new JsSIP.WebSocketInterface(this.config.wsUrl);
     console.log('[SIP] Connecting to:', this.config.wsUrl, 'as', this.config.sipUri);
@@ -148,19 +162,57 @@ export class SipClient {
 
       this.session = session;
 
-      // Attach remote audio as soon as track arrives
-      session.connection?.addEventListener('track', (e: RTCTrackEvent) => {
-        console.log('[SIP] Remote track received:', e.track.kind);
-        this._attachStream(e.streams[0]);
-      });
-
-      // Also watch for connection state changes
-      session.connection?.addEventListener('connectionstatechange', () => {
-        console.log('[SIP] PC state:', session.connection?.connectionState);
-      });
-
-      session.connection?.addEventListener('iceconnectionstatechange', () => {
-        console.log('[SIP] ICE state:', session.connection?.iceConnectionState);
+      session.on('peerconnection', () => {
+        const pc = session.connection;
+        if (!pc) { console.warn('[SIP] peerconnection event but no PC!'); return; }
+        console.log('[SIP] PeerConnection created, ICE state:', pc.iceConnectionState,
+          'signaling:', pc.signalingState,
+          'connectionState:', pc.connectionState);
+        if (pc.remoteDescription?.sdp) {
+          console.log('[SIP] Remote SDP (offer):', pc.remoteDescription.sdp.substring(0, 800));
+        }
+        pc.addEventListener('iceconnectionstatechange', () => {
+          console.log('[SIP] ICE state:', pc.iceConnectionState,
+            'gathering:', pc.iceGatheringState,
+            'signaling:', pc.signalingState);
+        });
+        pc.addEventListener('icecandidate', (e: RTCPeerConnectionIceEvent) => {
+          if (e.candidate) {
+            console.log('[SIP] ICE candidate:', e.candidate.candidate);
+          } else {
+            console.log('[SIP] ICE gathering complete (null candidate)');
+          }
+        });
+        pc.addEventListener('icecandidateerror', (e: RTCPeerConnectionIceErrorEvent) => {
+          console.error('[SIP] ICE candidate error:', e.errorCode, e.errorText, e.url);
+        });
+        pc.addEventListener('connectionstatechange', () => {
+          console.log('[SIP] PC state:', pc.connectionState);
+        });
+        pc.addEventListener('negotiationneeded', () => {
+          console.log('[SIP] Negotiation needed');
+        });
+        pc.addEventListener('track', (e: RTCTrackEvent) => {
+          console.log('[SIP] Remote track received:', e.track.kind,
+            'enabled:', e.track.enabled, 'muted:', e.track.muted);
+          this._attachStream(e.streams[0]);
+        });
+        pc.addEventListener('signalingstatechange', () => {
+          console.log('[SIP] Signaling state:', pc.signalingState);
+        });
+        pc.addEventListener('datachannel', (e: RTCDataChannelEvent) => {
+          console.log('[SIP] DataChannel event:', e.channel.label);
+        });
+        // Monitor for DTLS errors via iceconnectionstatechange failures
+        pc.addEventListener('connectionstatechange', () => {
+          if (pc.connectionState === 'failed') {
+            console.error('[SIP] *** PC connectionState FAILED — RTCPeerConnection failed ***');
+            console.error('[SIP] ICE state at failure:', pc.iceConnectionState,
+              'signaling:', pc.signalingState);
+          } else if (pc.connectionState === 'disconnected') {
+            console.warn('[SIP] PC connectionState DISCONNECTED');
+          }
+        });
       });
 
       if (originator === 'remote') {
@@ -170,23 +222,53 @@ export class SipClient {
         this.onCallStatusChange('incoming');
         this._startRinging();
 
+        session.on('connecting', () => {
+          console.log('[SIP] *** INCOMING CALL CONNECTING *** — 200 OK with SDP answer is being sent');
+          const pc = session.connection;
+          if (pc) {
+            console.log('[SIP] PC at connecting — ICE:', pc.iceConnectionState,
+              'signaling:', pc.signalingState, 'connection:', pc.connectionState);
+            if (pc.localDescription) {
+              console.log('[SIP] Local SDP type:', pc.localDescription.type,
+                'length:', pc.localDescription.sdp?.length);
+            } else {
+              console.warn('[SIP] *** NO LOCAL DESCRIPTION at connecting ***');
+            }
+          } else {
+            console.warn('[SIP] *** NO PeerConnection at connecting event ***');
+          }
+        });
         session.on('accepted', () => {
-          console.log('[SIP] Incoming call accepted');
+          console.log('[SIP] Incoming call accepted (200 OK confirmed)');
           this._stopRinging();
-          // Short delay for DTLS negotiation before marking active
+          const pc = session.connection;
+          if (pc) {
+            console.log('[SIP] After accepted — ICE state:', pc.iceConnectionState,
+              'signaling:', pc.signalingState,
+              'connectionState:', pc.connectionState);
+          }
           setTimeout(() => {
             this.onCallStatusChange('active');
             setTimeout(() => this._reattachStream(session), 300);
           }, 300);
         });
+        session.on('confirmed', () => {
+          console.log('[SIP] Incoming call confirmed (ACK received)');
+        });
         session.on('ended',  (e: any) => {
+          console.log('[SIP] Call ended, cause:', e.cause, 'originator:', e.originator);
           this._stopRinging();
           this.session = null;
           this.onEndCause('ended');
           this.onCallStatusChange('idle');
         });
         session.on('failed', (e: any) => {
-          console.error('[SIP] Call failed:', e.cause);
+          console.error('[SIP] Call failed — cause:', e.cause, 'originator:', e.originator,
+            'status:', (session as any).status,
+            'message:', e.message);
+          if (e.cause === 'User Denied Media Access') {
+            console.error('[SIP] *** MICROPHONE PERMISSION DENIED ***');
+          }
           this._stopRinging();
           this.session = null;
           this.onEndCause(e?.cause ?? 'failed');
@@ -249,10 +331,27 @@ export class SipClient {
   }
 
   disconnect() {
+    console.log('[SIP] disconnect() called');
+    this._stopRinging();
     const audio = document.getElementById('sip-remote-audio') as HTMLAudioElement;
     if (audio) { audio.srcObject = null; }
-    this.ua?.stop();
+
+    if (this.ua) {
+      try {
+        // Unregister first, then stop
+        this.ua.unregister({ all: true });
+      } catch (_) {}
+      try {
+        this.ua.stop();
+      } catch (_) {}
+      // Force close underlying WebSocket if it exists
+      const socket = (this.ua as any)._socket;
+      if (socket) {
+        try { socket.close(); } catch (_) {}
+      }
+    }
     this.ua = null;
+    this.session = null;
     this.onStatusChange('disconnected');
   }
 
@@ -261,12 +360,6 @@ export class SipClient {
     const domain = this.config.sipUri.split('@')[1];
     this.ua.call(`sip:${target}@${domain}`, {
       mediaConstraints: { audio: true, video: false },
-      pcConfig: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
     });
   }
 
@@ -279,26 +372,19 @@ export class SipClient {
     const sessionStatus = (this.session as any).status;
     console.log('[SIP] answer() called — session status:', sessionStatus);
 
-    // Valid statuses for answer(): STATUS_INVITE_RECEIVED (3) or STATUS_WAITING_FOR_ANSWER (4)
     if (sessionStatus !== undefined && sessionStatus !== 3 && sessionStatus !== 4) {
-      console.warn('[SIP] Cannot answer — invalid session status:', sessionStatus,
-        '(expected 3=INVITE_RECEIVED or 4=WAITING_FOR_ANSWER)');
+      console.warn('[SIP] Cannot answer — invalid session status:', sessionStatus);
       return;
     }
 
     try {
+      console.log('[SIP] Calling session.answer()...');
       this.session.answer({
         mediaConstraints: { audio: true, video: false },
-        pcConfig: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-          ],
-        },
       });
-      console.log('[SIP] session.answer() called successfully ✅');
-    } catch (err) {
-      console.error('[SIP] session.answer() threw exception:', err);
+      console.log('[SIP] session.answer() called successfully');
+    } catch (err: any) {
+      console.error('[SIP] session.answer() threw exception:', err?.message || err);
       this.session = null;
       this.onCallStatusChange('idle');
     }

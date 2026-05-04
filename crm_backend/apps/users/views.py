@@ -176,7 +176,8 @@ class AgentQueueStatusView(APIView):
             update_user_status(str(user.id), new_status)
             result = {'success': True, 'status': new_status, 'message': f'Status set to {new_status}'}
 
-        return Response(result)
+        http_status = 200 if result.get('success') else 400
+        return Response(result, status=http_status)
 
 class LiveAgentsView(APIView):
     """

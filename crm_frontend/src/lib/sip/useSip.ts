@@ -30,20 +30,33 @@ export function useSip(config: SipConfig | null) {
     if (!config) return;
 
     ;(window as any).__sipClient = null;   // reset before creating new
+    let disconnected  = false;
+    let retryCount    = 0;
+    const MAX_RETRIES = 10;
+
     const client = new SipClient(
       config,
       (status) => {
         setSipStatus(status);
-        // Auto-reconnect on registration failure or disconnect
         if (status === 'error' || status === 'disconnected') {
-          console.log('[useSip] SIP disconnected/error — will retry in 5s');
+          if (disconnected) return;
+          if (retryCount >= MAX_RETRIES) {
+            console.error('[useSip] Max retries reached — giving up');
+            return;
+          }
+          const delay = Math.min(5000 * Math.pow(1.5, retryCount), 60000);
+          retryCount++;
+          console.log(`[useSip] SIP disconnected/error — retry ${retryCount}/${MAX_RETRIES} in ${Math.round(delay)}ms`);
           setTimeout(() => {
-            // Only reconnect if config hasn't changed
+            if (disconnected) return;
             if (clientRef.current === client) {
               console.log('[useSip] Retrying SIP connection...');
+              try { client.disconnect(); } catch (_) {}
               try { client.connect(); } catch (e) { console.error('[useSip] Retry failed:', e); }
             }
-          }, 5000);
+          }, delay);
+        } else if (status === 'registered') {
+          retryCount = 0;
         }
       },
       setCallStatus,
@@ -57,7 +70,13 @@ export function useSip(config: SipConfig | null) {
     ;(window as any).__sipClient = client;   // expose for preload
     client.connect();
 
-    return () => { client.disconnect(); };
+    return () => {
+      disconnected = true;
+      client.disconnect();
+      if (clientRef.current === client) {
+        clientRef.current = null;
+      }
+    };
   }, [config?.sipUri]);
 
   const call = useCallback((target: string) => {

@@ -39,10 +39,12 @@ export function SoftPhone() {
   const extNumber   = user?.extension?.number   ?? null;
   const sipSecret   = user?.extension?.secret   ?? null;
 
-  // Only connect if both extension number AND sip secret are set
+  const SIP_WS_URL = process.env.NEXT_PUBLIC_SIP_WS_URL || 'ws://192.168.2.222:8088/ws';
+  const SIP_DOMAIN = process.env.NEXT_PUBLIC_SIP_DOMAIN || '192.168.2.222';
+
   const sipConfig = (extNumber && sipSecret) ? {
-    wsUrl:       'ws://192.168.2.222:8088/ws',
-    sipUri:      `sip:${extNumber}@192.168.2.222`,
+    wsUrl:       SIP_WS_URL,
+    sipUri:      `sip:${extNumber}@${SIP_DOMAIN}`,
     password:    sipSecret,
     displayName: user?.full_name ?? extNumber,
   } : null;

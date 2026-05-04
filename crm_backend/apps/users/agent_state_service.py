@@ -144,15 +144,32 @@ def _run_ami(actions: list[tuple[str, dict]]) -> list[str]:
         client.login()
         for action, fields in actions:
             resp = client.send_action(action, fields)
-            log.info(f'[AMI] {action} {fields} → {resp.strip()[:120]}')
+            log.info(f'[AMI] {action} {fields} → {resp.strip()[:200]}')
             responses.append(resp)
-            time.sleep(0.1)   # small gap between commands
+            time.sleep(0.1)
     except Exception as e:
-        log.error(f'[AMI] Error: {e}')
-        responses.append(str(e))
+        log.error(f'[AMI] Error: {e}', exc_info=True)
+        responses.append(f'ERROR: {e}')
     finally:
         client.logoff()
     return responses
+
+
+def _check_ami_success(responses: list[str]) -> tuple[bool, str]:
+    """
+    Check if all AMI responses indicate success.
+    Returns (all_ok, first_error_message).
+    """
+    for resp in responses:
+        if resp.startswith('ERROR:'):
+            return False, resp
+        if 'Response: Error' in resp or 'Response: Failed' in resp:
+            # Extract the error message from AMI response
+            for line in resp.split('\r\n'):
+                if line.startswith('Message:'):
+                    return False, line.split(':', 1)[1].strip()
+            return False, 'AMI command failed'
+    return True, ''
 
 
 # ── Public service functions ─────────────────────────────────────────────────
@@ -188,16 +205,16 @@ def agent_go_available(user) -> dict:
             'Interface':  interface,
             'MemberName': member,
             'Penalty':    penalty,
-            'Paused':     'false',
-        }))
-        # Unpause in case agent was previously paused
-        actions.append(('QueuePause', {
-            'Queue':     q,
-            'Interface': interface,
-            'Paused':    'false',
+            'Paused':     '0',
         }))
 
     responses = _run_ami(actions)
+    all_ok, error_msg = _check_ami_success(responses)
+
+    if not all_ok:
+        log.error(f'[AgentState] {user.email} failed to join queues: {error_msg}')
+        return {'success': False, 'status': user.status, 'queues': queues, 'message': f'Failed to join queues: {error_msg}'}
+
     update_user_status(str(user.id), 'available')
     _notify(user, 'available')
 
@@ -229,13 +246,15 @@ def agent_go_break(user, reason: str = 'Break') -> dict:
         ('QueuePause', {
             'Queue':     q,
             'Interface': interface,
-            'Paused':    'true',
+            'Paused':    '1',
             'Reason':    reason,
         })
         for q in queues
     ]
 
-    _run_ami(actions)
+    responses = _run_ami(actions)
+    all_ok, error_msg = _check_ami_success(responses)
+
     update_user_status(str(user.id), 'away')
     _notify(user, 'away')
 
@@ -251,6 +270,8 @@ def agent_go_break(user, reason: str = 'Break') -> dict:
     )
 
     log.info(f'[AgentState] {user.email} → break ({reason}) across queues: {queues}')
+    if not all_ok:
+        return {'success': False, 'status': 'away', 'queues': queues, 'message': f'Failed to pause in queues: {error_msg}'}
     return {'success': True, 'status': 'away', 'queues': queues, 'message': f'Paused in queues: {", ".join(queues)}'}
 
 
@@ -275,11 +296,15 @@ def agent_go_offline(user) -> dict:
         for q in queues
     ]
 
-    _run_ami(actions)
+    responses = _run_ami(actions)
+    all_ok, error_msg = _check_ami_success(responses)
+
     update_user_status(str(user.id), 'offline')
     _notify(user, 'offline')
 
     log.info(f'[AgentState] {user.email} → offline, removed from queues: {queues}')
+    if not all_ok:
+        return {'success': False, 'status': 'offline', 'queues': queues, 'message': f'Failed to remove from queues: {error_msg}'}
     return {'success': True, 'status': 'offline', 'queues': queues, 'message': f'Removed from queues: {", ".join(queues)}'}
 
 
@@ -358,12 +383,16 @@ def _do_unpause(user_id: str, session_id: str):
                 ('QueuePause', {
                     'Queue':     q,
                     'Interface': interface,
-                    'Paused':    'false',
+                    'Paused':    '0',
                 })
                 for q in queues
             ]
-            _run_ami(actions)
-            log.info(f'[LoginSeq] {user.email} unpaused in queues: {queues}')
+            responses = _run_ami(actions)
+            unpause_ok, unpause_err = _check_ami_success(responses)
+            if unpause_ok:
+                log.info(f'[LoginSeq] {user.email} unpaused in queues: {queues}')
+            else:
+                log.error(f'[LoginSeq] {user.email} failed to unpause: {unpause_err}')
         else:
             log.info(f'[LoginSeq] {user.email} — no queues/interface, CRM-only update')
 
@@ -428,7 +457,7 @@ def agent_on_login(user, request=None) -> dict:
 
     # Step 1: Remove from queues if already member (clean slate)
     remove_actions = [('QueueRemove', {'Queue': q, 'Interface': interface}) for q in queues]
-    _run_ami(remove_actions)
+    responses = _run_ami(remove_actions)
     log.info(f'[Login] {user.email} — removed from queues (clean slate)')
 
     # Step 2: Add to all queues already paused — atomic, no race condition window
@@ -439,12 +468,16 @@ def agent_on_login(user, request=None) -> dict:
             'Interface':  interface,
             'MemberName': member,
             'Penalty':    '0',
-            'Paused':     'true',   # joined already paused
+            'Paused':     '1',
         })
         for q in queues
     ]
-    _run_ami(add_actions)
-    log.info(f'[Login] {user.email} — added to queues paused: {queues}')
+    responses = _run_ami(add_actions)
+    add_ok, add_err = _check_ami_success(responses)
+    if not add_ok:
+        log.error(f'[Login] {user.email} — failed to add to queues: {add_err}')
+    else:
+        log.info(f'[Login] {user.email} — added to queues paused: {queues}')
 
     # Step 3: Create LOGIN break record
     AgentBreak.objects.create(
@@ -496,8 +529,12 @@ def agent_on_logout(user) -> dict:
     # Remove from all queues
     if interface and queues:
         remove_actions = [('QueueRemove', {'Queue': q, 'Interface': interface}) for q in queues]
-        _run_ami(remove_actions)
-        log.info(f'[Logout] {user.email} removed from queues: {queues}')
+        responses = _run_ami(remove_actions)
+        all_ok, error_msg = _check_ami_success(responses)
+        if all_ok:
+            log.info(f'[Logout] {user.email} removed from queues: {queues}')
+        else:
+            log.error(f'[Logout] {user.email} failed to remove from queues: {error_msg}')
 
     # Close active session
     AgentSession.objects.filter(
