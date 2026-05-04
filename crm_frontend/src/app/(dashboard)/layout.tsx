@@ -47,17 +47,16 @@ export default function DashboardLayout({
 
   const { setStatus } = useAgentStatusStore();
   const prevCallStatus = useRef<string>('idle');
+  const pendingCallIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Show DispositionModal when call ends (both inbound active→idle AND outbound ringing/active→idle)
-    // Show disposition modal when call ends
-    // incoming→idle = could be answered then ended, pendingCompletions filters correctly
-    // ringing→idle = outbound not answered, pendingCompletions returns empty → no modal
+    // Primary trigger: call_ended WS event (sets pendingCallIdRef)
+    // Fallback trigger: SIP state transition (active/holding/incoming → idle)
     const wasInCall = prevCallStatus.current === 'active'
                    || prevCallStatus.current === 'holding'
                    || prevCallStatus.current === 'incoming';
     if (wasInCall && callStatus === 'idle') {
-      // Retry up to 4 times (800ms, 1.8s, 3s, 5s) — handles slow networks
       const tryFetchPending = (attempt: number) => {
         const delays = [800, 1000, 1200, 2000];
         const delay  = delays[attempt] ?? 2000;
@@ -76,11 +75,28 @@ export default function DashboardLayout({
                   callDirection: (latest as any).direction ?? 'inbound',
                 });
               } else if (attempt < 3) {
-                // No pending found yet — retry
                 tryFetchPending(attempt + 1);
+              } else {
+                // All retries exhausted — show manual fallback
+                setDispModal({
+                  callId:        '__manual__',
+                  callerNumber:  'Unknown',
+                  leadName:      null,
+                  leadId:        null,
+                  callDirection: 'inbound',
+                });
               }
             }).catch(() => {
               if (attempt < 3) tryFetchPending(attempt + 1);
+              else {
+                setDispModal({
+                  callId:        '__manual__',
+                  callerNumber:  'Unknown',
+                  leadName:      null,
+                  leadId:        null,
+                  callDirection: 'inbound',
+                });
+              }
             });
           });
         }, delay);
@@ -102,6 +118,13 @@ export default function DashboardLayout({
       lastEventRef.current = event;
       setIncomingCall(event as any);
       setRingKey(k => k + 1);
+    }
+    if (event.type === 'call_ended') {
+      // Primary trigger: backend confirms call ended → fetch pending completions
+      const evt = event as any;
+      if (evt.call_id) {
+        pendingCallIdRef.current = evt.call_id;
+      }
     }
     if (event.type === 'agent_status' || event.type === 'agent_status_update') {
       const s = (event as any).status ?? (event as any).payload?.status;

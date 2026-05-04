@@ -275,6 +275,7 @@ export interface IncomingCallEvent {
   uniqueid:        string;
   call_id:         string;
   caller:          string;
+  caller_name:     string;
   callee:          string;
   queue:           string;
   direction:       'inbound' | 'outbound' | 'internal';

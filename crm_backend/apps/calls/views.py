@@ -475,7 +475,7 @@ class MarkCallAnsweredView(APIView):
         from django.utils import timezone as tz
         from .models import Call
         try:
-            call = Call.objects.get(pk=call_id)
+            call = Call.objects.select_related('lead').get(pk=call_id)
         except Call.DoesNotExist:
             return Response({'error': 'Call not found'}, status=404)
         if call.status in ('ringing', 'incoming'):
@@ -483,6 +483,11 @@ class MarkCallAnsweredView(APIView):
             call.agent      = request.user
             call.started_at = tz.now()
             call.save(update_fields=['status', 'agent', 'started_at'])
+
+            # Auto-assign lead to answering agent so they can view it immediately
+            if call.lead_id and not call.lead.assigned_to_id:
+                call.lead.assigned_to = request.user
+                call.lead.save(update_fields=['assigned_to'])
         return Response({'call_id': str(call.id), 'status': call.status})
 
 

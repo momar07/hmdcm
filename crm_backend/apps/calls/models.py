@@ -75,6 +75,7 @@ class Call(BaseModel):
     # Asterisk fields
     uniqueid    = models.CharField(max_length=100, unique=True, null=True, blank=True)
     caller      = models.CharField(max_length=50)
+    caller_name = models.CharField(max_length=200, blank=True, default='')
     callee      = models.CharField(max_length=50)
     direction   = models.CharField(max_length=20, choices=DIRECTION_CHOICES, default='outbound')
     status      = models.CharField(max_length=20, choices=STATUS_CHOICES,  default='ringing')

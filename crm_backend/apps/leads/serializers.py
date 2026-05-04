@@ -72,13 +72,14 @@ class LeadDetailSerializer(serializers.ModelSerializer):
     tag_ids      = serializers.ListField(
         child=serializers.UUIDField(), write_only=True, required=False
     )
+    call_uniqueid = serializers.CharField(write_only=True, required=False, allow_blank=True)
 
     class Meta:
         model  = Lead
         fields = [
             'id', 'title', 'phone', 'first_name', 'last_name', 'email',
             'gender', 'date_of_birth', 'company', 'address', 'city', 'country',
-            'status_id', 'priority_id', 'stage_id', 'tag_ids',
+            'status_id', 'priority_id', 'stage_id', 'tag_ids', 'call_uniqueid',
             'status_detail',   'status_name',
             'priority_detail', 'priority_name',
             'stage_detail',    'stage_name', 'stage_color', 'stage_slug',
@@ -104,6 +105,7 @@ class LeadDetailSerializer(serializers.ModelSerializer):
         priority_id  = validated_data.pop('priority_id', None)
         stage_id     = validated_data.pop('stage_id',    None)
         tag_ids      = validated_data.pop('tag_ids',     None)
+        call_uniqueid = validated_data.pop('call_uniqueid', None)
 
         validated_data['status']   = self._get_obj(LeadStatus,   status_id,    'status_id')
         validated_data['priority'] = self._get_obj(LeadPriority, priority_id,  'priority_id')
@@ -118,6 +120,10 @@ class LeadDetailSerializer(serializers.ModelSerializer):
         if tag_ids:
             tags = LeadTag.objects.filter(id__in=tag_ids)
             lead.tags.set(tags)
+
+        if call_uniqueid:
+            from apps.calls.models import Call
+            Call.objects.filter(uniqueid=call_uniqueid).update(lead=lead)
 
         return lead
 

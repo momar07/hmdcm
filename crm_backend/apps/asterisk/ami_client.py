@@ -156,15 +156,15 @@ class AMIClient:
 
         if name in relevant:
             import sys
-            print(f'[AMI DEBUG] Dispatching: {name} uid={event.get("Uniqueid")}', flush=True)
+            print(f'[AMI] Dispatching: {name} uid={event.get("Uniqueid")}', flush=True)
             sys.stdout.flush()
             try:
                 from apps.calls.tasks import process_ami_event
-                result = process_ami_event.apply(args=[event])
-                print(f'[AMI DEBUG] Task result: {result.status} — {result.result}', flush=True)
-                if result.traceback:
-                    print(f'[AMI DEBUG] TRACEBACK: {result.traceback}', flush=True)
+                result = process_ami_event.apply_async(args=[event])
+                print(f'[AMI] Task queued: {result.id}', flush=True)
+                sys.stdout.flush()
             except Exception as e:
                 import traceback
-                print(f'[AMI DEBUG] Dispatch error: {e}', flush=True)
+                print(f'[AMI] Dispatch error: {e}', flush=True)
                 traceback.print_exc()
+                sys.stdout.flush()

@@ -13,15 +13,20 @@ import { Input }        from '@/components/ui/Input';
 export default function NewLeadPage() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const prePhone     = searchParams.get('phone') ?? '';
-  const preUniqueid  = searchParams.get('uniqueid') ?? '';
+  const prePhone      = searchParams.get('phone') ?? '';
+  const preUniqueid   = searchParams.get('uniqueid') ?? '';
+  const preCallerName = searchParams.get('caller_name') ?? '';
 
   const [form, setForm] = useState({
-    title: '', source: 'manual', description: '',
+    title: prePhone ? `Lead from call — ${prePhone}` : '',
+    source: prePhone ? 'call' : 'manual',
+    description: '',
     value: '', followup_date: '',
     status_id: '', priority_id: '', stage_id: '',
     phone: prePhone,
-    first_name: '', last_name: '', email: '', company: '',
+    first_name: preCallerName ? preCallerName.split(' ').slice(0, -1).join(' ') || preCallerName : '',
+    last_name: preCallerName ? preCallerName.split(' ').slice(-1).join('') : '',
+    email: '', company: '',
   });
 
   const { data: statusData } = useQuery({
@@ -51,6 +56,8 @@ export default function NewLeadPage() {
     },
   });
 
+  const stageItems = Array.isArray(stageData) ? stageData : [];
+
   useEffect(() => {
     if (statusData?.length && !form.status_id) {
       const def = statusData.find((s: any) => s.is_default) ?? statusData[0];
@@ -69,6 +76,7 @@ export default function NewLeadPage() {
       value:         form.value ? parseFloat(form.value) : undefined,
       followup_date: form.followup_date || undefined,
       stage_id:      form.stage_id || undefined,
+      call_uniqueid: preUniqueid || undefined,
     } as any),
     onSuccess: async (res) => {
       toast.success('Lead created!');
@@ -191,7 +199,7 @@ export default function NewLeadPage() {
             onChange={(e) => set('stage_id', e.target.value)}
           >
             <option value="">— Select Stage —</option>
-            {(stageData ?? []).map((s: any) => (
+            {stageItems.map((s: any) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>

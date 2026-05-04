@@ -39,7 +39,7 @@ class CallListSerializer(serializers.ModelSerializer):
         model  = Call
         fields = [
             'id', 'uniqueid', 'direction', 'status',
-            'caller', 'callee',
+            'caller', 'caller_name', 'callee',
             'agent', 'agent_name',
             'lead', 'lead_name',
             'duration', 'started_at', 'ended_at',

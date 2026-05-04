@@ -123,12 +123,6 @@ export function IncomingCallPopup() {
     }
 
     actions.answer();
-
-    if (!call?.lead_id) {
-      sessionStorage.setItem('postAnswerPhone', caller);
-      sessionStorage.setItem('postAnswerUniqueid', uniqueid);
-    }
-
     setTimeout(() => { answeringRef.current = false; }, 3000);
   }, [actions]);
 
@@ -161,22 +155,23 @@ export function IncomingCallPopup() {
     }
     if (callStatus === 'active' && agentStatus !== 'away') {
       setVisible(true);
-      const call = incomingCallRef.current;
 
-      if (call?.lead_id) {
+      const isKnownLead = !!incomingCall?.lead_id;
+
+      if (isKnownLead) {
         const path = window.location.pathname;
         if (!path.includes('/leads/') && !path.includes('/calls/')) {
-          router.push(`/leads/${call.lead_id}`);
+          router.push(`/leads/${incomingCall.lead_id}`);
         }
       } else {
-        const phone = sessionStorage.getItem('postAnswerPhone') || call?.caller || '';
-        const uniqueid = sessionStorage.getItem('postAnswerUniqueid') || call?.uniqueid || '';
-        sessionStorage.removeItem('postAnswerPhone');
-        sessionStorage.removeItem('postAnswerUniqueid');
-        router.push(`/leads/new?phone=${encodeURIComponent(phone)}&uniqueid=${encodeURIComponent(uniqueid)}`);
+        const phone       = incomingCall?.caller || '';
+        const uniqueid    = incomingCall?.uniqueid || '';
+        const callerName  = incomingCall?.caller_name || '';
+        router.push(`/leads/new?phone=${encodeURIComponent(phone)}&uniqueid=${encodeURIComponent(uniqueid)}&caller_name=${encodeURIComponent(callerName)}`);
       }
     }
-    if (callStatus === 'idle' && !incomingCall) {
+    // Hide immediately when call ends — don't wait for incomingCall to clear
+    if (callStatus === 'idle') {
       setVisible(false);
     }
   }, [callStatus, incomingCall, agentStatus, router]);
@@ -186,11 +181,25 @@ export function IncomingCallPopup() {
 
   if (!visible) return null;
 
-  // Lead-first display
-  const leadName      = incomingCall?.lead_name ?? incomingCall?.lead_title ?? incomingCall?.caller ?? 'Unknown Caller';
-  const leadPhone     = incomingCall?.lead_phone ?? incomingCall?.caller ?? '';
-  const leadStage     = incomingCall?.lead_stage ?? null;
-  const leadCompany   = incomingCall?.lead_company ?? null;
+  const isKnownLead = !!incomingCall?.lead_id;
+
+  let leadName:   string;
+  let leadPhone:  string;
+  let leadStage:  string | null;
+  let leadCompany: string | null;
+
+  if (isKnownLead) {
+    leadName    = incomingCall?.lead_name ?? incomingCall?.lead_title ?? incomingCall?.caller ?? 'Unknown';
+    leadPhone   = incomingCall?.lead_phone ?? incomingCall?.caller ?? '';
+    leadStage   = incomingCall?.lead_stage ?? null;
+    leadCompany  = incomingCall?.lead_company ?? null;
+  } else {
+    const callerName = incomingCall?.caller_name?.trim();
+    leadName    = callerName || 'Unknown Caller';
+    leadPhone   = incomingCall?.caller ?? '';
+    leadStage   = null;
+    leadCompany  = null;
+  }
   const isActive      = callStatus === 'active' || callStatus === 'holding';
   const sipNotReady   = !actions || callStatus === 'idle';
 
@@ -206,20 +215,23 @@ export function IncomingCallPopup() {
             </button>
           </div>
           <div className="flex items-center gap-4 px-5 py-3">
-            <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center shrink-0 border border-gray-200">
-              <User size={26} className="text-gray-400" />
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 border ${isKnownLead ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'}`}>
+              <User size={26} className={isKnownLead ? 'text-blue-500' : 'text-amber-500'} />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xl font-bold text-gray-900 truncate leading-tight">{leadName}</p>
               {leadPhone && leadPhone !== leadName && (
                 <p className="text-sm text-gray-400 mt-0.5">Mobile&nbsp; {leadPhone}</p>
               )}
-              {leadStage && (
+              {!isKnownLead && (
+                <p className="text-xs text-amber-600 mt-0.5 font-medium">New Caller — Create Lead</p>
+              )}
+              {isKnownLead && leadStage && (
                 <p className="text-xs text-gray-400 mt-0.5">
                   Stage: <span className="font-medium text-gray-600">{leadStage}</span>
                 </p>
               )}
-              {leadCompany && <p className="text-xs text-gray-400 truncate">{leadCompany}</p>}
+              {isKnownLead && leadCompany && <p className="text-xs text-gray-400 truncate">{leadCompany}</p>}
               {incomingCall?.queue && (
                 <p className="text-xs text-gray-400">
                   Queue <span className="font-medium text-gray-600">{incomingCall.queue}</span>
@@ -266,7 +278,7 @@ export function IncomingCallPopup() {
       )}
       <div className="fixed bottom-6 right-6 z-50">
         <div className="bg-white rounded-2xl shadow-2xl w-96 overflow-hidden border border-gray-100">
-          <div className={`px-5 py-3 flex items-center justify-between ${isOnHold ? 'bg-yellow-500' : 'bg-green-600'}`}>
+          <div className={`px-5 py-3 flex items-center justify-between ${isOnHold ? 'bg-yellow-500' : isKnownLead ? 'bg-green-600' : 'bg-amber-500'}`}>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
                 <User size={16} className="text-white" />
@@ -275,6 +287,9 @@ export function IncomingCallPopup() {
                 <p className="text-white font-semibold text-sm truncate max-w-[180px]">{leadName}</p>
                 {leadPhone && leadPhone !== leadName && (
                   <p className="text-white/70 text-xs">{leadPhone}</p>
+                )}
+                {!isKnownLead && (
+                  <p className="text-white/70 text-xs">New Caller</p>
                 )}
               </div>
             </div>

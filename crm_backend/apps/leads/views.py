@@ -18,6 +18,12 @@ class LeadViewSet(viewsets.ModelViewSet):
                           'assigned_to', 'campaign', 'stage']
 
     def get_queryset(self):
+        if self.action == 'retrieve':
+            # Detail view: allow viewing any active lead by ID
+            # Agents may navigate here from an incoming call before assignment propagates
+            return Lead.objects.select_related(
+                'status', 'priority', 'assigned_to', 'campaign'
+            ).filter(is_active=True)
         return get_all_leads(user=self.request.user)
 
     def get_serializer_class(self):

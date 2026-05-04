@@ -83,6 +83,7 @@ export default function LeadDetailPage() {
       return Array.isArray(raw) ? raw : (raw?.results ?? []);
     },
   });
+  const stageList = Array.isArray(stages) ? stages : [];
 
   const { data: events, isLoading: eventsLoading } = useQuery({
     queryKey: ['lead-events', id],
@@ -300,11 +301,11 @@ export default function LeadDetailPage() {
         </div>
 
         {/* Move Stage */}
-        {stages && stages.length > 0 && (
+        {stageList.length > 0 && (
           <div className="pt-3 border-t border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Move Stage</p>
             <div className="flex flex-wrap gap-2">
-              {(stages as any[]).map((s: any) => (
+              {stageList.map((s: any) => (
                 <button key={s.id} onClick={() => moveStage.mutate(s.id)}
                   disabled={moveStage.isPending || lead.stage === s.id}
                   className="flex items-center gap-1.5 px-3 py-1 rounded-full

@@ -26,6 +26,9 @@ def notify_incoming_call(self, call_id: str):
     lead = call.lead
     lead_data = {}
     if lead:
+        lead_display_name = lead.get_full_name()
+        if lead_display_name and lead.phone and lead_display_name == lead.phone:
+            lead_display_name = call.caller_name or lead.title or lead.phone
         lead_data = {
             'lead_id':        str(lead.id),
             'lead_title':     lead.title,
@@ -35,7 +38,7 @@ def notify_incoming_call(self, call_id: str):
             'lead_assigned':  lead.assigned_to.get_full_name() if lead.assigned_to else None,
             'lead_value':     str(lead.value) if lead.value else None,
             'lead_source':    lead.source,
-            'lead_name':      lead.get_full_name(),
+            'lead_name':      lead_display_name,
             'lead_company':   lead.company or '',
             'lead_email':     lead.email or '',
         }
@@ -48,13 +51,14 @@ def notify_incoming_call(self, call_id: str):
         }
 
     payload = {
-        'type':      'incoming_call',
-        'call_id':   str(call.id),
-        'uniqueid':  call.uniqueid,
-        'caller':    call.caller,
-        'callee':    call.callee,
-        'queue':     call.queue or '',
-        'direction': call.direction,
+        'type':        'incoming_call',
+        'call_id':     str(call.id),
+        'uniqueid':    call.uniqueid,
+        'caller':      call.caller,
+        'caller_name': call.caller_name or '',
+        'callee':      call.callee,
+        'queue':       call.queue or '',
+        'direction':   call.direction,
         **lead_data,
     }
 
@@ -168,37 +172,54 @@ def process_ami_event(self, event: dict):
     try:
         # ── helpers ───────────────────────────────────────────
         def _find_lead_by_phone(phone: str):
-            """Look up existing Lead by phone number."""
+            """Look up existing Lead by phone number using normalized variants."""
             if not phone or len(phone) < 3:
                 return None
-            suffix = phone[-9:] if len(phone) >= 9 else phone
+            from apps.common.utils import normalize_phone
+            normalized = normalize_phone(phone)
+            if not normalized:
+                return None
             try:
-                lead = Lead.objects.select_related('assigned_to').filter(
-                    phone__endswith=suffix, is_active=True
-                ).first()
-                return lead
+                variants = set()
+                variants.add(normalized)
+                digits = normalized.lstrip('0')
+                variants.add(digits)
+                variants.add('+20' + digits)
+                variants.add('20' + digits)
+                variants.add('0020' + digits)
+                if len(normalized) >= 9:
+                    variants.add(normalized[-9:])
+                if len(digits) >= 9:
+                    variants.add(digits[-9:])
+                variants.discard('')
+                variants.discard('0')
+                logger.info(f'[AMI] Lead lookup: input={phone!r} normalized={normalized!r} variants={variants}')
+                match = Lead.objects.select_related('assigned_to').filter(
+                    phone__in=variants, is_active=True
+                ).order_by('-updated_at').first()
+                if match:
+                    logger.info(f'[AMI] Lead found by exact match: id={match.id} phone={match.phone!r} name={match.get_full_name()!r}')
+                    return match
+                match = Lead.objects.select_related('assigned_to').filter(
+                    phone__endswith=normalized[-9:] if len(normalized) >= 9 else normalized,
+                    is_active=True,
+                ).order_by('-updated_at').first()
+                if match:
+                    logger.info(f'[AMI] Lead found by suffix match: id={match.id} phone={match.phone!r} name={match.get_full_name()!r}')
+                else:
+                    logger.info(f'[AMI] No lead found for phone={phone!r}')
+                return match
             except Exception as e:
-                logger.debug(f'[AMI] Lead lookup error: {e}')
+                logger.error(f'[AMI] Lead lookup error for phone={phone!r}: {e}')
                 return None
 
-        def _get_or_create_lead(phone: str):
+        def _find_lead(phone: str):
             """
-            Lookup existing Lead by phone, or create a new one.
+            Lookup existing Lead by phone only. Does NOT auto-create.
+            Unknown callers will have lead=None on the Call record.
+            Lead is created later when agent explicitly creates one from /leads/new.
             """
-            lead = _find_lead_by_phone(phone)
-            if lead:
-                return lead
-
-            first_stage = LeadStage.objects.filter(is_active=True).order_by('order').first()
-            lead = Lead.objects.create(
-                title       = f'Lead from call — {phone}',
-                phone       = phone,
-                assigned_to = None,
-                source      = 'call',
-                stage       = first_stage,
-            )
-            logger.info(f'[AMI] Auto-created lead: {lead.id} for {phone}')
-            return lead
+            return _find_lead_by_phone(phone)
 
         def _create_call_activity(call_obj, status='in_progress'):
             """Create an Activity record linked to the call's lead."""
@@ -237,7 +258,8 @@ def process_ami_event(self, event: dict):
                 logger.debug(f'[AMI] Skipping Local channel: {chan_name}')
                 return
 
-            caller_num = event.get('CallerIDNum', '')
+            caller_num  = event.get('CallerIDNum', '')
+            caller_name = event.get('CallerIDName', '') or ''
             context    = event.get('Context', '')
             exten      = event.get('Exten', '')
 
@@ -250,45 +272,49 @@ def process_ami_event(self, event: dict):
                 logger.debug(f'[AMI] Newchannel skipped — context={context}')
                 return
 
-            caller    = caller_num
-            callee    = exten
-            direction = 'inbound'
+            caller       = caller_num
+            callee       = exten
+            direction    = 'inbound'
 
-            lead = _get_or_create_lead(caller)
+            lead = _find_lead(caller)
 
             call, created = Call.objects.get_or_create(
                 uniqueid=uniqueid,
                 defaults={
-                    'caller':     caller,
-                    'callee':     callee,
-                    'direction':  direction,
-                    'status':     'ringing',
-                    'lead':       lead,
-                    'agent':      None,
-                    'started_at': timezone.now(),
+                    'caller':      caller,
+                    'caller_name': caller_name,
+                    'callee':      callee,
+                    'direction':   direction,
+                    'status':      'ringing',
+                    'lead':        lead,
+                    'agent':       None,
+                    'started_at':  timezone.now(),
                 }
             )
+            logger.info(f'[AMI] Newchannel result: caller={caller!r} caller_name={caller_name!r} lead={lead.id if lead else None} call_created={created}')
             if created:
                 _create_call_activity(call, status='in_progress')
                 notify_incoming_call.delay(str(call.id))
                 logger.info(f'[AMI] New trunk call: {uniqueid} | {caller} → {callee}')
 
         elif event_name == 'QueueCallerJoin':
-            caller = event.get('CallerIDNum', '')
-            queue  = event.get('Queue', '')
+            caller      = event.get('CallerIDNum', '')
+            caller_name = event.get('CallerIDName', '') or ''
+            queue       = event.get('Queue', '')
 
-            lead = _get_or_create_lead(caller)
+            lead = _find_lead(caller)
 
             call, created = Call.objects.update_or_create(
                 uniqueid=uniqueid,
                 defaults={
-                    'caller':     caller,
-                    'callee':     queue,
-                    'direction':  'inbound',
-                    'status':     'ringing',
-                    'queue':      queue,
-                    'lead':       lead,
-                    'started_at': timezone.now(),
+                    'caller':      caller,
+                    'caller_name': caller_name,
+                    'callee':      queue,
+                    'direction':   'inbound',
+                    'status':      'ringing',
+                    'queue':       queue,
+                    'lead':        lead,
+                    'started_at':  timezone.now(),
                 }
             )
             # Create activity only for new calls

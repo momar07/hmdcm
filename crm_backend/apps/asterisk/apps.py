@@ -11,8 +11,8 @@ class AsteriskConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
 
     def ready(self):
-        # Skip during manage.py commands like migrate, makemigrations, collectstatic
-        import sys
+        import os, sys
+        # Skip during manage.py commands like migrate, makemigrations, collectstatic, test, shell
         skip_commands = {'migrate', 'makemigrations', 'collectstatic', 'test', 'shell'}
         if len(sys.argv) > 1 and sys.argv[1] in skip_commands:
             logger.info('[AMI] Skipping listener (management command)')
@@ -22,6 +22,16 @@ class AsteriskConfig(AppConfig):
         if os.environ.get('DISABLE_AMI') == '1':
             logger.info('[AMI] Listener disabled via DISABLE_AMI=1')
             return
+
+        # Only start the AMI listener in the Daphne/web process, not in Celery workers.
+        # Celery workers don't need their own AMI listener since events are dispatched
+        # via apply_async() to the Celery queue from the Daphne process.
+        if os.environ.get('AMI_STANDALONE') != '1':
+            import threading
+            is_celery = any('celery' in arg.lower() for arg in sys.argv)
+            if is_celery:
+                logger.info('[AMI] Skipping listener in Celery worker — events dispatched via queue')
+                return
 
         self._start_ami_thread()
 
