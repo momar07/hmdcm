@@ -595,7 +595,7 @@ def process_ami_event(self, event: dict):
                             event_type='answered'
                         ).values_list('agent_id', flat=True))
                         rejected_agent_ids = set(events_qs.filter(
-                            event_type__in=('rejected', 'ringhangup', 'dismissed')
+                            event_type__in=('rejected', 'ringhangup')
                         ).values_list('agent_id', flat=True))
                         timeout_agent_ids = set(events_qs.filter(
                             event_type='timeout'

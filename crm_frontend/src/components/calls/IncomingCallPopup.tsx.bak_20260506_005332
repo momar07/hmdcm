@@ -100,15 +100,6 @@ export function IncomingCallPopup() {
   /* ── Dismiss (reject / close) ─────────────────────────── */
   const handleDismiss = useCallback(() => {
     const call = incomingCallRef.current;
-    // 1. Log dismiss to backend FIRST (before SIP hangup → AMI timeout race)
-    if (call?.call_id) {
-      import('@/lib/api/calls').then(({ callsApi }) => {
-        callsApi.dismissCall(call.call_id).catch((e: any) => {
-          console.error('[Popup] dismissCall failed:', e?.response?.data || e);
-        });
-      });
-    }
-    // 2. Then hangup SIP
     if (!actions) {
       console.warn('[Popup] Cannot dismiss — SIP actions not registered');
     } else {
@@ -116,20 +107,17 @@ export function IncomingCallPopup() {
     }
     setVisible(false);
     clearIncoming();
+    // Mark call as no_answer in DB
+    if (call?.call_id) {
+      import('@/lib/api/calls').then(({ callsApi }) => {
+        callsApi.dismissCall(call.call_id).catch(() => {});
+      });
+    }
   }, [actions, clearIncoming]);
 
   /* ── Reject (red Reject button) ───────────────────────── */
   const handleReject = useCallback(() => {
     const call = incomingCallRef.current;
-    // 1. Log reject to backend FIRST
-    if (call?.call_id) {
-      import('@/lib/api/calls').then(({ callsApi }) => {
-        callsApi.rejectCall(call.call_id).catch((e: any) => {
-          console.error('[Popup] rejectCall failed:', e?.response?.data || e);
-        });
-      });
-    }
-    // 2. Then hangup SIP
     if (!actions) {
       console.warn('[Popup] Cannot reject — SIP actions not registered');
     } else {
@@ -137,6 +125,11 @@ export function IncomingCallPopup() {
     }
     setVisible(false);
     clearIncoming();
+    if (call?.call_id) {
+      import('@/lib/api/calls').then(({ callsApi }) => {
+        callsApi.rejectCall(call.call_id).catch(() => {});
+      });
+    }
   }, [actions, clearIncoming]);
 
 
