@@ -206,7 +206,6 @@ class CallAgentEvent(BaseModel):
         ('rejected',        'Call Rejected'),
         ('dismissed',       'Popup Dismissed (X button)'),
         ('timeout',         'Ring Timeout'),
-        ('taken_by_other',  'Taken by Another Agent'),
         ('ringhangup',      'Agent Hung Up While Ringing'),
         ('transfer_init',   'Transfer Initiated'),
         ('hold_started',    'Call Put On Hold'),

@@ -609,28 +609,18 @@ def process_ami_event(self, event: dict):
                             and aid not in timeout_agent_ids
                         }
 
-                        # Did anyone actually answer this call?
-                        someone_answered = bool(answered_agent_ids)
-
                         for agent_id in target_agent_ids:
                             offered_evt = events_qs.filter(
                                 event_type='offered', agent_id=agent_id
                             ).select_related('agent').order_by('-created_at').first()
                             if not offered_evt or not offered_evt.agent:
                                 continue
-                            # If another agent answered, this isn't a "missed call" — log it differently
-                            if someone_answered:
-                                evt_type = 'taken_by_other'
-                                evt_note = f'Call answered by another agent — {offered_evt.agent.get_full_name() if hasattr(offered_evt.agent, "get_full_name") else offered_evt.agent}'
-                            else:
-                                evt_type = 'timeout'
-                                evt_note = f'No answer — {offered_evt.agent.get_full_name() if hasattr(offered_evt.agent, "get_full_name") else offered_evt.agent}'
                             _log_agent_event(
                                 call,
                                 offered_evt.agent,
-                                evt_type,
+                                'timeout',
                                 ring_duration=offered_evt.ring_duration or duration,
-                                note=evt_note,
+                                note=f'No answer — {offered_evt.agent.get_full_name() if hasattr(offered_evt.agent, "get_full_name") else offered_evt.agent}',
                             )
 
                     notify_call_ended.delay(str(call.id), status)
