@@ -16,8 +16,9 @@ type Event = {
 
 type CurrentUser = {
   id: string;
-  email?: string;
-  full_name?: string;
+  email: string;
+  first_name?: string;
+  last_name?: string;
   role?: string;
 };
 
@@ -49,65 +50,8 @@ const EVENT_LABEL: Record<string, string> = {
   mute_toggled:  'Mute Toggled',
 };
 
-/** Decode a JWT payload without verifying signature. */
-function decodeJwt(token: string): any | null {
-  try {
-    const part = token.split('.')[1];
-    if (!part) return null;
-    const padded = part.replace(/-/g, '+').replace(/_/g, '/');
-    const json = atob(padded + '==='.slice((padded.length + 3) % 4));
-    return JSON.parse(decodeURIComponent(escape(json)));
-  } catch {
-    try {
-      const part = token.split('.')[1];
-      const padded = part.replace(/-/g, '+').replace(/_/g, '/');
-      return JSON.parse(atob(padded));
-    } catch {
-      return null;
-    }
-  }
-}
-
-/** Look for a JWT in cookies first, then localStorage. */
-function findToken(): string | null {
-  // Cookie names commonly used in this project
-  const cookieNames = ['access_token', 'access', 'token', 'jwt', 'auth_token'];
-  if (typeof document !== 'undefined') {
-    const cookies = document.cookie.split(';').map(s => s.trim());
-    for (const name of cookieNames) {
-      const found = cookies.find(c => c.startsWith(name + '='));
-      if (found) {
-        const val = decodeURIComponent(found.split('=').slice(1).join('='));
-        if (val.split('.').length === 3) return val;
-      }
-    }
-  }
-  if (typeof localStorage !== 'undefined') {
-    for (const key of cookieNames) {
-      const v = localStorage.getItem(key);
-      if (v && v.split('.').length === 3) return v;
-    }
-  }
-  return null;
-}
-
-function getCurrentUserFromJwt(): CurrentUser | null {
-  const token = findToken();
-  if (!token) return null;
-  const payload = decodeJwt(token);
-  if (!payload) return null;
-  const id = payload.user_id || payload.sub || payload.id;
-  if (!id) return null;
-  return {
-    id: String(id),
-    email: payload.email,
-    full_name: payload.full_name || payload.name,
-    role: payload.role,
-  };
-}
-
 export default function ActivityPage() {
-  const [events, setEvents]   = useState<Event[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [user, setUser]       = useState<CurrentUser | null>(null);
@@ -117,13 +61,20 @@ export default function ActivityPage() {
 
   const isSupervisor = user?.role === 'supervisor' || user?.role === 'admin';
 
-  // Decode JWT once on mount
-  useEffect(() => {
-    const u = getCurrentUserFromJwt();
-    setUser(u);
-    if (!u) {
-      setError('Could not identify current user (no valid JWT). Please log in again.');
-      setLoading(false);
+  const fetchUser = useCallback(async () => {
+    const candidates = ['/api/auth/me/', '/api/users/me/', '/api/me/'];
+    for (const url of candidates) {
+      try {
+        const token = localStorage.getItem('access_token') || localStorage.getItem('token');
+        const res = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data);
+          return;
+        }
+      } catch {}
     }
   }, []);
 
@@ -145,9 +96,15 @@ export default function ActivityPage() {
     }
   }, [user, days, eventType, scope, isSupervisor]);
 
+  useEffect(() => { fetchUser(); }, [fetchUser]);
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
-  // Group by call
+  const fmtTime = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleString();
+  };
+
+  // Group events by call_id for compact display
   const grouped = events.reduce<Record<string, Event[]>>((acc, e) => {
     (acc[e.call] = acc[e.call] || []).push(e);
     return acc;
@@ -164,7 +121,7 @@ export default function ActivityPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Activity</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {user?.full_name ? `Signed in as ${user.full_name}` : 'Timeline of your call events.'}
+            Timeline of your call events — answered, dismissed, rejected, timeouts.
           </p>
         </div>
         <button onClick={fetchEvents} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
@@ -205,7 +162,7 @@ export default function ActivityPage() {
         )}
       </div>
 
-      {/* Distribution */}
+      {/* Distribution summary */}
       {events.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-6">
           <p className="text-xs text-gray-500 mb-2">Distribution ({events.length} events)</p>
@@ -219,6 +176,7 @@ export default function ActivityPage() {
         </div>
       )}
 
+      {/* Timeline */}
       {loading && <p className="text-sm text-gray-500">Loading…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!loading && !error && events.length === 0 && (
