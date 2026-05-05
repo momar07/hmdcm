@@ -110,28 +110,10 @@ export function IncomingCallPopup() {
     // Mark call as no_answer in DB
     if (call?.call_id) {
       import('@/lib/api/calls').then(({ callsApi }) => {
-        callsApi.dismissCall(call.call_id).catch(() => {});
-      });
-    }
-  }, [actions, clearIncoming]);
-
-  /* ── Reject (red Reject button) ───────────────────────── */
-  const handleReject = useCallback(() => {
-    const call = incomingCallRef.current;
-    if (!actions) {
-      console.warn('[Popup] Cannot reject — SIP actions not registered');
-    } else {
-      actions.hangup?.();
-    }
-    setVisible(false);
-    clearIncoming();
-    if (call?.call_id) {
-      import('@/lib/api/calls').then(({ callsApi }) => {
         callsApi.rejectCall(call.call_id).catch(() => {});
       });
     }
   }, [actions, clearIncoming]);
-
 
   const answeringRef = useRef(false);
 
@@ -300,7 +282,7 @@ export function IncomingCallPopup() {
             </div>
           </div>
           <div className="flex items-center justify-end gap-4 px-5 pb-5 pt-2">
-            <button onClick={handleReject}
+            <button onClick={handleDismiss}
               className="w-12 h-12 rounded-full bg-red-500 hover:bg-red-600 flex items-center justify-center shadow-md transition-all active:scale-95"
               title="Reject">
               <PhoneOff size={20} className="text-white" />
