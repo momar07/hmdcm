@@ -505,6 +505,7 @@ class RejectCallView(APIView):
     def patch(self, request, call_id):
         from django.utils import timezone as tz
         from .models import Call
+        from apps.leads.models import LeadEvent
         try:
             call = Call.objects.get(pk=call_id)
         except Call.DoesNotExist:
@@ -514,12 +515,26 @@ class RejectCallView(APIView):
             call.ended_at = tz.now()
             call.save(update_fields=['status', 'ended_at'])
             from .models import CallAgentEvent
-            CallAgentEvent.objects.create(
-                call=request.user.calls.filter(status='no_answer').first() or call,
+            already_rejected = CallAgentEvent.objects.filter(
+                call=call,
                 agent=request.user,
                 event_type='rejected',
-                note=f'Agent {request.user.get_full_name()} rejected call',
-            )
+            ).exists()
+            if not already_rejected:
+                CallAgentEvent.objects.create(
+                    call=call,
+                    agent=request.user,
+                    event_type='rejected',
+                    note=f'Agent {request.user.get_full_name()} rejected call',
+                )
+                if call.lead_id:
+                    LeadEvent.objects.create(
+                        lead=call.lead,
+                        event_type='call_rejected',
+                        actor=request.user,
+                        new_value=request.user.get_full_name(),
+                        note=f'Call rejected by {request.user.get_full_name()}',
+                    )
         return Response({'call_id': str(call.id), 'status': call.status})
 
 

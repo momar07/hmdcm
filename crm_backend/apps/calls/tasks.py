@@ -2,6 +2,7 @@ import logging
 from celery import shared_task
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -284,6 +285,112 @@ def process_ami_event(self, event: dict):
                         note       = note or f'{event_type.replace("_", " ").title()} — {call_obj.caller}',
                     )
 
+        def _extract_extension_candidates(raw_value: str):
+            """Extract likely extension tokens from AMI fields."""
+            import re
+
+            if not raw_value:
+                return []
+
+            raw = str(raw_value).strip()
+            if not raw:
+                return []
+
+            variants = []
+
+            def _add(val):
+                val = (val or '').strip()
+                if val and val not in variants:
+                    variants.append(val)
+
+            _add(raw)
+
+            # Typical AMI formats: PJSIP/300-0001a2b3, SIP/300, Local/300@from-queue
+            if '/' in raw:
+                right = raw.split('/', 1)[1]
+                _add(right)
+            else:
+                right = raw
+
+            if '-' in right:
+                _add(right.split('-', 1)[0])
+            if '@' in right:
+                _add(right.split('@', 1)[0])
+
+            # Keep pure digit chunks as extension candidates
+            for token in re.findall(r'\d{2,8}', raw):
+                _add(token)
+
+            return variants
+
+        def _resolve_agent_from_event(event_dict: dict):
+            """Resolve CRM agent from AMI event fields with flexible parsing."""
+            from django.db.models import Q
+
+            fields = [
+                event_dict.get('MemberName', ''),
+                event_dict.get('Interface', ''),
+                event_dict.get('Location', ''),
+                event_dict.get('Member', ''),
+                event_dict.get('DestChannel', ''),
+                event_dict.get('Channel', ''),
+            ]
+
+            candidates = []
+            for raw in fields:
+                for c in _extract_extension_candidates(raw):
+                    if c not in candidates:
+                        candidates.append(c)
+
+            if not candidates:
+                return None, []
+
+            ext = Extension.objects.select_related('user').filter(
+                is_active=True
+            ).filter(
+                Q(number__in=candidates) | Q(peer_name__in=candidates)
+            ).first()
+
+            if not ext:
+                return None, candidates
+
+            return ext.user, candidates
+
+        def _resolve_call_from_event(event_dict: dict):
+            """Resolve call for queue/agent AMI events using multiple identifiers."""
+            ids = []
+            for key in ('Linkedid', 'Uniqueid', 'DestUniqueid', 'Uniqueid1', 'Uniqueid2'):
+                val = (event_dict.get(key, '') or '').strip()
+                if val and val not in ids:
+                    ids.append(val)
+
+            if ids:
+                call_obj = Call.objects.filter(uniqueid__in=ids).select_related('lead', 'agent').order_by('-created_at').first()
+                if call_obj:
+                    return call_obj
+
+            # Fallback for queue events where AMI ids don't map 1:1 to stored uniqueid
+            caller_raw = (event_dict.get('CallerIDNum', '') or event_dict.get('CallerID', '') or '').strip()
+            queue_name = (event_dict.get('Queue', '') or '').strip()
+            if not caller_raw and not queue_name:
+                return None
+
+            recent_qs = Call.objects.select_related('lead', 'agent').filter(
+                direction='inbound',
+                created_at__gte=timezone.now() - timedelta(minutes=15),
+            )
+
+            if queue_name:
+                recent_qs = recent_qs.filter(queue=queue_name)
+
+            if caller_raw:
+                digits = ''.join(ch for ch in caller_raw if ch.isdigit())
+                suffix = digits[-9:] if len(digits) >= 9 else digits
+                if suffix:
+                    recent_qs = recent_qs.filter(caller__endswith=suffix)
+
+            return recent_qs.order_by('-created_at').first()
+
         # ── event handlers ────────────────────────────────────
         from apps.leads.models import Lead, LeadStage, LeadEvent
 
@@ -392,7 +499,9 @@ def process_ami_event(self, event: dict):
             }
 
             now = timezone.now()
-            call_obj = Call.objects.filter(uniqueid=uniqueid).first()
+            call_obj = Call.objects.filter(uniqueid=uniqueid).first() if uniqueid else None
+            if not call_obj:
+                call_obj = _resolve_call_from_event(event)
 
             if not call_obj:
                 return
@@ -414,17 +523,33 @@ def process_ami_event(self, event: dict):
                 delta = (now - call_obj.started_at).total_seconds()
                 duration = max(0, int(delta))
 
-            updated = Call.objects.filter(
-                uniqueid=uniqueid,
-                is_completed=False,
-            ).update(
-                status=status,
-                ended_at=now,
-                duration=duration,
-            )
+            updated = 0
+            if uniqueid:
+                updated = Call.objects.filter(
+                    uniqueid=uniqueid,
+                    is_completed=False,
+                ).update(
+                    status=status,
+                    ended_at=now,
+                    duration=duration,
+                )
+
+            if not updated and call_obj:
+                updated = Call.objects.filter(
+                    pk=call_obj.pk,
+                    is_completed=False,
+                ).update(
+                    status=status,
+                    ended_at=now,
+                    duration=duration,
+                )
 
             if updated:
-                call = Call.objects.filter(uniqueid=uniqueid).select_related('lead', 'agent').first()
+                call = None
+                if uniqueid:
+                    call = Call.objects.filter(uniqueid=uniqueid).select_related('lead', 'agent').first()
+                if not call and call_obj:
+                    call = Call.objects.filter(pk=call_obj.pk).select_related('lead', 'agent').first()
                 if call:
                     # Update activity status
                     if call.lead_id:
@@ -441,16 +566,41 @@ def process_ami_event(self, event: dict):
                     # but never answered (find offered events with no matching answered)
                     if status == 'no_answer':
                         from .models import CallAgentEvent
-                        answered_agent_ids = CallAgentEvent.objects.filter(
-                            call=call, event_type='answered'
-                        ).values_list('agent_id', flat=True)
-                        unanswered = CallAgentEvent.objects.filter(
-                            call=call, event_type='offered'
-                        ).exclude(agent_id__in=answered_agent_ids)
-                        for evt in unanswered:
-                            _log_agent_event(call, evt.agent, 'timeout',
-                                             ring_duration=evt.ring_duration or duration,
-                                             note=f'No answer — {evt.agent.get_full_name() if hasattr(evt.agent, "get_full_name") else evt.agent}')
+                        events_qs = CallAgentEvent.objects.filter(call=call)
+                        offered_agent_ids = set(events_qs.filter(
+                            event_type='offered'
+                        ).values_list('agent_id', flat=True))
+                        answered_agent_ids = set(events_qs.filter(
+                            event_type='answered'
+                        ).values_list('agent_id', flat=True))
+                        rejected_agent_ids = set(events_qs.filter(
+                            event_type__in=('rejected', 'ringhangup')
+                        ).values_list('agent_id', flat=True))
+                        timeout_agent_ids = set(events_qs.filter(
+                            event_type='timeout'
+                        ).values_list('agent_id', flat=True))
+
+                        # Skip None and keep one timeout per agent max
+                        target_agent_ids = {
+                            aid for aid in offered_agent_ids
+                            if aid and aid not in answered_agent_ids
+                            and aid not in rejected_agent_ids
+                            and aid not in timeout_agent_ids
+                        }
+
+                        for agent_id in target_agent_ids:
+                            offered_evt = events_qs.filter(
+                                event_type='offered', agent_id=agent_id
+                            ).select_related('agent').order_by('-created_at').first()
+                            if not offered_evt or not offered_evt.agent:
+                                continue
+                            _log_agent_event(
+                                call,
+                                offered_evt.agent,
+                                'timeout',
+                                ring_duration=offered_evt.ring_duration or duration,
+                                note=f'No answer — {offered_evt.agent.get_full_name() if hasattr(offered_evt.agent, "get_full_name") else offered_evt.agent}',
+                            )
 
                     notify_call_ended.delay(str(call.id), status)
 
@@ -459,6 +609,8 @@ def process_ami_event(self, event: dict):
                         handle_missed_call.delay(str(call.id))
 
                 logger.info(f'[AMI] Call ended: {uniqueid} → {status} (cause={cause}, duration={duration}s)')
+            else:
+                logger.warning(f'[AMI] Hangup not linked to call: uid={uniqueid} linkedid={event.get("Linkedid", "")} caller={event.get("CallerIDNum", "")}')
 
         elif event_name == 'QueueMemberAdded':
             interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
@@ -508,79 +660,77 @@ def process_ami_event(self, event: dict):
                     logger.debug(f'[AMI] QueueMemberPause error: {e}')
 
         elif event_name == 'AgentCalled':
-            member_name = event.get('MemberName', '')
             linkedid    = event.get('Linkedid', '') or uniqueid
-            if member_name:
-                try:
-                    ext_obj = Extension.objects.select_related('user').get(
-                        number=member_name, is_active=True
-                    )
-                    agent = ext_obj.user
-                    Call.objects.filter(uniqueid=linkedid).update(agent=agent)
-                    logger.info(f'[AMI] Agent assigned to call: {member_name} → {linkedid}')
-                    call_obj = Call.objects.filter(uniqueid=linkedid).select_related('lead').first()
+            try:
+                agent, agent_candidates = _resolve_agent_from_event(event)
+                if not agent:
+                    logger.warning(f'[AMI] AgentCalled unresolved agent: member={event.get("MemberName", "")} interface={event.get("Interface", "")} cands={agent_candidates}')
+                else:
+                    call_obj = _resolve_call_from_event(event)
                     if call_obj:
-                        _log_agent_event(call_obj, agent, 'offered', note=f'Call offered to {member_name}')
-                except Extension.DoesNotExist:
-                    logger.debug(f'[AMI] No agent for MemberName: {member_name}')
-                except Exception as e:
-                    logger.debug(f'[AMI] AgentCalled error: {e}')
+                        Call.objects.filter(pk=call_obj.pk).update(agent=agent)
+                        _log_agent_event(call_obj, agent, 'offered', note=f'Call offered to {event.get("MemberName", "") or event.get("Interface", "") or "agent"}')
+                        logger.info(f'[AMI] AgentCalled: agent={agent} call={call_obj.uniqueid or linkedid}')
+                    else:
+                        logger.warning(f'[AMI] AgentCalled unresolved call: linkedid={linkedid} uniqueid={uniqueid} caller={event.get("CallerIDNum", "")}')
+            except Exception as e:
+                logger.debug(f'[AMI] AgentCalled error: {e}')
 
         elif event_name == 'AgentConnect':
-            member_name = event.get('MemberName', '')
             linkedid    = event.get('Linkedid', '') or uniqueid
             ring_time   = int(event.get('Ringtime', '0') or '0')
-            if member_name:
-                try:
-                    ext_obj = Extension.objects.select_related('user').get(
-                        number=member_name, is_active=True
-                    )
-                    agent = ext_obj.user
-
-                    Call.objects.filter(uniqueid=linkedid).update(
-                        agent=agent,
-                        status='answered',
-                        started_at=timezone.now(),
-                    )
-
-                    call_obj = Call.objects.filter(uniqueid=linkedid).select_related('lead').first()
+            try:
+                agent, agent_candidates = _resolve_agent_from_event(event)
+                if not agent:
+                    logger.warning(f'[AMI] AgentConnect unresolved agent: member={event.get("MemberName", "")} interface={event.get("Interface", "")} cands={agent_candidates}')
+                else:
+                    call_obj = _resolve_call_from_event(event)
                     if call_obj:
-                        _assign_lead_to_agent(call_obj, agent)
-                        _log_agent_event(call_obj, agent, 'answered', ring_duration=ring_time,
-                                         note=f'Answered by {member_name} after {ring_time}s')
+                        Call.objects.filter(pk=call_obj.pk).update(
+                            agent=agent,
+                            status='answered',
+                            started_at=timezone.now(),
+                        )
 
-                    from apps.users.services import update_user_status, _notify_status_change
-                    update_user_status(str(agent.id), 'on_call')
-                    _notify_status_change(agent, 'on_call')
-                    logger.info(f'[AMI] AgentConnect: {member_name} answered {linkedid}')
-                except Extension.DoesNotExist:
-                    logger.debug(f'[AMI] No agent for MemberName: {member_name}')
-                except Exception as e:
-                    logger.debug(f'[AMI] AgentConnect error: {e}')
+                        call_obj = Call.objects.filter(pk=call_obj.pk).select_related('lead').first()
+                        if call_obj:
+                            _assign_lead_to_agent(call_obj, agent)
+                            _log_agent_event(call_obj, agent, 'answered', ring_duration=ring_time,
+                                             note=f'Answered by {event.get("MemberName", "") or event.get("Interface", "") or "agent"} after {ring_time}s')
+
+                        from apps.users.services import update_user_status, _notify_status_change
+                        update_user_status(str(agent.id), 'on_call')
+                        _notify_status_change(agent, 'on_call')
+                        resolved_uid = call_obj.uniqueid if call_obj else linkedid
+                        logger.info(f'[AMI] AgentConnect: agent={agent} answered {resolved_uid}')
+                    else:
+                        logger.warning(f'[AMI] AgentConnect unresolved call: linkedid={linkedid} uniqueid={uniqueid} caller={event.get("CallerIDNum", "")}')
+            except Exception as e:
+                logger.debug(f'[AMI] AgentConnect error: {e}')
 
         elif event_name in ('AgentComplete', 'AgentRinghangup'):
             interface = event.get('Location', '') or event.get('Interface', '') or event.get('Member', '')
             member_name = event.get('MemberName', '')
             linkedid    = event.get('Linkedid', '') or uniqueid
-            if '/' in interface:
-                ext_num = interface.split('/')[1]
-                try:
+            try:
+                agent, agent_candidates = _resolve_agent_from_event(event)
+                if not agent:
+                    logger.warning(f'[AMI] {event_name} unresolved agent: member={member_name} interface={interface} cands={agent_candidates}')
+                else:
                     from apps.users.services import update_user_status, _notify_status_change
-                    ext_obj = Extension.objects.select_related('user').get(
-                        number=ext_num, is_active=True
-                    )
-                    agent = ext_obj.user
                     update_user_status(str(agent.id), 'available')
                     _notify_status_change(agent, 'available')
-                    logger.info(f'[AMI] Agent available again: {ext_num}')
+                    logger.info(f'[AMI] Agent available again: {agent}')
 
                     if event_name == 'AgentRinghangup':
-                        call_obj = Call.objects.filter(uniqueid=linkedid).select_related('lead').first()
+                        call_obj = _resolve_call_from_event(event)
                         if call_obj:
                             _log_agent_event(call_obj, agent, 'ringhangup',
-                                             note=f'Agent {member_name or ext_num} rejected (rang up while ringing)')
-                except Exception as e:
-                    logger.debug(f'[AMI] AgentComplete error: {e}')
+                                             note=f'Agent {member_name or interface or agent} rejected (rang up while ringing)')
+                        else:
+                            logger.warning(f'[AMI] AgentRinghangup unresolved call: linkedid={linkedid} uniqueid={uniqueid}')
+            except Exception as e:
+                logger.debug(f'[AMI] AgentComplete error: {e}')
 
     except Exception as exc:
         logger.error(f'[AMI] Error processing {event_name}: {exc}')

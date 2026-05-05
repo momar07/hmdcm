@@ -7,3 +7,42 @@ Admin (/admin/calls/callagentevent/)
 Admin (/admin/leads/leadevent/)
 Make a test call now — the AgentCalled AMI event should create offered records, and AgentConnect should create answered records.
 ▣  Build · GLM-5.1 · 44.0s
+
+
+
+
+
+You’re right to doubt it — based on the code, this won’t reliably show AMI events after testing yet.
+What I’d fix first (in order):
+- crm_backend/apps/calls/tasks.py currently resolves agent in AgentCalled/AgentConnect using only MemberName as exact Extension.number (Extension.objects.get(number=member_name)), which is fragile; in many Asterisk setups MemberName is not the raw extension (it can be PJSIP/300, label, etc.), so offered/answered never get logged.
+- crm_backend/apps/calls/tasks.py correlates events to call mostly by linkedid/uniqueid; if queue events carry different IDs, call_obj is None and logging silently skips.
+- crm_backend/apps/calls/views.py:517 has a real bug in reject logging: it may attach rejected to the wrong call (request.user.calls.filter(status='no_answer').first() or call) instead of always the current call.
+- Admin pages you listed won’t exist as expected because there is no admin.py registration for calls/leads models in this repo right now (no crm_backend/apps/calls/admin.py, no crm_backend/apps/leads/admin.py).
+What I would implement:
+1) Harden AMI agent resolution
+- In crm_backend/apps/calls/tasks.py, add helper to resolve agent from multiple AMI fields:
+  - MemberName, Interface, Member, DestChannel, Channel
+  - normalize tokens like PJSIP/300-00001a2b -> 300
+  - fallback lookup by Extension.peer_name too, not only number.
+- Use this helper in AgentCalled, AgentConnect, AgentRinghangup.
+2) Harden AMI call resolution
+- Add helper in crm_backend/apps/calls/tasks.py that tries:
+  - Linkedid, Uniqueid, DestUniqueid, Uniqueid1, Uniqueid2
+  - then fallback by recent ringing inbound call for same CallerIDNum (+ queue) within short window.
+- If unresolved, log warning with event keys (not debug) so production logs show why event was dropped.
+3) Fix reject event correctness
+- In crm_backend/apps/calls/views.py, change reject creation to always use call=call.
+- This prevents “phantom rejected events” on unrelated calls.
+4) Make admin locations real
+- Add crm_backend/apps/calls/admin.py:
+  - register CallAgentEvent with filters (event_type, agent, created_at) and searchable call/uniqueid.
+- Add crm_backend/apps/leads/admin.py:
+  - register LeadEvent with filters and search.
+- Then /admin/calls/callagentevent/ and /admin/leads/leadevent/ become valid operational views.
+5) Verification pass (after patch)
+- Place one queue call with two agents (A times out, B answers).
+- Expect:
+  - Call detail (/calls/{id}): offered for A + B, answered for B, optional timeout for A (depending event flow).
+  - Lead activity (/leads/{id}): call_offered, call_answered, call_no_answer/call_rejected as applicable.
+  - Admin pages show same records.
+- Also check logs for unresolved mapping warnings (should be zero in healthy flow).

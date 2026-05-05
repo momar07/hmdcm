@@ -53,7 +53,7 @@ export default function CallDetailPage() {
     refetchInterval: 10_000,
   });
 
-  const { data: agentEvents } = useQuery({
+  const { data: agentEvents, isLoading: agentEventsLoading, isError: agentEventsError } = useQuery({
     queryKey: ['call-agent-events', id],
     queryFn:  () => callsApi.agentEvents(id).then((r) => r.data),
     enabled:  !!id,
@@ -159,11 +159,24 @@ export default function CallDetailPage() {
       </div>
 
       {/* Agent Events */}
-      {agentEvents && agentEvents.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-          <p className="text-xs font-semibold text-gray-500 uppercase px-5 pt-5 pb-2">
-            Agent Activity
-          </p>
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        <p className="text-xs font-semibold text-gray-500 uppercase px-5 pt-5 pb-2">
+          Agent Activity
+        </p>
+        {agentEventsLoading && (
+          <div className="px-5 pb-5 text-sm text-gray-500">Loading agent events...</div>
+        )}
+        {!agentEventsLoading && agentEventsError && (
+          <div className="px-5 pb-5 text-sm text-red-600">
+            Could not load agent events.
+          </div>
+        )}
+        {!agentEventsLoading && !agentEventsError && (!agentEvents || agentEvents.length === 0) && (
+          <div className="px-5 pb-5 text-sm text-gray-500">
+            No agent events logged for this call yet.
+          </div>
+        )}
+        {agentEvents && agentEvents.length > 0 && (
           <div className="divide-y divide-gray-50">
             {agentEvents.map((ev: any) => {
               const meta = AGENT_EVENT_ICONS[ev.event_type] ?? { label: ev.event_type, color: 'bg-gray-100 text-gray-600', icon: '•' };
@@ -189,8 +202,8 @@ export default function CallDetailPage() {
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Completion details */}
       {isCompleted && c.completion && (
