@@ -159,16 +159,6 @@ export function IncomingCallPopup() {
     clearIncoming();
   }, [actions, clearIncoming]);
 
-
-  // Report popup shown to backend for activity tracking
-  useEffect(() => {
-    const call = incomingCall;
-    if (call?.call_id && visible && agentStatus !== 'away') {
-      import('@/lib/api/calls').then(({ callsApi }) => {
-        (callsApi as any).popupShown?.(call.call_id).catch(() => {});
-      });
-    }
-  }, [incomingCall?.call_id, visible, agentStatus]);
   /* ── WS event: incomingCall set → show popup ─────────── */
   useEffect(() => {
     if (incomingCall && agentStatus !== 'away') {

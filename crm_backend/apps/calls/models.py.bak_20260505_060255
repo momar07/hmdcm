@@ -200,17 +200,11 @@ class CallDisposition(BaseModel):
 class CallAgentEvent(BaseModel):
     """Tracks each agent interaction with a call: offered, answered, rejected, timeout."""
     EVENT_CHOICES = [
-        ('offered',         'Call Offered'),
-        ('popup_shown',     'Popup Shown to Agent'),
-        ('answered',        'Call Answered'),
-        ('rejected',        'Call Rejected'),
-        ('dismissed',       'Popup Dismissed (X button)'),
-        ('timeout',         'Ring Timeout'),
-        ('ringhangup',      'Agent Hung Up While Ringing'),
-        ('transfer_init',   'Transfer Initiated'),
-        ('hold_started',    'Call Put On Hold'),
-        ('hold_ended',      'Call Resumed from Hold'),
-        ('mute_toggled',    'Mute Toggled'),
+        ('offered',   'Call Offered'),
+        ('answered',  'Call Answered'),
+        ('rejected',  'Call Rejected'),
+        ('timeout',   'Ring Timeout'),
+        ('ringhangup','Agent Hung Up While Ringing'),
     ]
 
     call         = models.ForeignKey(Call, on_delete=models.CASCADE,

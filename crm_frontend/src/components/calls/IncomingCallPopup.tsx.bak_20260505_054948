@@ -159,16 +159,6 @@ export function IncomingCallPopup() {
     clearIncoming();
   }, [actions, clearIncoming]);
 
-
-  // Report popup shown to backend for activity tracking
-  useEffect(() => {
-    const call = incomingCall;
-    if (call?.call_id && visible && agentStatus !== 'away') {
-      import('@/lib/api/calls').then(({ callsApi }) => {
-        (callsApi as any).popupShown?.(call.call_id).catch(() => {});
-      });
-    }
-  }, [incomingCall?.call_id, visible, agentStatus]);
   /* ── WS event: incomingCall set → show popup ─────────── */
   useEffect(() => {
     if (incomingCall && agentStatus !== 'away') {
@@ -176,12 +166,6 @@ export function IncomingCallPopup() {
       setVisible(true);
     }
   }, [incomingCall, agentStatus]);
-
-  // HOISTED: derived call data — must exist before the effects below
-  const wsData = incomingCall;
-  const spData = screenPopLead;
-  const hasWs  = !!wsData?.lead_id;
-  const isKnownLead = hasWs ? !!wsData!.lead_id : !!spData;
 
   /* ── SIP status changes ───────────────────────────────── */
   useEffect(() => {
@@ -217,7 +201,15 @@ export function IncomingCallPopup() {
 
   if (!visible) return null;
 
-  // (wsData / spData / hasWs / isKnownLead are hoisted above)
+  // Merge WS event data with screen-pop fallback
+  const wsData   = incomingCall;
+  const spData   = screenPopLead;
+  const hasWs    = !!wsData?.lead_id;
+
+  const isKnownLead = hasWs
+    ? !!wsData.lead_id
+    : !!spData;
+
   let leadName:    string;
   let leadPhone:   string;
   let leadStage:   string | null;

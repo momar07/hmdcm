@@ -38,13 +38,7 @@ export const callsApi = {
     api.patch(`/calls/mark-answered/${callId}/`),
 
   rejectCall: (callId: string) =>
-    api.patch(`/calls/reject/${callId}
-  dismissCall: (callId: string) =>
-    api.patch(`/calls/dismiss/${callId}/`),
-  popupShown: (callId: string) =>
-    api.post(`/calls/popup-shown/${callId}/`),
-  agentActivity: (params?: { agent_id?: string; days?: number; event_type?: string; call_id?: string }) =>
-    api.get(`/calls/agent-activity/`, { params }),/`),
+    api.patch(`/calls/reject/${callId}/`),
 
   dispositionsList: () =>
     api.get<Disposition[]>('/calls/dispositions-list/'),

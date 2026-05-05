@@ -248,18 +248,14 @@ def process_ami_event(self, event: dict):
             """Create an Activity record linked to the call's lead."""
             if call_obj.lead_id:
                 from .models import Activity
-                Activity.objects.get_or_create(
-                    call=call_obj,
-                    activity_type='call',
-                    defaults=dict(
+                Activity.objects.create(
                     lead          = call_obj.lead,
                     call          = call_obj,
                     agent         = call_obj.agent,
                     activity_type = 'call',
                     status        = status,
                     title         = f'{call_obj.direction} call — {call_obj.caller}',
-                        started_at = call_obj.started_at,
-                    ),
+                    started_at    = call_obj.started_at,
                 )
 
         def _assign_lead_to_agent(call_obj, agent):

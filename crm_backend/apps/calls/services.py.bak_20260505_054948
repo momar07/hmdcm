@@ -171,8 +171,11 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
                 )
                 completion.followup_created = followup
                 completion.save(update_fields=['followup_created'])
-        # 2) create_lead — TODO: implement when lead doesn't exist yet
-        # (currently a no-op; unknown-caller leads are created by the agent form)
+
+        # 2) create_lead (skip if lead already exists)
+        elif atype == 'create_lead':
+            if not call.lead and call.lead:
+                pass  # lead already exists, skip
 
         # 3) create_ticket
         elif atype == 'create_ticket':
