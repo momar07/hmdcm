@@ -1,5 +1,5 @@
 import api from './axios';
-import type { Call, Disposition, PaginatedResponse } from '@/types';
+import type { Call, Disposition, PaginatedResponse, CallAgentEvent } from '@/types';
 
 export interface CallCompletionPayload {
   disposition_id:        string;
@@ -62,6 +62,12 @@ export const callsApi = {
     end_cause: string;
     duration?: number;
   }) => api.patch(`/calls/end-webrtc-call/${call_id}/`, data),
+
+  agentEvents: (callId: string) =>
+    api.get<CallAgentEvent[]>(`/calls/list/${callId}/agent-events/`),
+
+  agentStats: (params?: { days?: number; agent_id?: string }) =>
+    api.get('/calls/agent-stats/', { params }),
 };
 
 // ── Disposition CRUD types ────────────────────────────────────────────────────

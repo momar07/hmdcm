@@ -32,6 +32,10 @@ const EVENT_LABELS: Record<string, { label: string; color: string; icon: string 
   won:            { label: 'Won 🎉',                color: 'bg-green-200 text-green-800',  icon: '🏆' },
   lost:           { label: 'Lost',                  color: 'bg-red-100 text-red-700',     icon: '❌' },
   note:           { label: 'Note Added',            color: 'bg-gray-100 text-gray-700',   icon: '📝' },
+  call_offered:   { label: 'Call Offered',          color: 'bg-sky-100 text-sky-700',     icon: '📞' },
+  call_answered:  { label: 'Call Answered',          color: 'bg-emerald-100 text-emerald-700', icon: '✅' },
+  call_rejected:  { label: 'Call Rejected',          color: 'bg-red-100 text-red-700',     icon: '🚫' },
+  call_no_answer: { label: 'No Answer',              color: 'bg-amber-100 text-amber-700', icon: '⏰' },
 };
 
 function formatDuration(s: number) {

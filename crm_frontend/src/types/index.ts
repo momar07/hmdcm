@@ -350,6 +350,17 @@ export interface LeadEvent {
   created_at:   string;
 }
 
+export interface CallAgentEvent {
+  id:            string;
+  call:          string;
+  agent:         string | null;
+  agent_name:    string | null;
+  event_type:    'offered' | 'answered' | 'rejected' | 'timeout' | 'ringhangup';
+  ring_duration: number;
+  note:          string;
+  created_at:    string;
+}
+
 // ─── Tasks ────────────────────────────────────────────────────
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type TaskStatus   = 'pending' | 'in_progress' | 'completed' | 'cancelled';

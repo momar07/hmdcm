@@ -5,11 +5,12 @@ from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django.core.exceptions import ValidationError
+from django.db.models import Count, Avg
 
-from .models import Call, Disposition
+from .models import Call, Disposition, CallAgentEvent
 from .serializers import (CallListSerializer, CallDetailSerializer,
                            OriginateCallSerializer, DispositionSerializer,
-                           CallDispositionSerializer)
+                           CallDispositionSerializer, CallAgentEventSerializer)
 from .selectors import get_all_calls
 from .services import complete_call, get_pending_completions
 from apps.common.permissions import IsAgent
@@ -66,6 +67,12 @@ class CallViewSet(viewsets.ModelViewSet):
     def dispositions(self, request):
         qs = Disposition.objects.filter(is_active=True).order_by('order')
         return Response(DispositionSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['get'], url_path='agent-events')
+    def agent_events(self, request, pk=None):
+        call = self.get_object()
+        qs = CallAgentEvent.objects.filter(call=call).select_related('agent').order_by('created_at')
+        return Response(CallAgentEventSerializer(qs, many=True).data)
 
     @action(detail=False, methods=['post'], url_path='originate')
     def originate(self, request, pk=None):
@@ -506,4 +513,40 @@ class RejectCallView(APIView):
             call.status   = 'no_answer'
             call.ended_at = tz.now()
             call.save(update_fields=['status', 'ended_at'])
+            from .models import CallAgentEvent
+            CallAgentEvent.objects.create(
+                call=request.user.calls.filter(status='no_answer').first() or call,
+                agent=request.user,
+                event_type='rejected',
+                note=f'Agent {request.user.get_full_name()} rejected call',
+            )
         return Response({'call_id': str(call.id), 'status': call.status})
+
+
+class AgentCallStatsView(APIView):
+    """GET /api/calls/agent-stats/ — per-agent call statistics"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        from .models import CallAgentEvent
+
+        days = int(request.query_params.get('days', 7))
+        since = tz.now() - timedelta(days=days)
+
+        agent_id = request.query_params.get('agent_id')
+        qs = CallAgentEvent.objects.filter(created_at__gte=since)
+        if agent_id:
+            qs = qs.filter(agent_id=agent_id)
+
+        stats = qs.values('agent_id', 'event_type').annotate(
+            count=Count('id'),
+            avg_ring=Avg('ring_duration'),
+        ).order_by('agent_id', 'event_type')
+
+        from .serializers import CallAgentEventSerializer
+        return Response({
+            'period_days': days,
+            'stats': list(stats),
+        })

@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter, SimpleRouter
 from .views import (
     MarkCallAnsweredView,
     RejectCallView,
+    AgentCallStatsView,
     StartWebrtcCallView,
     EndWebrtcCallView,
     CallViewSet,
@@ -35,6 +36,7 @@ urlpatterns = [
     path('end-webrtc-call/<uuid:call_id>/',  EndWebrtcCallView.as_view(),      name='end-webrtc-call'),
     path('mark-answered/<uuid:call_id>/',    MarkCallAnsweredView.as_view(),   name='mark-answered'),
     path('reject/<uuid:call_id>/',           RejectCallView.as_view(),         name='reject-call'),
+    path('agent-stats/',                     AgentCallStatsView.as_view(),      name='agent-call-stats'),
     # routers — calls_router أولاً عشان ما يتغلبش بـ disp_router
     path('', include(calls_router.urls)),
     path('', include(disp_router.urls)),

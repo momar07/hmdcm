@@ -1,0 +1,9 @@
+Only the rejected event from the frontend button exists. The AMI-level events (offered, answered, timeout) will appear after your next test call goes through the queue.
+Summary: Where to see events
+Location
+Call Detail (/calls/{id})
+Lead Detail (/leads/{id} → Activity tab)
+Admin (/admin/calls/callagentevent/)
+Admin (/admin/leads/leadevent/)
+Make a test call now — the AgentCalled AMI event should create offered records, and AgentConnect should create answered records.
+▣  Build · GLM-5.1 · 44.0s

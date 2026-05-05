@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Call, CallEvent, CallRecording, CallDisposition, Disposition, DispositionAction
+from .models import (Call, CallEvent, CallRecording, CallDisposition,
+                    Disposition, DispositionAction, CallAgentEvent)
 
 
 class DispositionSerializer(serializers.ModelSerializer):
@@ -84,6 +85,17 @@ class CallDetailSerializer(serializers.ModelSerializer):
             return obj.caller or 'Unknown'
         full = obj.lead.get_full_name() if hasattr(obj.lead, 'get_full_name') else ''
         return full or obj.lead.title or obj.caller or 'Unknown'
+
+
+class CallAgentEventSerializer(serializers.ModelSerializer):
+    agent_name = serializers.CharField(
+        source='agent.get_full_name', read_only=True, default=None
+    )
+
+    class Meta:
+        model  = CallAgentEvent
+        fields = ['id', 'call', 'agent', 'agent_name', 'event_type',
+                  'ring_duration', 'note', 'created_at']
 
 
 class OriginateCallSerializer(serializers.Serializer):

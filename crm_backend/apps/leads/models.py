@@ -186,6 +186,10 @@ class LeadEvent(BaseModel):
         ('won',            'Won'),
         ('lost',           'Lost'),
         ('note',           'Note Added'),
+        ('call_offered',   'Call Offered'),
+        ('call_answered',  'Call Answered'),
+        ('call_rejected',  'Call Rejected'),
+        ('call_no_answer', 'Call No Answer'),
     ]
 
     lead       = models.ForeignKey('Lead', on_delete=models.CASCADE,

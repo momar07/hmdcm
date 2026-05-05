@@ -1,5 +1,157 @@
 # Error Fix Log
 
+## 2026-05-05 — Popup Shows "Unknown Caller" for Known Leads + Multi-Agent Events
+
+### Issue 11: Popup shows "Unknown Caller" even for known leads
+
+**Problem:** When an incoming call arrives, the popup briefly shows "Unknown Caller" before the WebSocket event with lead info arrives. The SIP phone rings first, setting `callStatus='incoming'`, which triggers the popup to render. But `incomingCall` (from the WS event) is still `null` at that point, so `lead_id` is null → `isKnownLead=false` → "Unknown Caller".
+
+**Additional issue:** Asterisk sends `CallerIDName='300'` (the SIP extension number) which was displayed as the lead name. When `get_full_name()` returns only the phone number (lead has no first/last name), `lead_name` in the WS payload became `'300'` — an unhelpful SIP extension.
+
+**Root causes:**
+1. **Race condition** — SIP ring → popup shows → WS event arrives milliseconds later → but too late, user already sees "Unknown Caller"
+2. **Numeric SIP extension as caller_name** — `call.caller_name='300'` is stored and sent in the WS payload without filtering
+3. **Phone number as lead name** — `get_full_name()` returns `'01007525223'` when `first_name=''` and `last_name=''`. The fallback `call.caller_name or lead.title or lead.phone` would pick `'300'` (the extension) over the title `'Lead from call — 01007525223'`
+
+**Fixes:**
+
+1. **Screen-pop fallback in popup** — When `callStatus === 'incoming'` but `incomingCall` is null, the popup calls `callsApi.screenPop(phone)` using the SIP caller number. This returns lead data from the backend before the WS event arrives. The popup merges WS data (preferred), screen-pop data (fallback), and SIP info (last resort):
+   ```typescript
+   // Priority: WS event > screen-pop API > SIP incoming info
+   const hasWs = !!wsData?.lead_id;
+   const isKnownLead = hasWs ? !!wsData.lead_id : !!spData;
+   if (hasWs) {
+     leadName = wsData?.lead_name ?? wsData?.lead_title ?? wsData?.caller ?? 'Unknown';
+   } else if (spData) {
+     leadName = fullName || spData.title || sipIncoming?.from || 'Unknown';
+   } else {
+     leadName = callerName && callerName !== fromNum ? callerName : 'Unknown Caller';
+   }
+   ```
+
+2. **Filter numeric-only caller_name** — In `notify_incoming_call`:
+   ```python
+   caller_name_clean = ''
+   if call.caller_name and not call.caller_name.isdigit():
+       caller_name_clean = call.caller_name
+   ```
+   And in the `lead_display_name` fallback:
+   ```python
+   if lead_display_name and lead.phone and lead_display_name.strip() == lead.phone.strip():
+       lead_display_name = lead.title or caller_name_clean or lead.phone
+   ```
+
+3. **SIP `incoming` info in shared store** — Added `incoming: { from, displayName }` to `useSipStore` so the popup can access the SIP caller number even before the WS event arrives:
+   ```typescript
+   // sipStore.ts
+   incoming: SipIncoming | null;
+   setIncoming: (info: SipIncoming | null) => void;
+   ```
+   `useSip.ts` syncs the local state to the shared store on each SIP event.
+
+### Issue 12: Re-queued calls only log events for the last agent
+
+**Problem:** When a call rings agent A, A doesn't answer, and Asterisk re-queues to agent B:
+- `AgentCalled` handler had `agent__isnull=True` on line 505 — so `update(agent=B)` silently failed because agent A was already set
+- Agent B never got an `offered` event logged
+- `Hangup no_answer` only checked `call.agent` (which was agent A, not B)
+- The call's `agent` field was always the last agent who didn't answer, not necessarily the one who ultimately handled it
+
+**Fixes:**
+
+1. **Removed `agent__isnull=True` from `AgentCalled`** — Now `Call.objects.filter(uniqueid=linkedid).update(agent=agent)` always succeeds. Every agent who receives the call gets assigned as the current agent and gets an `offered` event.
+
+2. **Multi-agent timeout logging** — Instead of logging a single timeout for `call.agent`, the Hangup handler now finds ALL agents who were offered the call but never answered:
+   ```python
+   answered_agent_ids = CallAgentEvent.objects.filter(
+       call=call, event_type='answered'
+   ).values_list('agent_id', flat=True)
+   unanswered = CallAgentEvent.objects.filter(
+       call=call, event_type='offered'
+   ).exclude(agent_id__in=answered_agent_ids)
+   for evt in unanswered:
+       _log_agent_event(call, evt.agent, 'timeout', ...)
+   ```
+   This correctly logs `timeout` for agent A (who didn't answer) even if agent B was later assigned.
+
+### Issue 13: IndentationError in tasks.py preventing Celery startup
+
+**Problem:** The `if call:` block after `call = Call.objects.filter(...).first()` was indented one level too deep (under the assignment), causing an `IndentationError` that prevented Celery workers from starting.
+
+**Fix:** Corrected indentation of lines 421-447 so `if call:` is at the same level as `if updated:`.
+
+### Issue 14: DispositionModal React hooks-of-hooks build failure
+
+**Problem:** `if (isManual(callId)) { return ... }` on line 61 was placed before all hooks (`useQueryClient`, `useState`, `useQuery`, `useMutation`), violating React's rules of hooks. This caused 18 build errors.
+
+**Fix:** Extracted the manual fallback UI into a separate `ManualFallback` component. All hooks now run unconditionally at the top of `DispositionModal` before the early return.
+
+## 2026-05-05 — Agent Call Event Tracking
+
+### Feature: Track which agents were offered, answered, rejected, or timed out on calls
+
+**Background:** When a call comes into a queue, multiple agents may be offered the call. Only one answers. There was no record of which agents were offered, who rejected, or who timed out. This meant:
+- No visibility into call routing in the lead timeline
+- No way to see "Agent X rejected this call 3 times this week"
+- No analytics on agent responsiveness
+- Disposition only captured the final outcome, not the path to get there
+
+**Implementation:**
+
+1. **New `CallAgentEvent` model** — Tracks each agent interaction with a call:
+   ```python
+   class CallAgentEvent(BaseModel):
+       EVENT_CHOICES = [
+           ('offered',    'Call Offered'),
+           ('answered',   'Call Answered'),
+           ('rejected',   'Call Rejected'),
+           ('timeout',    'Ring Timeout'),
+           ('ringhangup', 'Agent Hung Up While Ringing'),
+       ]
+       call          = FK(Call)
+       agent         = FK(User)
+       event_type    = CharField(choices=EVENT_CHOICES)
+       ring_duration = PositiveIntegerField(default=0)  # seconds
+       note          = TextField(blank=True)
+   ```
+
+2. **New `LeadEvent` types** — `call_offered`, `call_answered`, `call_rejected`, `call_no_answer` show in the lead activity timeline with distinct icons:
+   - 📞 Call Offered (sky blue)
+   - ✅ Call Answered (emerald green)
+   - 🚫 Call Rejected (red)
+   - ⏰ No Answer (amber)
+
+3. **AMI event mapping:**
+   | AMI Event | CallAgentEvent | LeadEvent | Notes |
+   |-----------|---------------|-----------|-------|
+   | `AgentCalled` | `offered` | `call_offered` | Call offered to agent (phone ringing) |
+   | `AgentConnect` | `answered` | `call_answered` | Agent answered, includes `ring_duration` from AMI `Ringtime` |
+   | `AgentRinghangup` | `ringhangup` | `call_rejected` | Agent hung up while phone was ringing |
+   | `Hangup` (no_answer) | `timeout` | `call_no_answer` | No agent answered within ring timeout |
+   | Frontend reject button | `rejected` | — | Agent clicked Reject in popup |
+
+4. **`_log_agent_event()` helper** — Creates both `CallAgentEvent` and `LeadEvent` in one call, with automatic mapping of event types.
+
+5. **API endpoints:**
+   - `GET /api/calls/list/{id}/agent-events/` — Agent events for a specific call
+   - `GET /api/calls/agent-stats/?days=7&agent_id=uuid` — Aggregate stats per agent
+
+6. **Frontend:**
+   - `CallAgentEvent` TypeScript interface
+   - `callsApi.agentEvents(callId)` and `callsApi.agentStats(params)` API methods
+   - `EVENT_LABELS` in lead detail page updated with call event types
+   - Lead activity timeline automatically shows the new event types
+
+### Why two layers (CallAgentEvent + LeadEvent)?
+
+| Aspect | CallAgentEvent | LeadEvent |
+|--------|---------------|-----------|
+| Purpose | Per-agent per-call analytics | Lead timeline display |
+| Linked to | Call | Lead |
+| Works for unknown callers? | Yes (call has no lead) | No (requires lead FK) |
+| Query | "How many calls did Agent X reject?" | "What happened with this lead's calls?" |
+| Ring duration | Tracked | Not tracked |
+
 ## 2026-05-04 — Unknown Caller Shown as Known Lead in Popup
 
 ### Issue 10: New/unknown callers displayed as existing leads with pipeline stage

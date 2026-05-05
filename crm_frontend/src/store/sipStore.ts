@@ -9,6 +9,11 @@ interface SipActions {
   call:       (target: string) => void;
 }
 
+interface SipIncoming {
+  from:        string;
+  displayName: string;
+}
+
 interface SipStore {
   sipStatus:        SipStatus;
   callStatus:       CallStatus;
@@ -17,7 +22,8 @@ interface SipStore {
   callTimer:        number;
   actions:          SipActions | null;
   lastEndCause:     string | null;
-  lastCalledNumber: string | null;   // ← NEW: track who we called
+  lastCalledNumber: string | null;
+  incoming:         SipIncoming | null;
 
   setSipStatus:        (s: SipStatus)     => void;
   setCallStatus:       (s: CallStatus)    => void;
@@ -26,7 +32,8 @@ interface SipStore {
   setCallTimer:        (v: number)        => void;
   registerActions:     (a: SipActions)    => void;
   setLastEndCause:     (c: string | null) => void;
-  setLastCalledNumber: (n: string | null) => void;  // ← NEW
+  setLastCalledNumber: (n: string | null) => void;
+  setIncoming:         (info: SipIncoming | null) => void;
 }
 
 export const useSipStore = create<SipStore>()((set) => ({
@@ -38,6 +45,7 @@ export const useSipStore = create<SipStore>()((set) => ({
   actions:          null,
   lastEndCause:     null,
   lastCalledNumber: null,
+  incoming:         null,
 
   setSipStatus:        (s) => set({ sipStatus: s }),
   setCallStatus:       (s) => set({ callStatus: s }),
@@ -46,5 +54,6 @@ export const useSipStore = create<SipStore>()((set) => ({
   setCallTimer:        (v) => set({ callTimer: v }),
   registerActions:     (a) => set({ actions: a }),
   setLastEndCause:     (c) => set({ lastEndCause: c }),
-  setLastCalledNumber: (n) => set({ lastCalledNumber: n }),  // ← NEW
+  setLastCalledNumber: (n) => set({ lastCalledNumber: n }),
+  setIncoming:         (info) => set({ incoming: info }),
 }));

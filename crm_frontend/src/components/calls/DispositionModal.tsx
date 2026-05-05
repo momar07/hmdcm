@@ -55,50 +55,50 @@ const FOLLOWUP_TYPES = [
   { value: 'whatsapp', label: '💬 WhatsApp' },
 ];
 
+function ManualFallback({ callerNumber, onClose }: { callerNumber: string; onClose: () => void }) {
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
+                <Phone size={16} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Call Ended</h3>
+                <p className="text-xs text-gray-400">Disposition not available</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+              <X size={16} className="text-gray-400" />
+            </button>
+          </div>
+          <div className="px-6 py-6 text-center space-y-3">
+            <p className="text-sm text-gray-600">
+              The call was logged, but the disposition form couldn&apos;t be loaded automatically.
+            </p>
+            <p className="text-xs text-gray-400">
+              You can complete this call later from the Call History.
+            </p>
+          </div>
+          <div className="px-6 pb-6">
+            <button onClick={onClose}
+              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700
+                         text-white text-sm font-semibold transition-colors">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function DispositionModal({
   callId, callerNumber, leadName, leadId, callDirection, onClose,
 }: DispositionModalProps) {
-  if (isManual(callId)) {
-    return (
-      <>
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
-                  <Phone size={16} className="text-amber-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Call Ended</h3>
-                  <p className="text-xs text-gray-400">Disposition not available</p>
-                </div>
-              </div>
-              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                <X size={16} className="text-gray-400" />
-              </button>
-            </div>
-            <div className="px-6 py-6 text-center space-y-3">
-              <p className="text-sm text-gray-600">
-                The call was logged, but the disposition form couldn&apos;t be loaded automatically.
-              </p>
-              <p className="text-xs text-gray-400">
-                You can complete this call later from the Call History.
-              </p>
-            </div>
-            <div className="px-6 pb-6">
-              <button onClick={onClose}
-                className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700
-                           text-white text-sm font-semibold transition-colors">
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  }
-
   const qc = useQueryClient();
   const [selectedDisp, setSelectedDisp] = useState('');
   const [note,         setNote]         = useState('');
@@ -139,39 +139,11 @@ export function DispositionModal({
     enabled:  followupReq,
   });
 
-  const selected = dispositions.find(d => d.id === selectedDisp);
-  const actions  = selected?.actions ?? [];
-
-  const autoFollowup = actions.some(a => a.action_type === 'create_followup');
-  const needsNote    = selected?.requires_note ?? true;
-  const needsAutoFollowupDate = autoFollowup;
-
-  const stageItems: any[] = (stagesData as any)?.data ?? (stagesData as any)?.results ?? stagesData ?? [];
-  const selectedStage = stageItems.find((s: any) => s.id === newStageId);
-  const isWon  = selectedStage?.is_won ?? false;
-  const isLost = selectedStage?.is_closed && !selectedStage?.is_won;
-
-  const canSubmit = selectedDisp &&
-    (!needsNote || note.length >= 10) &&
-    (!needsAutoFollowupDate || followupDate);
-
   useEffect(() => {
     if (selectedDisp) {
       setErrors({});
     }
   }, [selectedDisp]);
-
-  const validate = (): boolean => {
-    const e: Record<string, string> = {};
-    if (!selectedDisp) e.disposition = 'Disposition is required';
-    if (needsNote && note.trim().length < 10) e.note = 'Note must be at least 10 characters';
-    if (needsAutoFollowupDate && !followupDate) e.followupDate = 'Follow-up date is required';
-    if (updateStage && isWon && !wonAmount) e.wonAmount = 'Won amount is required';
-    if (updateStage && isLost && !lostReason.trim()) e.lostReason = 'Lost reason is required';
-    if (followupReq && !followupDate) e.followupDate = 'Follow-up date is required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
 
   const { mutate: submit, isPending } = useMutation({
     mutationFn: () => {
@@ -209,6 +181,38 @@ export function DispositionModal({
       toast.error(msg);
     },
   });
+
+  if (isManual(callId)) {
+    return <ManualFallback callerNumber={callerNumber} onClose={onClose} />;
+  }
+
+  const selected = dispositions.find(d => d.id === selectedDisp);
+  const actions  = selected?.actions ?? [];
+
+  const autoFollowup = actions.some(a => a.action_type === 'create_followup');
+  const needsNote    = selected?.requires_note ?? true;
+  const needsAutoFollowupDate = autoFollowup;
+
+  const stageItems: any[] = (stagesData as any)?.data ?? (stagesData as any)?.results ?? stagesData ?? [];
+  const selectedStage = stageItems.find((s: any) => s.id === newStageId);
+  const isWon  = selectedStage?.is_won ?? false;
+  const isLost = selectedStage?.is_closed && !selectedStage?.is_won;
+
+  const canSubmit = selectedDisp &&
+    (!needsNote || note.length >= 10) &&
+    (!needsAutoFollowupDate || followupDate);
+
+  const validate = (): boolean => {
+    const e: Record<string, string> = {};
+    if (!selectedDisp) e.disposition = 'Disposition is required';
+    if (needsNote && note.trim().length < 10) e.note = 'Note must be at least 10 characters';
+    if (needsAutoFollowupDate && !followupDate) e.followupDate = 'Follow-up date is required';
+    if (updateStage && isWon && !wonAmount) e.wonAmount = 'Won amount is required';
+    if (updateStage && isLost && !lostReason.trim()) e.lostReason = 'Lost reason is required';
+    if (followupReq && !followupDate) e.followupDate = 'Follow-up date is required';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const handleSubmit = () => {
     if (validate()) submit();

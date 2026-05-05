@@ -1,12 +1,11 @@
 'use client';
 
 import { useParams, useRouter }              from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Phone, PhoneIncoming, PhoneOutgoing,
   Clock, User, CheckCircle, Calendar,
 } from 'lucide-react';
-import toast              from 'react-hot-toast';
 import { callsApi }       from '@/lib/api/calls';
 import { PageHeader }     from '@/components/ui/PageHeader';
 import { Button }         from '@/components/ui/Button';
@@ -14,6 +13,14 @@ import { StatusBadge }    from '@/components/ui/StatusBadge';
 import { Spinner }        from '@/components/ui/Spinner';
 import { CallCompletionModal } from '@/components/calls/CallCompletionModal';
 import { useState }       from 'react';
+
+const AGENT_EVENT_ICONS: Record<string, { label: string; color: string; icon: string }> = {
+  offered:    { label: 'Offered',    color: 'bg-sky-100 text-sky-700',    icon: '📞' },
+  answered:   { label: 'Answered',   color: 'bg-emerald-100 text-emerald-700', icon: '✅' },
+  rejected:   { label: 'Rejected',   color: 'bg-red-100 text-red-700',    icon: '🚫' },
+  timeout:    { label: 'Timeout',    color: 'bg-amber-100 text-amber-700', icon: '⏰' },
+  ringhangup: { label: 'Rang Off',   color: 'bg-orange-100 text-orange-700', icon: '📴' },
+};
 
 function formatDuration(seconds: number): string {
   if (!seconds) return '—';
@@ -44,6 +51,12 @@ export default function CallDetailPage() {
     queryKey: ['call', id],
     queryFn:  () => callsApi.get(id).then((r) => r.data),
     refetchInterval: 10_000,
+  });
+
+  const { data: agentEvents } = useQuery({
+    queryKey: ['call-agent-events', id],
+    queryFn:  () => callsApi.agentEvents(id).then((r) => r.data),
+    enabled:  !!id,
   });
 
   if (isLoading) return (
@@ -144,6 +157,40 @@ export default function CallDetailPage() {
           />
         )}
       </div>
+
+      {/* Agent Events */}
+      {agentEvents && agentEvents.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+          <p className="text-xs font-semibold text-gray-500 uppercase px-5 pt-5 pb-2">
+            Agent Activity
+          </p>
+          <div className="divide-y divide-gray-50">
+            {agentEvents.map((ev: any) => {
+              const meta = AGENT_EVENT_ICONS[ev.event_type] ?? { label: ev.event_type, color: 'bg-gray-100 text-gray-600', icon: '•' };
+              return (
+                <div key={ev.id} className="flex items-center gap-3 px-5 py-3">
+                  <span className="text-base">{meta.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={"px-2 py-0.5 rounded-full text-xs font-semibold " + meta.color}>
+                        {meta.label}
+                      </span>
+                      <span className="text-sm font-medium text-gray-800">{ev.agent_name || 'Unknown Agent'}</span>
+                      {ev.ring_duration > 0 && (
+                        <span className="text-xs text-gray-400">{ev.ring_duration}s ring</span>
+                      )}
+                    </div>
+                    {ev.note && <p className="text-xs text-gray-500 mt-0.5">{ev.note}</p>}
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {new Date(ev.created_at).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Completion details */}
       {isCompleted && c.completion && (

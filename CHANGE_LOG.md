@@ -1,5 +1,69 @@
 # Change Log
 
+## 2026-05-05 — Agent Events, Popup Fix, Multi-Agent Timeout
+
+### Added
+- **"Agent Activity" section on Call Detail page** — Shows per-agent events (offered, answered, rejected, timeout, ringhangup) with icons, ring duration, and timestamps
+- **Screen-pop fallback** in `IncomingCallPopup` — When SIP rings before the WS event arrives, the popup makes a quick `callsApi.screenPop(phone)` API call to show lead info immediately instead of "Unknown Caller"
+- **SIP `incoming` info in `useSipStore`** — Added `incoming: { from, displayName }` to the shared SIP store so the popup can access caller number before the WS event arrives
+
+### Fixed
+- **"Unknown Caller" shown for known leads in popup** — Race condition: SIP phone rings → popup shows immediately → but WS event with lead info hasn't arrived yet → shows "Unknown Caller". Fixed by doing a screen-pop API lookup using the SIP caller number as fallback while waiting for the WS event
+- **SIP extension number shown as caller name** — Asterisk sends `CallerIDName='300'` (the SIP extension number), which was displayed as the lead name. Now numeric-only `caller_name` values are filtered out in the WS payload, and the popup prefers `lead.title` or `lead.phone` over numeric extensions
+- **`AgentCalled` handler only updating agent when `agent__isnull=True`** — Removed this filter. When a call times out on agent A and Asterisk re-queues to agent B, `update(agent=B)` now succeeds. Each agent offered the call gets a `CallAgentEvent(offered)` record
+- **`Hangup no_answer` only logging timeout for the last assigned agent** — Now finds ALL agents who had an `offered` event but no `answered` event, and logs a `timeout` for each one. Correctly tracks multi-agent ring scenarios
+- **`DispositionModal` React hooks-of-hooks error** — Early return for `__manual__` call IDs was placed before hooks, causing all hooks below it to be called conditionally. Extracted `ManualFallback` into a separate component so hooks always run
+- **`tasks.py` IndentationError** — The `if call:` block after `call = Call.objects...filter().first()` was incorrectly indented under the assignment, preventing Celery from starting
+- **`lead_display_name` showing phone number instead of title** — When `get_full_name()` returns only a phone number (empty first/last name), the WS payload now falls back to `lead.title` first, then `caller_name` (only if non-numeric), then `lead.phone`
+
+### Changed
+- **`notify_incoming_call` WS payload** — `caller_name` now filters out numeric-only SIP extensions (e.g., `'300'` becomes `''`). `lead_display_name` fallback chain changed from `caller_name → title → phone` to `title → caller_name_clean → phone`
+- **`IncomingCallPopup`** — Merges WS event data with screen-pop fallback data. When `incomingCall` is null but `callStatus === 'incoming'`, does a `callsApi.screenPop(phone)` lookup. Falls back to SIP `incoming.from`/`incoming.displayName` as last resort
+- **`Hangup no_answer` handler** — Replaced single `_log_agent_event(call, call.agent, 'timeout', ...)` with a loop that finds all agents offered but unanswered via `CallAgentEvent` records
+- **`sipStore.ts`** — Added `incoming: SipIncoming | null` state and `setIncoming` action for cross-component access to SIP incoming call info
+
+### Files Modified
+- `crm_backend/apps/calls/tasks.py` — Removed `agent__isnull=True` from `AgentCalled`; multi-agent timeout logging; `caller_name` cleanup; indentation fix; `lead_display_name` fallback fix
+- `crm_frontend/src/components/calls/IncomingCallPopup.tsx` — Screen-pop fallback; SIP `incoming` merge; known/unknown caller logic rewrite
+- `crm_frontend/src/components/calls/DispositionModal.tsx` — Extracted `ManualFallback` component; moved all hooks before early return
+- `crm_frontend/src/app/(dashboard)/calls/[id]/page.tsx` — Added "Agent Activity" section; added `useQuery` for agent events
+- `crm_frontend/src/store/sipStore.ts` — Added `incoming` state and `setIncoming` action
+- `crm_frontend/src/lib/sip/useSip.ts` — Sync `incoming` info to `useSipStore`; clear on hangup/answer
+
+## 2026-05-05 — Agent Call Event Tracking
+
+### Added
+- **`CallAgentEvent` model** — Tracks each agent interaction with a call: offered, answered, rejected, timeout, ringhangup. Records `call`, `agent`, `event_type`, `ring_duration`, and `note`
+- **New LeadEvent types** — `call_offered`, `call_answered`, `call_rejected`, `call_no_answer` now appear in the lead activity timeline with distinct icons and colors
+- **`_log_agent_event()` helper** in `tasks.py` — Creates both a `CallAgentEvent` record and a corresponding `LeadEvent` (if the call has a lead) in one call
+- **AMI event tracking** — `AgentCalled` creates `offered` event; `AgentConnect` creates `answered` event with ring duration; `AgentRinghangup` creates `ringhangup` event; Hangup with `no_answer` creates `timeout` event
+- **`AgentCallStatsView` API** — `GET /api/calls/agent-stats/?days=7&agent_id=uuid` returns per-agent call statistics (offered/answered/rejected/timeout counts and average ring duration)
+- **`CallViewSet.agent_events` API** — `GET /api/calls/list/{id}/agent-events/` returns agent events for a specific call
+- **`CallAgentEventSerializer`** — Serializes agent events with `agent_name`
+- **Frontend `CallAgentEvent` type** — Added to `types/index.ts`
+- **Frontend EVENT_LABELS** — Added `call_offered`, `call_answered`, `call_rejected`, `call_no_answer` with icons and colors
+- **`callsApi.agentEvents()` and `callsApi.agentStats()`** — Frontend API methods for agent call analytics
+
+### Changed
+- **`AgentCalled` handler** — Now creates a `CallAgentEvent(offered)` and `LeadEvent(call_offered)`
+- **`AgentConnect` handler** — Now creates a `CallAgentEvent(answered)` with `ring_duration` from AMI `Ringtime` field and `LeadEvent(call_answered)`
+- **`AgentRinghangup` handler** — Now creates a `CallAgentEvent(ringhangup)` and `LeadEvent(call_rejected)`
+- **Hangup handler** — On `no_answer`, creates a `CallAgentEvent(timeout)` with call duration and `LeadEvent(call_no_answer)`
+- **`RejectCallView`** — Creates a `CallAgentEvent(rejected)` when agent rejects a call via the reject button
+
+### Files Modified
+- `crm_backend/apps/calls/models.py` — Added `CallAgentEvent` model
+- `crm_backend/apps/leads/models.py` — Added 4 new event types to `LeadEvent.EVENT_CHOICES`
+- `crm_backend/apps/calls/tasks.py` — Added `_log_agent_event()`, updated AMI handlers
+- `crm_backend/apps/calls/serializers.py` — Added `CallAgentEventSerializer`
+- `crm_backend/apps/calls/views.py` — Added `AgentCallStatsView`, `agent_events` action, `Count`/`Avg` imports
+- `crm_backend/apps/calls/urls.py` — Added `agent-stats` and import for `AgentCallStatsView`
+- `crm_backend/apps/leads/migrations/0014_...` — Migration for new event types
+- `crm_backend/apps/calls/migrations/0012_...` — Migration for `CallAgentEvent` table
+- `crm_frontend/src/types/index.ts` — Added `CallAgentEvent` interface
+- `crm_frontend/src/lib/api/calls.ts` — Added `agentEvents()` and `agentStats()` methods
+- `crm_frontend/src/app/(dashboard)/leads/[id]/page.tsx` — Added call event types to `EVENT_LABELS`
+
 ## 2026-05-04 — Unknown Caller Popup & Lead Matching Fix
 
 ### Fixed

@@ -64,16 +64,35 @@ function TransferModal({
 ───────────────────────────────────────────────────────── */
 export function IncomingCallPopup() {
   const { incomingCall, clearIncoming } = useCallStore();
-  const { actions, callStatus, isMuted, isOnHold, callTimer } = useSipStore();
+  const { actions, callStatus, isMuted, isOnHold, callTimer, incoming: sipIncoming } = useSipStore();
   const { status: agentStatus } = useAgentStatusStore();
   const router = useRouter();
 
   const [visible,      setVisible]      = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+  const [screenPopLead, setScreenPopLead] = useState<any>(null);
 
   // Keep ref to avoid stale closure
   const incomingCallRef = useRef(incomingCall);
   useEffect(() => { incomingCallRef.current = incomingCall; }, [incomingCall]);
+
+  // When SIP rings but WS event hasn't arrived yet, do a screen-pop lookup
+  useEffect(() => {
+    if (callStatus === 'incoming' && !incomingCall && sipIncoming?.from) {
+      const phone = sipIncoming.from;
+      import('@/lib/api/calls').then(({ callsApi }) => {
+        callsApi.screenPop(phone).then((res: any) => {
+          const data = res.data ?? res;
+          const leads = data?.leads ?? data?.results ?? [];
+          if (Array.isArray(leads) && leads.length > 0) {
+            setScreenPopLead(leads[0]);
+          }
+        }).catch(() => {});
+      });
+    } else if (incomingCall) {
+      setScreenPopLead(null);
+    }
+  }, [callStatus, incomingCall, sipIncoming?.from]);
 
   const fmt = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
@@ -156,17 +175,18 @@ export function IncomingCallPopup() {
     if (callStatus === 'active' && agentStatus !== 'away') {
       setVisible(true);
 
-      const isKnownLead = !!incomingCall?.lead_id;
-
       if (isKnownLead) {
-        const path = window.location.pathname;
-        if (!path.includes('/leads/') && !path.includes('/calls/')) {
-          router.push(`/leads/${incomingCall.lead_id}`);
+        const leadId = hasWs ? wsData!.lead_id! : spData?.id;
+        if (leadId) {
+          const path = window.location.pathname;
+          if (!path.includes('/leads/') && !path.includes('/calls/')) {
+            router.push(`/leads/${leadId}`);
+          }
         }
       } else {
-        const phone       = incomingCall?.caller || '';
-        const uniqueid    = incomingCall?.uniqueid || '';
-        const callerName  = incomingCall?.caller_name || '';
+        const phone       = wsData?.caller || sipIncoming?.from || '';
+        const uniqueid    = wsData?.uniqueid || '';
+        const callerName  = wsData?.caller_name || sipIncoming?.displayName || '';
         router.push(`/leads/new?phone=${encodeURIComponent(phone)}&uniqueid=${encodeURIComponent(uniqueid)}&caller_name=${encodeURIComponent(callerName)}`);
       }
     }
@@ -181,22 +201,36 @@ export function IncomingCallPopup() {
 
   if (!visible) return null;
 
-  const isKnownLead = !!incomingCall?.lead_id;
+  // Merge WS event data with screen-pop fallback
+  const wsData   = incomingCall;
+  const spData   = screenPopLead;
+  const hasWs    = !!wsData?.lead_id;
 
-  let leadName:   string;
-  let leadPhone:  string;
-  let leadStage:  string | null;
+  const isKnownLead = hasWs
+    ? !!wsData.lead_id
+    : !!spData;
+
+  let leadName:    string;
+  let leadPhone:   string;
+  let leadStage:   string | null;
   let leadCompany: string | null;
 
-  if (isKnownLead) {
-    leadName    = incomingCall?.lead_name ?? incomingCall?.lead_title ?? incomingCall?.caller ?? 'Unknown';
-    leadPhone   = incomingCall?.lead_phone ?? incomingCall?.caller ?? '';
-    leadStage   = incomingCall?.lead_stage ?? null;
-    leadCompany  = incomingCall?.lead_company ?? null;
+  if (hasWs) {
+    leadName   = wsData?.lead_name ?? wsData?.lead_title ?? wsData?.caller ?? 'Unknown';
+    leadPhone  = wsData?.lead_phone ?? wsData?.caller ?? '';
+    leadStage  = wsData?.lead_stage ?? null;
+    leadCompany = wsData?.lead_company ?? null;
+  } else if (spData) {
+    const fullName = [spData.first_name, spData.last_name].filter(Boolean).join(' ').trim();
+    leadName   = fullName || spData.title || sipIncoming?.from || 'Unknown';
+    leadPhone  = spData.phone || sipIncoming?.from || '';
+    leadStage  = spData.stage_name ?? null;
+    leadCompany = spData.company ?? null;
   } else {
-    const callerName = incomingCall?.caller_name?.trim();
-    leadName    = callerName || 'Unknown Caller';
-    leadPhone   = incomingCall?.caller ?? '';
+    const callerName = sipIncoming?.displayName?.trim();
+    const fromNum    = sipIncoming?.from || wsData?.caller || '';
+    leadName   = (callerName && callerName !== fromNum) ? callerName : 'Unknown Caller';
+    leadPhone  = fromNum;
     leadStage   = null;
     leadCompany  = null;
   }

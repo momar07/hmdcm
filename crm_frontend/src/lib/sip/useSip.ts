@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { SipClient, SipStatus, CallStatus, IncomingCallInfo, SipConfig } from './sipClient';
+import { useSipStore } from '@/store/sipStore';
 
 export function useSip(config: SipConfig | null) {
   const clientRef                     = useRef<SipClient | null>(null);
@@ -60,7 +61,10 @@ export function useSip(config: SipConfig | null) {
         }
       },
       setCallStatus,
-      (info) => setIncoming(info),
+      (info) => {
+        setIncoming(info);
+        useSipStore.getState().setIncoming(info ? { from: info.from, displayName: info.displayName } : null);
+      },
       (cause) => {
         window.dispatchEvent(new CustomEvent('sip:endcause', { detail: cause }));
       },
@@ -91,11 +95,13 @@ export function useSip(config: SipConfig | null) {
     }
     clientRef.current.answer();
     setIncoming(null);
+    useSipStore.getState().setIncoming(null);
   }, []);
 
   const hangup = useCallback(() => {
     clientRef.current?.hangup();
     setIncoming(null);
+    useSipStore.getState().setIncoming(null);
     setIsMuted(false);
     setIsOnHold(false);
   }, []);

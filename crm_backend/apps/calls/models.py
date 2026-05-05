@@ -197,6 +197,38 @@ class CallDisposition(BaseModel):
         db_table = 'call_dispositions'
 
 
+class CallAgentEvent(BaseModel):
+    """Tracks each agent interaction with a call: offered, answered, rejected, timeout."""
+    EVENT_CHOICES = [
+        ('offered',   'Call Offered'),
+        ('answered',  'Call Answered'),
+        ('rejected',  'Call Rejected'),
+        ('timeout',   'Ring Timeout'),
+        ('ringhangup','Agent Hung Up While Ringing'),
+    ]
+
+    call         = models.ForeignKey(Call, on_delete=models.CASCADE,
+                                     related_name='agent_events')
+    agent        = models.ForeignKey('users.User', on_delete=models.SET_NULL,
+                                    null=True, blank=True, related_name='call_agent_events')
+    event_type   = models.CharField(max_length=20, choices=EVENT_CHOICES, db_index=True)
+    ring_duration= models.PositiveIntegerField(default=0,
+                    help_text='Seconds the agent\'s phone rang before this event')
+    note         = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'call_agent_events'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['call', 'event_type']),
+            models.Index(fields=['agent', 'event_type']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.call_id} | {self.event_type} by {self.agent}'
+
+
 class WebhookEvent(BaseModel):
     """
     Idempotency tracker for AMI/webhook events.

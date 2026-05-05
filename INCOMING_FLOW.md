@@ -169,20 +169,41 @@ The popup shows:
 - **Known lead:** Name, phone, stage, company, email (blue avatar icon)
 - **Unknown caller:** Caller ID name (or "Unknown Caller"), phone number, "New Caller — Create Lead" badge (amber avatar icon)
 
-**Display logic:**
-```typescript
-const isKnownLead = !!incomingCall?.lead_id;
+**Race condition handling:**
+When SIP rings before the WS event arrives, `incomingCall` is null. The popup uses a **screen-pop fallback** — it calls `callsApi.screenPop(phone)` using the SIP caller number to look up the lead immediately.
 
-if (isKnownLead) {
-  leadName  = incomingCall?.lead_name ?? incomingCall?.lead_title ?? incomingCall?.caller ?? 'Unknown';
-  leadPhone = incomingCall?.lead_phone ?? incomingCall?.caller ?? '';
-  // Show lead name, phone, stage, company
+```typescript
+// Data priority: WS event > screen-pop API > SIP incoming info
+const hasWs    = !!wsData?.lead_id;
+const isKnownLead = hasWs ? !!wsData.lead_id : !!spData;
+
+if (hasWs) {
+  leadName  = wsData?.lead_name ?? wsData?.lead_title ?? wsData?.caller ?? 'Unknown';
+  leadPhone = wsData?.lead_phone ?? wsData?.caller ?? '';
+  leadStage = wsData?.lead_stage ?? null;
+} else if (spData) {
+  const fullName = [spData.first_name, spData.last_name].filter(Boolean).join(' ').trim();
+  leadName   = fullName || spData.title || sipIncoming?.from || 'Unknown';
+  leadPhone  = spData.phone || sipIncoming?.from || '';
+  leadStage  = spData.stage_name ?? null;
 } else {
-  leadName  = incomingCall?.caller_name?.trim() || 'Unknown Caller';
-  leadPhone = incomingCall?.caller ?? '';
-  // Show caller name / "Unknown Caller", phone, "New Caller — Create Lead" badge
-  // NO stage, NO company shown (they're null)
+  leadName   = 'Unknown Caller';
+  leadPhone  = sipIncoming?.from || wsData?.caller || '';
 }
+```
+
+**`caller_name` filtering:**
+Asterisk sends `CallerIDName='300'` (SIP extension number) which is not a useful name. The backend now filters out numeric-only `caller_name` values:
+```python
+caller_name_clean = ''
+if call.caller_name and not call.caller_name.isdigit():
+    caller_name_clean = call.caller_name
+```
+
+When `get_full_name()` returns just a phone number (lead has no first_name/last_name), the WS payload prefers `title` over the numeric extension:
+```python
+if lead_display_name and lead.phone and lead_display_name.strip() == lead.phone.strip():
+    lead_display_name = lead.title or caller_name_clean or lead.phone
 ```
 
 ### 2.3 Agent States
@@ -328,8 +349,30 @@ Asterisk fires `Hangup` event with cause code:
 **Updates:**
 - Sets `ended_at`, `duration`, `status` on Call record
 - Updates Activity record to `completed`
+- **Finds all agents offered but never answered** and logs `timeout` events for each
 - Triggers `notify_call_ended.delay()`
 - If `no_answer`, triggers `handle_missed_call.delay()` (auto-creates callback follow-up)
+
+### Agent Event Tracking
+
+Each AMI event creates `CallAgentEvent` and `LeadEvent` records:
+
+| AMI Event | CallAgentEvent | LeadEvent | Notes |
+|-----------|---------------|-----------|-------|
+| `AgentCalled` | `offered` | `call_offered` | Call offered to agent (phone ringing) |
+| `AgentConnect` | `answered` | `call_answered` | Agent answered, includes `ring_duration` from AMI `Ringtime` |
+| `AgentRinghangup` | `ringhangup` | `call_rejected` | Agent hung up while phone was ringing |
+| `Hangup` (no_answer) | `timeout` (per agent) | `call_no_answer` | Finds ALL agents offered but unanswered |
+| Frontend reject button | `rejected` | — | Agent clicked Reject in popup |
+
+**Multi-agent re-queue scenario:**
+When agent A doesn't answer and Asterisk re-queues to agent B:
+1. `AgentCalled` for agent A → `CallAgentEvent(offered)` for agent A
+2. `AgentCalled` for agent B → `CallAgentEvent(offered)` for agent B, `call.agent` updated to B
+3. `AgentConnect` for agent B → `CallAgentEvent(answered)` for agent B
+4. `Hangup no_answer` → Only agent A gets `timeout` (no matching `answered` event)
+
+The `AgentCalled` handler no longer filters by `agent__isnull=True`, so it correctly updates the call's agent field even when re-routing.
 
 ### 5.3 WebSocket: `call_ended` Event
 
@@ -435,13 +478,17 @@ Call.objects.filter(pk=call_id).update(
 
 | File | Purpose |
 |------|---------|
-| `crm_backend/apps/calls/tasks.py` | AMI event processing, lead lookup, WS notifications |
-| `crm_backend/apps/calls/views.py` | API endpoints (mark-answered, complete, pending-completions) |
+| `crm_backend/apps/calls/tasks.py` | AMI event processing, lead lookup, WS notifications, agent event tracking |
+| `crm_backend/apps/calls/models.py` | Call, CallAgentEvent models |
+| `crm_backend/apps/calls/views.py` | API endpoints (mark-answered, complete, pending-completions, agent-events, agent-stats) |
 | `crm_backend/apps/calls/services.py` | Call completion logic and validation |
-| `crm_frontend/src/components/calls/IncomingCallPopup.tsx` | Popup UI, answer/reject, routing |
+| `crm_backend/apps/leads/models.py` | LeadEvent model with call_* event types |
+| `crm_frontend/src/components/calls/IncomingCallPopup.tsx` | Popup UI, answer/reject, routing, screen-pop fallback |
+| `crm_frontend/src/app/(dashboard)/calls/[id]/page.tsx` | Call detail page with Agent Activity section |
 | `crm_frontend/src/app/(dashboard)/leads/new/page.tsx` | New lead form with call pre-fill |
 | `crm_frontend/src/components/calls/DispositionModal.tsx` | Post-call disposition form |
 | `crm_frontend/src/app/(dashboard)/layout.tsx` | WS event handling, disposition modal trigger |
+| `crm_frontend/src/store/sipStore.ts` | Shared SIP state including incoming call info |
 
 ---
 
