@@ -59,6 +59,11 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['admin', 'supervisor', 'agent', 'qa'],
   },
   {
+    href: '/activity', label: 'My Activity',
+    icon: <Activity size={18} />,
+    roles: ['admin', 'supervisor', 'agent'],
+  },
+  {
     href: '/tickets', label: 'Tickets',
     icon: <TicketIcon size={18} />,
     roles: ['admin', 'supervisor', 'agent'],
