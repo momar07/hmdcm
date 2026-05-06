@@ -1,3 +1,46 @@
+#!/bin/bash
+# ============================================================================
+# Phase 1: Leads List Redesign
+# Repo: /home/momar/Desktop/websites/hmdcm
+# ============================================================================
+
+set -e  # Exit on any error
+
+REPO="/home/momar/Desktop/websites/hmdcm"
+FRONTEND="$REPO/crm_frontend"
+TS=$(date +"%Y%m%d_%H%M%S")
+
+# ── ألوان ──
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}╔════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   Phase 1: Leads List Redesign                    ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════╝${NC}"
+
+cd "$FRONTEND" || { echo -e "${RED}✗ Frontend dir not found${NC}"; exit 1; }
+
+# ── 1. Sanity check ──
+echo -e "\n${YELLOW}[1/6] Sanity check...${NC}"
+[ -f "src/app/(dashboard)/leads/page.tsx" ] || { echo -e "${RED}✗ leads/page.tsx not found${NC}"; exit 1; }
+[ -f "src/components/ui/StatCard.tsx" ]      || { echo -e "${RED}✗ StatCard.tsx not found${NC}"; exit 1; }
+[ -f "src/lib/api/leads.ts" ]                 || { echo -e "${RED}✗ leads.ts not found${NC}"; exit 1; }
+echo -e "${GREEN}✓ All required files exist${NC}"
+
+# ── 2. Backup الملف القديم ──
+echo -e "\n${YELLOW}[2/6] Creating backups...${NC}"
+LEADS_PAGE="src/app/(dashboard)/leads/page.tsx"
+BACKUP="${LEADS_PAGE}.bak_${TS}"
+cp "$LEADS_PAGE" "$BACKUP"
+echo -e "${GREEN}✓ Backup: $BACKUP${NC}"
+
+# ── 3. كتابة الصفحة الجديدة ──
+echo -e "\n${YELLOW}[3/6] Writing new Leads List page...${NC}"
+
+cat > "$LEADS_PAGE" <<'TSXEOF'
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -592,3 +635,86 @@ export default function LeadsPage() {
     </div>
   );
 }
+TSXEOF
+
+echo -e "${GREEN}✓ New page written ($(wc -l < $LEADS_PAGE) lines)${NC}"
+
+# ── 4. TypeScript build test ──
+echo -e "\n${YELLOW}[4/6] Running TypeScript check...${NC}"
+
+# Check if npx tsc available
+if ! command -v npx &> /dev/null; then
+  echo -e "${RED}✗ npx not found — install Node.js${NC}"
+  echo -e "${YELLOW}Rolling back...${NC}"
+  cp "$BACKUP" "$LEADS_PAGE"
+  exit 1
+fi
+
+# Run tsc - ONLY the leads file
+TSC_OUT=$(npx tsc --noEmit --project tsconfig.json 2>&1 | grep -E "leads/page\.tsx|^error" || true)
+
+if [ -z "$TSC_OUT" ]; then
+  echo -e "${GREEN}✓ TypeScript check passed (no errors in leads/page.tsx)${NC}"
+else
+  echo -e "${RED}✗ TypeScript errors found:${NC}"
+  echo "$TSC_OUT" | head -30
+  echo -e "\n${YELLOW}Rolling back...${NC}"
+  cp "$BACKUP" "$LEADS_PAGE"
+  echo -e "${GREEN}✓ Rolled back to original${NC}"
+  exit 1
+fi
+
+# ── 5. ESLint check (optional - won't fail build) ──
+echo -e "\n${YELLOW}[5/6] Running ESLint check (warnings only)...${NC}"
+LINT_OUT=$(npx next lint --file "src/app/(dashboard)/leads/page.tsx" --quiet 2>&1 || true)
+if echo "$LINT_OUT" | grep -qE "Error:"; then
+  echo -e "${YELLOW}⚠ ESLint warnings:${NC}"
+  echo "$LINT_OUT" | head -20
+else
+  echo -e "${GREEN}✓ No ESLint errors${NC}"
+fi
+
+# ── 6. Optional: Next.js build smoke test ──
+echo -e "\n${YELLOW}[6/6] Final report${NC}"
+
+cat <<EOF
+
+${GREEN}╔════════════════════════════════════════════════════╗${NC}
+${GREEN}║   ✓ Phase 1: Leads List Redesign - SUCCESS         ║${NC}
+${GREEN}╚════════════════════════════════════════════════════╝${NC}
+
+📁 Modified:
+   $LEADS_PAGE
+
+💾 Backup:
+   $BACKUP
+
+✨ New Features:
+   • KPI cards (admin/supervisor only): Total, New 7d, Hot, Won, Pipeline EGP
+   • Search bar (name / phone / email)
+   • Filters: Status, Stage, Source, Assigned Agent
+   • Sortable columns: Lead, Value, Last Activity
+   • Bulk selection + Export CSV
+   • View toggle: Table / Cards (desktop)
+   • Mobile: always cards layout
+   • Quick actions: Call ☎  WhatsApp 💬 (on row hover)
+   • Stale indicator (red) for leads not updated in 7+ days
+   • Avatar with initials + hashed color
+   • Empty state with "Clear filters" CTA
+
+📋 Next steps:
+   1. Restart dev server:
+      cd $FRONTEND
+      rm -rf .next
+      npm run dev
+   2. Hard-refresh browser (Ctrl+Shift+R)
+   3. Test pages:
+      - http://localhost:3000/leads (as admin → see KPI cards)
+      - http://localhost:3000/leads (as agent → no KPI cards)
+      - Resize browser to mobile (< 768px) → cards layout
+      - Click filters → search → sort → bulk select → export
+
+🔄 To rollback manually:
+   cp "$BACKUP" "$LEADS_PAGE"
+
+EOF
