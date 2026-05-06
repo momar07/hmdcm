@@ -538,31 +538,36 @@ class RejectCallView(APIView):
             call = Call.objects.get(pk=call_id)
         except Call.DoesNotExist:
             return Response({'error': 'Call not found'}, status=404)
+
+        # Update call status only if still ringing — AMI timeout may have
+        # already set it to no_answer/busy, but we still want to log the event.
         if call.status in ('ringing', 'incoming'):
             call.status   = 'no_answer'
             call.ended_at = tz.now()
             call.save(update_fields=['status', 'ended_at'])
-            from .models import CallAgentEvent
-            already_rejected = CallAgentEvent.objects.filter(
+
+        # Always create the rejected event (deduplicated) regardless of status.
+        from .models import CallAgentEvent
+        already_rejected = CallAgentEvent.objects.filter(
+            call=call,
+            agent=request.user,
+            event_type='rejected',
+        ).exists()
+        if not already_rejected:
+            CallAgentEvent.objects.create(
                 call=call,
                 agent=request.user,
                 event_type='rejected',
-            ).exists()
-            if not already_rejected:
-                CallAgentEvent.objects.create(
-                    call=call,
-                    agent=request.user,
-                    event_type='rejected',
-                    note=f'Agent {request.user.get_full_name()} rejected call',
+                note=f'Agent {request.user.get_full_name()} rejected call',
+            )
+            if call.lead_id:
+                LeadEvent.objects.create(
+                    lead=call.lead,
+                    event_type='call_rejected',
+                    actor=request.user,
+                    new_value=request.user.get_full_name(),
+                    note=f'Call rejected by {request.user.get_full_name()}',
                 )
-                if call.lead_id:
-                    LeadEvent.objects.create(
-                        lead=call.lead,
-                        event_type='call_rejected',
-                        actor=request.user,
-                        new_value=request.user.get_full_name(),
-                        note=f'Call rejected by {request.user.get_full_name()}',
-                    )
         return Response({'call_id': str(call.id), 'status': call.status})
 
 

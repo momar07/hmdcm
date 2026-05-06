@@ -1,5 +1,24 @@
 # Change Log
 
+## 2026-05-06 — Reject/Dismiss Event Fix + My Activity Page
+
+### Fixed
+- **Reject/Dismiss events lost when AMI timeout fires first** — `RejectCallView` nested `CallAgentEvent` creation inside `if call.status in ('ringing', 'incoming')`. When AMI's `QueueMemberTimeout` fires first (setting status to `no_answer` or `busy`), the agent's click on Reject would silently skip event creation. Moved event creation outside the status check so events are always recorded regardless of call status.
+
+### Added
+- **"My Activity" page** (`/activity`) — New dashboard page showing the agent's personal call event timeline. Consumes the existing `/api/calls/agent-activity/` endpoint. Features:
+  - Events grouped by call with timestamps, event type badges, ring duration, and notes
+  - Distribution summary showing count per event type
+  - Filters: period (24h / 7 days / 30 days), event type dropdown
+  - Scope toggle for supervisors/admins (just me / all agents)
+  - Clickable call links that navigate to the call detail page
+- **Sidebar nav entry** — "My Activity" with Activity icon, visible to admin/supervisor/agent roles
+
+### Files Modified
+- `crm_backend/apps/calls/views.py` — Fixed `RejectCallView` to create events outside status check
+- `crm_frontend/src/app/(dashboard)/activity/page.tsx` — New page
+- `crm_frontend/src/components/layout/Sidebar.tsx` — Added "My Activity" nav entry
+
 ## 2026-05-05 — Agent Events, Popup Fix, Multi-Agent Timeout
 
 ### Added

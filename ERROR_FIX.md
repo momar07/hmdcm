@@ -1,5 +1,47 @@
 # Error Fix Log
 
+## 2026-05-06 — Reject/Dismiss Events Lost When AMI Timeout Fires First
+
+### Issue 15: Agent clicks Reject or X but no event appears in activity feed
+
+**Problem:** Agents (Mohsen and testb) reported clicking the red Reject button or the X (dismiss) button on the incoming call popup, but no `rejected` or `dismissed` `CallAgentEvent` appeared in their activity feed. The browser toast confirmed the click fired with the correct `call_id`, but the database had no record.
+
+**Root cause:** `RejectCallView` (`crm_backend/apps/calls/views.py:541`) nested the `CallAgentEvent` creation inside this condition:
+```python
+if call.status in ('ringing', 'incoming'):
+    call.status = 'no_answer'
+    call.ended_at = tz.now()
+    call.save(update_fields=['status', 'ended_at'])
+    # CallAgentEvent.create() was HERE — inside the if block
+```
+
+The AMI `QueueMemberTimeout` event fires after ~15-30 seconds of no answer and sets the call status to `no_answer` or `busy`. By the time the agent clicks Reject, the status has already changed — so the entire block is skipped silently. No event created, no error returned, just `{"call_id": "...", "status": "busy"}`.
+
+**Fix:** Moved `CallAgentEvent` creation outside the status check:
+```python
+# Update call status only if still ringing — AMI timeout may have
+# already set it to no_answer/busy, but we still want to log the event.
+if call.status in ('ringing', 'incoming'):
+    call.status = 'no_answer'
+    call.ended_at = tz.now()
+    call.save(update_fields=['status', 'ended_at'])
+
+# Always create the rejected event (deduplicated) regardless of status.
+from .models import CallAgentEvent
+already_rejected = CallAgentEvent.objects.filter(
+    call=call, agent=request.user, event_type='rejected',
+).exists()
+if not already_rejected:
+    CallAgentEvent.objects.create(
+        call=call, agent=request.user, event_type='rejected',
+        note=f'Agent {request.user.get_full_name()} rejected call',
+    )
+```
+
+`DismissCallView` did not have this bug (it doesn't check call status), so it was already working correctly.
+
+**Verification:** Tested via Django shell — both `rejected` and `dismissed` events are now created even when call status is `busy` or `no_answer`.
+
 ## 2026-05-05 — Popup Shows "Unknown Caller" for Known Leads + Multi-Agent Events
 
 ### Issue 11: Popup shows "Unknown Caller" even for known leads

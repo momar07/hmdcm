@@ -364,6 +364,10 @@ Each AMI event creates `CallAgentEvent` and `LeadEvent` records:
 | `AgentRinghangup` | `ringhangup` | `call_rejected` | Agent hung up while phone was ringing |
 | `Hangup` (no_answer) | `timeout` (per agent) | `call_no_answer` | Finds ALL agents offered but unanswered |
 | Frontend reject button | `rejected` | — | Agent clicked Reject in popup |
+| Frontend dismiss button (X) | `dismissed` | — | Agent closed popup without answering |
+
+**Reject/Dismiss race condition with AMI timeout (RESOLVED 2026-05-06):**
+The `RejectCallView` originally nested `CallAgentEvent` creation inside `if call.status in ('ringing', 'incoming')`. When AMI's `QueueMemberTimeout` fires first (setting status to `no_answer` or `busy`), the agent's click on Reject/X would silently skip event creation — no error returned, no event logged. The fix moved event creation outside the status check so events are always recorded regardless of the call's current status.
 
 **Multi-agent re-queue scenario:**
 When agent A doesn't answer and Asterisk re-queues to agent B:
@@ -480,11 +484,12 @@ Call.objects.filter(pk=call_id).update(
 |------|---------|
 | `crm_backend/apps/calls/tasks.py` | AMI event processing, lead lookup, WS notifications, agent event tracking |
 | `crm_backend/apps/calls/models.py` | Call, CallAgentEvent models |
-| `crm_backend/apps/calls/views.py` | API endpoints (mark-answered, complete, pending-completions, agent-events, agent-stats) |
+| `crm_backend/apps/calls/views.py` | API endpoints (mark-answered, complete, pending-completions, agent-events, agent-stats, reject, dismiss, agent-activity) |
 | `crm_backend/apps/calls/services.py` | Call completion logic and validation |
 | `crm_backend/apps/leads/models.py` | LeadEvent model with call_* event types |
 | `crm_frontend/src/components/calls/IncomingCallPopup.tsx` | Popup UI, answer/reject, routing, screen-pop fallback |
 | `crm_frontend/src/app/(dashboard)/calls/[id]/page.tsx` | Call detail page with Agent Activity section |
+| `crm_frontend/src/app/(dashboard)/activity/page.tsx` | My Activity page — agent's personal call event timeline |
 | `crm_frontend/src/app/(dashboard)/leads/new/page.tsx` | New lead form with call pre-fill |
 | `crm_frontend/src/components/calls/DispositionModal.tsx` | Post-call disposition form |
 | `crm_frontend/src/app/(dashboard)/layout.tsx` | WS event handling, disposition modal trigger |
@@ -520,3 +525,23 @@ Call.objects.filter(pk=call_id).update(
 - Known numbers: Found in DB → popup shows lead details with stage → routes to `/leads/{id}`
 - Unknown numbers: Not found → popup shows "Unknown Caller" (or CallerIDName if available) with amber badge → routes to `/leads/new?phone=...&uniqueid=...&caller_name=...`
 - Leads for unknown callers are only created when the agent explicitly submits the new lead form
+
+### Issue: Reject/Dismiss events lost when AMI timeout fires first (RESOLVED 2026-05-06)
+
+**Problem:** Agents clicked the red Reject button or the X (dismiss) button on the incoming call popup, but no `rejected` or `dismissed` `CallAgentEvent` appeared in their activity feed. The toast confirmed the click fired, but the DB had no record.
+
+**Root Cause:** `RejectCallView` nested the `CallAgentEvent` creation inside `if call.status in ('ringing', 'incoming')`. The AMI `QueueMemberTimeout` event fires after ~15-30 seconds of no answer and sets the call status to `no_answer` or `busy`. By the time the agent clicks Reject, the status has already changed — so the entire block is skipped silently. No event created, no error returned, just `{"status": "busy"}`.
+
+**Resolution:** Moved `CallAgentEvent` creation outside the status check. The status update still only happens if the call is still ringing, but the event is always logged (deduplicated):
+```python
+# Update call status only if still ringing
+if call.status in ('ringing', 'incoming'):
+    call.status = 'no_answer'
+    call.ended_at = tz.now()
+    call.save(update_fields=['status', 'ended_at'])
+
+# Always create the rejected event regardless of status
+already_rejected = CallAgentEvent.objects.filter(...).exists()
+if not already_rejected:
+    CallAgentEvent.objects.create(...)
+```
