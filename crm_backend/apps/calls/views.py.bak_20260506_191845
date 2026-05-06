@@ -485,9 +485,6 @@ class MarkCallAnsweredView(APIView):
             call = Call.objects.select_related('lead').get(pk=call_id)
         except Call.DoesNotExist:
             return Response({'error': 'Call not found'}, status=404)
-        # Update call status only if still ringing — AMI may have already set
-        # it to busy/no_answer due to a race condition, but we still want to
-        # record that the agent answered (same fix pattern as Issue 15).
         if call.status in ('ringing', 'incoming'):
             call.status     = 'answered'
             call.agent      = request.user
@@ -499,46 +496,34 @@ class MarkCallAnsweredView(APIView):
                 call.lead.assigned_to = request.user
                 call.lead.save(update_fields=['assigned_to'])
 
-        # Always log the answered event (deduplicated) regardless of status.
-        from .models import CallAgentEvent
-        from apps.leads.models import LeadEvent
-        offered_evt = CallAgentEvent.objects.filter(
-            call=call, agent=request.user, event_type='offered'
-        ).order_by('-created_at').first()
-        ring_dur = 0
-        if offered_evt:
-            ring_dur = int((tz.now() - offered_evt.created_at).total_seconds())
-        already_answered = CallAgentEvent.objects.filter(
-            call=call, agent=request.user, event_type='answered'
-        ).exists()
-        if not already_answered:
-            CallAgentEvent.objects.create(
-                call=call,
-                agent=request.user,
-                event_type='answered',
-                ring_duration=ring_dur,
-                note=f'Answered via popup after {ring_dur}s ring',
-            )
-            if call.lead_id:
-                LeadEvent.objects.create(
-                    lead=call.lead,
-                    event_type='call_answered',
-                    actor=request.user,
-                    new_value=request.user.get_full_name(),
-                    note=f'Answered by {request.user.get_full_name()} after {ring_dur}s',
+            from .models import CallAgentEvent
+            from apps.leads.models import LeadEvent
+            offered_evt = CallAgentEvent.objects.filter(
+                call=call, agent=request.user, event_type='offered'
+            ).order_by('-created_at').first()
+            ring_dur = 0
+            if offered_evt:
+                ring_dur = int((tz.now() - offered_evt.created_at).total_seconds())
+            already_answered = CallAgentEvent.objects.filter(
+                call=call, agent=request.user, event_type='answered'
+            ).exists()
+            if not already_answered:
+                CallAgentEvent.objects.create(
+                    call=call,
+                    agent=request.user,
+                    event_type='answered',
+                    ring_duration=ring_dur,
+                    note=f'Answered via popup after {ring_dur}s ring',
                 )
-
-            # If AMI wrote a stale 'timeout' event for this agent before the
-            # click landed, remove it — the agent's answer is the source of truth.
-            CallAgentEvent.objects.filter(
-                call=call, agent=request.user, event_type='timeout'
-            ).delete()
-
-        return Response({
-            'call_id':       str(call.id),
-            'status':        call.status,
-            'event_logged':  not already_answered,
-        })
+                if call.lead_id:
+                    LeadEvent.objects.create(
+                        lead=call.lead,
+                        event_type='call_answered',
+                        actor=request.user,
+                        new_value=request.user.get_full_name(),
+                        note=f'Answered by {request.user.get_full_name()} after {ring_dur}s',
+                    )
+        return Response({'call_id': str(call.id), 'status': call.status})
 
 
 class RejectCallView(APIView):

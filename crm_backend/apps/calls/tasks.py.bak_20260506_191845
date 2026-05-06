@@ -459,12 +459,11 @@ def process_ami_event(self, event: dict):
             context    = event.get('Context', '')
             exten      = event.get('Exten', '')
 
-            from django.conf import settings as _dj_settings
-            INBOUND_CONTEXTS = set(getattr(_dj_settings, 'ASTERISK_INBOUND_CONTEXTS', [
+            INBOUND_CONTEXTS = {
                 'from-trunk', 'from-pstn', 'from-did',
                 'from-sip-external', 'ext-did', 'from-external',
                 'from-did-direct', 'from-pstn-toheader',
-            ]))
+            }
             if context not in INBOUND_CONTEXTS:
                 logger.debug(f'[AMI] Newchannel skipped — context={context}')
                 return

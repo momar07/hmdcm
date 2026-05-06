@@ -206,15 +206,3 @@ CELERY_BEAT_SCHEDULE["expire-overdue-quotations"] = {
 # Timezone
 TIME_ZONE = 'Africa/Cairo'
 USE_TZ    = False
-
-
-# ── Asterisk Configuration ──────────────────────────────────────
-# Contexts considered as inbound (calls coming from outside).
-# Override via env: ASTERISK_INBOUND_CONTEXTS=from-trunk,from-pstn-extra
-import os as _os
-ASTERISK_INBOUND_CONTEXTS = [
-    c.strip() for c in _os.environ.get(
-        'ASTERISK_INBOUND_CONTEXTS',
-        'from-trunk,from-pstn,from-did,from-sip-external,ext-did,from-external,from-did-direct,from-pstn-toheader'
-    ).split(',') if c.strip()
-]
