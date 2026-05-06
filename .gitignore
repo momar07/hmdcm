@@ -55,3 +55,4 @@ Thumbs.db
 init-repo.sh
 fix_init.py
 fix_all_migrations.py
+*.bak_*
