@@ -42,7 +42,7 @@ class LeadListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Lead
         fields = [
-            'id', 'title', 'phone', 'first_name', 'last_name', 'company',
+            'id', 'full_name', 'phone', 'company',
             'status',   'status_name',
             'priority', 'priority_name',
             'stage',    'stage_name', 'stage_color', 'stage_slug',
@@ -77,7 +77,7 @@ class LeadDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model  = Lead
         fields = [
-            'id', 'title', 'phone', 'first_name', 'last_name', 'email',
+            'id', 'full_name', 'phone', 'email',
             'gender', 'date_of_birth', 'company', 'address', 'city', 'country',
             'status_id', 'priority_id', 'stage_id', 'tag_ids', 'call_uniqueid',
             'status_detail',   'status_name',

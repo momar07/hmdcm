@@ -180,7 +180,7 @@ class ScreenPopView(APIView):
         for lead in leads:
             lead_data = {
                 'id':           str(lead.id),
-                'title':        lead.title,
+                'title':        lead.get_display_name(),
                 'phone':        lead.phone,
                 'first_name':   lead.first_name,
                 'last_name':    lead.last_name,

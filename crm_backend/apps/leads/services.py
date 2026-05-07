@@ -19,9 +19,9 @@ def _notify_agent(agent, lead, message: str):
         payload = {
             'type':    'lead_assigned',
             'lead_id': str(lead.id),
-            'title':   lead.title,
+            'title':   lead.get_display_name(),
             'message': message,
-            'lead_name': lead.get_full_name() or lead.title,
+            'lead_name': lead.get_display_name(),
         }
 
         def _run():
@@ -73,7 +73,7 @@ def _sync_followup(lead, actor=None):
             Followup.objects.create(
                 lead          = lead,
                 assigned_to   = assigned,
-                title         = f'Follow-up: {lead.title}',
+                title         = f'Follow-up: {lead.get_display_name()}',
                 followup_type = 'call',
                 scheduled_at  = lead.followup_date,
                 status        = 'pending',
@@ -82,16 +82,16 @@ def _sync_followup(lead, actor=None):
 
 
 # ── public services ────────────────────────────────────────────────────
-def create_lead(title, status_id=None, priority_id=None,
+def create_lead(full_name='', status_id=None, priority_id=None,
                 source='manual', assigned_to=None, actor=None, **kwargs) -> Lead:
     lead = Lead.objects.create(
-        title=title,
+        full_name=full_name,
         status_id=status_id, priority_id=priority_id,
         source=source, assigned_to=assigned_to, **kwargs
     )
 
     _log_event(lead, 'created', actor=actor or assigned_to,
-               new_value=title)
+               new_value=lead.get_display_name())
 
     if lead.followup_date:
         _sync_followup(lead, actor=actor or assigned_to)
@@ -99,7 +99,7 @@ def create_lead(title, status_id=None, priority_id=None,
     if assigned_to:
         _notify_agent(
             assigned_to, lead,
-            f'New lead assigned to you: {title}'
+            f'New lead assigned to you: {lead.get_display_name()}'
         )
     return lead
 
@@ -119,7 +119,7 @@ def assign_lead(lead_id, agent_id, actor=None):
     if lead.assigned_to:
         _notify_agent(
             lead.assigned_to, lead,
-            f'Lead assigned to you: {lead.title}'
+            f'Lead assigned to you: {lead.get_display_name()}'
         )
 
 

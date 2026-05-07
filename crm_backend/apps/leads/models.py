@@ -98,12 +98,11 @@ class Lead(BaseModel):
     GENDER_CHOICES = [('M', 'Male'), ('F', 'Female'), ('O', 'Other')]
 
     # ── Core identity ─────────────────────────────────────
-    title        = models.CharField(max_length=255)
+    full_name    = models.CharField(max_length=255, blank=True, db_index=True,
+                                    help_text='Lead display name')
     phone        = models.CharField(max_length=30, db_index=True, blank=True,
                                     help_text='Primary phone — used for incoming call lookup')
     email        = models.EmailField(blank=True, db_index=True)
-    first_name   = models.CharField(max_length=150, blank=True, db_index=True)
-    last_name    = models.CharField(max_length=150, blank=True, db_index=True)
     gender       = models.CharField(max_length=1, choices=GENDER_CHOICES, blank=True)
     date_of_birth= models.DateField(null=True, blank=True)
     company      = models.CharField(max_length=200, blank=True)
@@ -154,20 +153,20 @@ class Lead(BaseModel):
             models.Index(fields=['stage',       'assigned_to'], name='leads_status__64a296_idx'),
             models.Index(fields=['followup_date'],               name='leads_followu_b0a7a5_idx'),
             models.Index(fields=['phone'],                       name='leads_phone_idx'),
-            models.Index(fields=['first_name', 'last_name'],     name='leads_name_idx'),
         ]
 
     def __str__(self):
-        name = self.get_full_name() or self.title
-        return f'{name} ({self.phone or "no phone"})'
+        return f'{self.get_display_name()} ({self.phone or "no phone"})'
 
-    def get_full_name(self):
-        if self.first_name or self.last_name:
-            return f'{self.first_name} {self.last_name}'.strip()
-        # Fallback: parse title "Lead from call — Name"
-        if '—' in self.title:
-            return self.title.split('—', 1)[1].strip()
-        return self.title
+    def get_display_name(self):
+        """Return the best available display name."""
+        if self.full_name and self.full_name.strip():
+            return self.full_name.strip()
+        if self.company and self.company.strip():
+            return self.company.strip()
+        if self.phone:
+            return f'Lead {self.phone}'
+        return f'Lead {str(self.id)[:8]}'
 
     @property
     def primary_phone(self):
