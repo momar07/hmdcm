@@ -116,18 +116,31 @@ export function NewTicketModal({ open, onClose, onCreated, defaultLeadId, defaul
 
   // Re-build form every time modal opens
   useEffect(() => {
-    if (open) {
-      setForm(buildForm());
-      setError(null);
-      // Reset lead search unless defaultLeadId is set
-      if (!defaultLeadId) {
-        setSelectedLead(null);
-        setLeadSearch("");
-        setLeadResults([]);
-      }
+    if (!open) return;
+    setForm(buildForm());
+    setError(null);
+
+    if (defaultLeadId) {
+      // Fetch & display the pre-linked lead (so the user SEES it's linked)
+      (async () => {
+        try {
+          const res = await api.get(`/leads/${defaultLeadId}/`);
+          const l = (res.data as any) ?? null;
+          if (l) {
+            setSelectedLead(l);
+            setLeadSearch(l.title ?? `${l.first_name || ''} ${l.last_name || ''}`.trim());
+          }
+        } catch {
+          // leave empty – the form.lead is still set, ticket will link correctly
+        }
+      })();
+    } else {
+      setSelectedLead(null);
+      setLeadSearch("");
+      setLeadResults([]);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, defaultLeadId]);
 
   if (!open) return null;
 

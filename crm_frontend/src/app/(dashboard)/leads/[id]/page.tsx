@@ -212,7 +212,16 @@ export default function LeadDetailPage() {
   const timelineItems = useMemo<TimelineItem[]>(() => {
     const items: TimelineItem[] = [];
 
+    // Filter out noisy / duplicate events:
+    //   call_*  → already shown as their own call row
+    //   unknown → skip (avoids raw "popup_shown" labels etc.)
+    const HIDDEN_EVENT_TYPES = new Set([
+      'call_offered', 'call_answered', 'call_rejected', 'call_no_answer',
+    ]);
+    const KNOWN_EVENT_TYPES = new Set(Object.keys(EVENT_LABELS));
     (events as LeadEvent[]).forEach(e => {
+      if (HIDDEN_EVENT_TYPES.has(e.event_type)) return;
+      if (!KNOWN_EVENT_TYPES.has(e.event_type)) return;
       items.push({ id: `ev-${e.id}`, type: 'event', timestamp: e.created_at, data: e });
     });
     ((callsData?.results as any[]) ?? []).forEach(c => {
@@ -595,7 +604,7 @@ export default function LeadDetailPage() {
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">Quotations ({quotationCount})</h3>
                 <Button variant="primary" size="xs" icon={<Plus size={12}/>}
-                  onClick={() => router.push(`/sales/new?lead=${id}`)}>New</Button>
+                  onClick={() => router.push(`/sales/quotations/new?lead=${id}`)}>New</Button>
               </div>
               {quotationsLoading && <div className="flex justify-center py-10"><Spinner/></div>}
               {!quotationsLoading && !(quotationsData as any)?.results?.length && (
@@ -605,7 +614,7 @@ export default function LeadDetailPage() {
                 {((quotationsData as any)?.results as any[])?.map((q) => (
                   <div key={q.id}
                     className="px-5 py-4 flex items-start justify-between hover:bg-gray-50 cursor-pointer"
-                    onClick={() => router.push(`/sales/${q.id}`)}>
+                    onClick={() => router.push(`/sales/quotations/${q.id}`)}>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="text-xs text-gray-400 font-mono">{q.ref_number}</span>
