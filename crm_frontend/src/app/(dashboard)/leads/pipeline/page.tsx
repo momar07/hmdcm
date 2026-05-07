@@ -12,6 +12,7 @@ import { leadsApi }     from '@/lib/api/leads';
 import { PageHeader }   from '@/components/ui/PageHeader';
 import { Button }       from '@/components/ui/Button';
 import type { Lead, LeadStage } from '@/types';
+import { getLeadDisplayName } from '@/lib/leads';
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -56,16 +57,16 @@ function LeadCard({
       {/* Title */}
       <p className="text-sm font-semibold text-gray-900 leading-snug mb-2.5
                     line-clamp-2 group-hover:text-blue-700 transition-colors">
-        {lead.title}
+        {getLeadDisplayName(lead)}
       </p>
 
       {/* Contact */}
-      {(lead.first_name || lead.last_name || lead.phone) && (
+      {(lead.full_name || lead.phone) && (
         <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1.5">
           <User size={11} className="text-gray-400 shrink-0" />
           <span className="truncate">
-            {lead.first_name || lead.last_name
-              ? `${lead.first_name} ${lead.last_name}`.trim()
+            {lead.full_name
+              ? `${''} ${''}`.trim()
               : lead.phone}
           </span>
         </div>

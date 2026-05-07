@@ -22,8 +22,7 @@ class CallViewSet(viewsets.ModelViewSet):
     filter_backends    = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields   = ['direction', 'status', 'agent', 'queue', 'lead']
     search_fields      = ['caller', 'callee', 'uniqueid',
-                          'lead__first_name', 'lead__last_name', 'lead__phone',
-                          'lead__title',
+                          'lead__full_name', 'lead__phone',
                           'agent__first_name', 'agent__last_name',
                           'queue']
     ordering_fields    = ['started_at', 'created_at', 'duration']
@@ -181,9 +180,9 @@ class ScreenPopView(APIView):
             lead_data = {
                 'id':           str(lead.id),
                 'title':        lead.get_display_name(),
+                'name':         lead.get_display_name(),
+                'full_name':    lead.full_name,
                 'phone':        lead.phone,
-                'first_name':   lead.first_name,
-                'last_name':    lead.last_name,
                 'company':      lead.company,
                 'email':        lead.email,
                 'stage_name':   lead.stage.name  if lead.stage  else None,
@@ -261,7 +260,7 @@ class PendingCompletionsView(APIView):
             'caller':        c.caller,
             'direction':     c.direction,
             'lead':          str(c.lead_id) if c.lead_id else None,
-            'lead_name':     c.lead.get_full_name() if c.lead else None,
+            'lead_name':     c.lead.get_display_name() if c.lead else None,
             'started_at':    c.started_at,
             'duration':      c.duration,
         } for c in calls])

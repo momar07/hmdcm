@@ -90,7 +90,7 @@ export function NewTicketModal({ open, onClose, onCreated, defaultLeadId, defaul
   const handleSelectLead = (l: any) => {
     setSelectedLead(l);
     const phone = l.phone ?? "";
-    setLeadSearch(l.title ?? `${l.first_name || ''} ${l.last_name || ''}`.trim());
+    setLeadSearch(l.full_name ?? `${l.full_name || ''} ${l.full_name || ''}`.trim());
     setShowDropdown(false);
     setForm(prev => ({ ...prev, lead: l.id, phone_number: phone || prev.phone_number }));
   };
@@ -128,7 +128,7 @@ export function NewTicketModal({ open, onClose, onCreated, defaultLeadId, defaul
           const l = (res.data as any) ?? null;
           if (l) {
             setSelectedLead(l);
-            setLeadSearch(l.title ?? `${l.first_name || ''} ${l.last_name || ''}`.trim());
+            setLeadSearch(l.full_name ?? `${l.full_name || ''} ${l.full_name || ''}`.trim());
           }
         } catch {
           // leave empty – the form.lead is still set, ticket will link correctly
@@ -309,7 +309,7 @@ export function NewTicketModal({ open, onClose, onCreated, defaultLeadId, defaul
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">
-                          {l.title}
+                          {l.full_name}
                         </p>
                         <p className="text-xs text-gray-400 truncate">
                           {l.phone ?? l.email ?? ""}
@@ -325,7 +325,7 @@ export function NewTicketModal({ open, onClose, onCreated, defaultLeadId, defaul
                 <div className="mt-1.5 flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 border border-blue-200 rounded-lg">
                   <User className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                   <span className="text-xs font-medium text-blue-800 truncate">
-                    {selectedLead.title}
+                    {selectedLead.full_name}
                   </span>
                   {selectedLead.phone && (
                     <span className="text-xs text-blue-500">· {selectedLead.phone}</span>

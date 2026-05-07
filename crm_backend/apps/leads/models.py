@@ -168,6 +168,10 @@ class Lead(BaseModel):
             return f'Lead {self.phone}'
         return f'Lead {str(self.id)[:8]}'
 
+    def get_full_name(self):
+        """Backwards-compatibility alias for code that still calls get_full_name()."""
+        return self.get_display_name()
+
     @property
     def primary_phone(self):
         """Compatibility property — returns the lead's phone field."""

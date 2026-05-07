@@ -22,6 +22,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { NewTicketModal } from '@/components/tickets/NewTicketModal';
 import { PriorityBadge, StatusBadge as TicketStatusBadge } from '@/components/tickets/TicketBadge';
 import type { LeadEvent } from '@/types';
+import { getLeadDisplayName } from '@/lib/leads';
 
 // ── Helpers ───────────────────────────────────────────────────
 const EVENT_LABELS: Record<string, { label: string; color: string; icon: string }> = {
@@ -301,7 +302,7 @@ export default function LeadDetailPage() {
     <div className="text-center py-20 text-gray-400">Lead not found.</div>
   );
 
-  const fullName = [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.title;
+  const fullName = getLeadDisplayName(lead);
   const ticketCount    = ticketsData?.count    ?? 0;
   const callCount      = callsData?.count      ?? 0;
   const followupCount  = followupsData?.count  ?? 0;
@@ -522,7 +523,7 @@ export default function LeadDetailPage() {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">Tickets ({ticketCount})</h3>
-                <Button variant="primary" size="xs" icon={<Plus size={12}/>}
+                <Button variant="primary" size="sm" icon={<Plus size={12}/>}
                   onClick={() => setTicketModal(true)}>New</Button>
               </div>
               {ticketsLoading && <div className="flex justify-center py-10"><Spinner/></div>}
@@ -603,7 +604,7 @@ export default function LeadDetailPage() {
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700">Quotations ({quotationCount})</h3>
-                <Button variant="primary" size="xs" icon={<Plus size={12}/>}
+                <Button variant="primary" size="sm" icon={<Plus size={12}/>}
                   onClick={() => router.push(`/sales/quotations/new?lead=${id}`)}>New</Button>
               </div>
               {quotationsLoading && <div className="flex justify-center py-10"><Spinner/></div>}

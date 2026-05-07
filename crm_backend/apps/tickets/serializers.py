@@ -180,7 +180,7 @@ class TicketCreateSerializer(serializers.ModelSerializer):
         # Snapshot lead info
         lead = validated_data.get("lead")
         if lead:
-            validated_data["customer_name"]  = lead.get_full_name() or lead.title
+            validated_data["customer_name"]  = lead.get_display_name()
             validated_data["customer_email"] = lead.email or ""
             if not validated_data.get("phone_number") and lead.phone:
                 validated_data["phone_number"] = lead.phone

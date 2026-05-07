@@ -27,7 +27,7 @@ class FollowupListSerializer(serializers.ModelSerializer):
         return f"{u.first_name} {u.last_name}".strip() if u else None
 
     def get_lead_title(self, obj):
-        return obj.lead.title if obj.lead else None
+        return obj.lead.get_display_name() if obj.lead else None
 
     def _get_lead(self, obj):
         if obj.lead:
@@ -39,7 +39,7 @@ class FollowupListSerializer(serializers.ModelSerializer):
     def get_lead_name(self, obj):
         lead = self._get_lead(obj)
         if not lead: return None
-        return lead.get_full_name() or lead.title or None
+        return lead.get_display_name()
 
     def get_lead_phone(self, obj):
         lead = self._get_lead(obj)
@@ -71,7 +71,7 @@ class FollowupDetailSerializer(serializers.ModelSerializer):
         return f"{u.first_name} {u.last_name}".strip() if u else None
 
     def get_lead_title(self, obj):
-        return obj.lead.title if obj.lead else None
+        return obj.lead.get_display_name() if obj.lead else None
 
     def create(self, validated_data):
         lead_id = validated_data.pop('lead_id', None)

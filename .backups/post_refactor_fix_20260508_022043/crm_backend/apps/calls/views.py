@@ -1,0 +1,709 @@
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
+from django.core.exceptions import ValidationError
+from django.db.models import Count, Avg
+
+from .models import Call, Disposition, CallAgentEvent
+from .serializers import (CallListSerializer, CallDetailSerializer,
+                           OriginateCallSerializer, DispositionSerializer,
+                           CallDispositionSerializer, CallAgentEventSerializer)
+from .selectors import get_all_calls
+from .services import complete_call, get_pending_completions
+from apps.common.permissions import IsAgent
+from apps.leads.models import LeadStage
+
+
+class CallViewSet(viewsets.ModelViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends    = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields   = ['direction', 'status', 'agent', 'queue', 'lead']
+    search_fields      = ['caller', 'callee', 'uniqueid',
+                          'lead__first_name', 'lead__last_name', 'lead__phone',
+                          'lead__title',
+                          'agent__first_name', 'agent__last_name',
+                          'queue']
+    ordering_fields    = ['started_at', 'created_at', 'duration']
+    http_method_names  = ['get', 'post', 'patch', 'head', 'options']
+
+    def get_queryset(self):
+        qs = get_all_calls(user=self.request.user)
+        # When filtering by lead, show ALL calls for that lead
+        lead_id = self.request.query_params.get('lead')
+        if lead_id:
+            qs = Call.objects.select_related(
+                'agent', 'lead'
+            ).prefetch_related('events').filter(
+                lead_id=lead_id
+            ).distinct().order_by('-created_at')
+        return qs
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return CallDetailSerializer
+        if self.action == 'originate':
+            return OriginateCallSerializer
+        return CallListSerializer
+
+    @action(detail=True, methods=['post'], url_path='disposition')
+    def add_disposition(self, request, pk=None):
+        call = self.get_object()
+        serializer = CallDispositionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        disposition = Disposition.objects.get(pk=serializer.validated_data['disposition_id'])
+        from .models import CallDisposition
+        cd = CallDisposition.objects.create(
+            call        = call,
+            disposition = disposition,
+            note        = serializer.validated_data.get('note', ''),
+            agent       = request.user,
+        )
+        return Response({'id': str(cd.id), 'message': 'Disposition added.'})
+
+    @action(detail=False, methods=['get'], url_path='dispositions')
+    def dispositions(self, request):
+        qs = Disposition.objects.filter(is_active=True).order_by('order')
+        return Response(DispositionSerializer(qs, many=True).data)
+
+    @action(detail=True, methods=['get'], url_path='agent-events')
+    def agent_events(self, request, pk=None):
+        call = self.get_object()
+        qs = CallAgentEvent.objects.filter(call=call).select_related('agent').order_by('created_at')
+        return Response(CallAgentEventSerializer(qs, many=True).data)
+
+    @action(detail=False, methods=['post'], url_path='originate')
+    def originate(self, request, pk=None):
+        """
+        POST /api/calls/originate/
+        body: { phone_number, customer_id?, lead_id? }
+        Triggers an AMI Originate — agent extension rings first,
+        then Asterisk dials the destination.
+        """
+        from django.conf import settings
+        phone  = request.data.get('phone_number', '').strip()
+        if not phone:
+            return Response({'error': 'phone_number is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Get agent extension
+        try:
+            from apps.users.models import Extension
+            ext_obj = Extension.objects.get(user=request.user, is_active=True)
+            agent_ext = ext_obj.number
+        except Exception:
+            return Response({'error': 'No active extension for this agent'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # AMI Originate
+        try:
+            import socket, time
+            ami_host   = getattr(settings, 'AMI_HOST',   '192.168.2.222')
+            ami_port   = int(getattr(settings, 'AMI_PORT',   5038))
+            ami_user   = getattr(settings, 'AMI_USERNAME', 'admin')
+            ami_secret = getattr(settings, 'AMI_SECRET',   'admin')
+
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(10)
+            s.connect((ami_host, ami_port))
+            s.recv(1024)  # banner
+
+            # Login
+            s.sendall(
+                f'Action: Login\r\nUsername: {ami_user}\r\nSecret: {ami_secret}\r\n\r\n'
+                .encode()
+            )
+            time.sleep(0.3)
+            s.recv(1024)
+
+            # Originate — agent ext rings first, then dials phone
+            action_id = f'crm-{request.user.id}-{int(time.time())}'
+            cmd = (
+                f'Action: Originate\r\n'
+                f'ActionID: {action_id}\r\n'
+                f'Channel: PJSIP/{agent_ext}\r\n'
+                f'Exten: {phone}\r\n'
+                f'Context: from-internal\r\n'
+                f'Priority: 1\r\n'
+                f'CallerID: CRM <{agent_ext}>\r\n'
+                f'Timeout: 30000\r\n'
+                f'Async: true\r\n'
+                f'\r\n'
+            )
+            s.sendall(cmd.encode())
+            time.sleep(0.5)
+            resp = s.recv(2048).decode(errors='ignore')
+            s.close()
+
+            if 'Success' in resp or 'Queued' in resp:
+                return Response({'message': f'Dialing {phone} from ext {agent_ext}', 'action_id': action_id})
+            else:
+                return Response({'error': f'AMI response: {resp[:200]}'}, status=status.HTTP_502_BAD_GATEWAY)
+
+        except Exception as e:
+            return Response({'error': f'AMI connection failed: {str(e)}'}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+# ── Screen Pop View ─────────────────────────────────────────────────────
+
+class ScreenPopView(APIView):
+    """
+    GET /api/calls/screen-pop/?phone=+201001234567
+    Lead-first lookup: searches Lead by phone.
+    Returns: lead info + last 5 call activities.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        phone = request.query_params.get('phone', '').strip()
+        if not phone:
+            return Response(
+                {'detail': 'phone parameter is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        digits = ''.join(c for c in phone if c.isdigit())
+        suffix = digits[-9:] if len(digits) >= 9 else digits
+
+        from apps.common.utils import normalize_phone
+        from apps.leads.models import Lead
+        from .models import Call
+
+        # ── Lead lookup by phone ──────────────────────────
+        leads = Lead.objects.filter(
+            phone__endswith=suffix, is_active=True
+        ).select_related('stage', 'status', 'assigned_to').order_by('-created_at')[:5]
+
+        # ── Build response ──────────────────────────────────
+        leads_data = []
+
+        for lead in leads:
+            lead_data = {
+                'id':           str(lead.id),
+                'title':        lead.get_display_name(),
+                'phone':        lead.phone,
+                'first_name':   lead.first_name,
+                'last_name':    lead.last_name,
+                'company':      lead.company,
+                'email':        lead.email,
+                'stage_name':   lead.stage.name  if lead.stage  else None,
+                'stage_color':  lead.stage.color if lead.stage  else None,
+                'status_name':  lead.status.name if lead.status else None,
+                'assigned_to':  lead.assigned_to.get_full_name() if lead.assigned_to else None,
+                'value':        str(lead.value)  if lead.value  else None,
+                'source':       lead.source,
+            }
+            leads_data.append(lead_data)
+
+        # Last 5 call activities — by lead
+        if leads_data:
+            lead_ids = [l.id for l in leads]
+            calls = Call.objects.filter(
+                lead_id__in=lead_ids
+            ).select_related('agent').order_by('-started_at')[:5]
+        else:
+            calls = Call.objects.none()
+
+        activities_data = [{
+            'type':       'call',
+            'direction':  c.direction,
+            'status':     c.status,
+            'duration':   c.duration,
+            'started_at': c.started_at.isoformat() if c.started_at else None,
+            'agent':      c.agent.get_full_name() if c.agent else None,
+            'queue':      c.queue or '',
+            'is_completed': c.is_completed,
+        } for c in calls]
+
+        found = bool(leads_data)
+
+        return Response({
+            'found':      found,
+            'leads':      leads_data,
+            'activities': activities_data,
+        })
+
+
+# ── Call Completion (Enforcement) Views ──────────────────────────────────
+
+class CallCompleteView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, call_id):
+        try:
+            completion = complete_call(
+                call_id = str(call_id),
+                agent   = request.user,
+                data    = request.data,
+            )
+            return Response({
+                'id':               str(completion.id),
+                'call_id':          str(completion.call_id),
+                'disposition':      completion.disposition.name,
+                'next_action':      completion.next_action,
+                'followup_created': bool(completion.followup_created_id),
+                'message':          'Call completed successfully.',
+            }, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            msg = e.message if hasattr(e, 'message') else str(e)
+            return Response({'detail': msg}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PendingCompletionsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        calls = get_pending_completions(agent=request.user)
+        return Response([{
+            'id':            str(c.id),
+            'caller':        c.caller,
+            'direction':     c.direction,
+            'lead':          str(c.lead_id) if c.lead_id else None,
+            'lead_name':     c.lead.get_full_name() if c.lead else None,
+            'started_at':    c.started_at,
+            'duration':      c.duration,
+        } for c in calls])
+
+
+class DispositionsListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        dispositions = Disposition.objects.filter(is_active=True).order_by('order')
+        return Response([{
+            'id':                  str(d.id),
+            'name':                d.name,
+            'code':                d.code,
+            'color':               d.color,
+            'requires_followup':   d.requires_followup,
+            'default_next_action': d.default_next_action,
+            'direction':           d.direction,
+            'actions':             list(d.actions.order_by('order').values(
+                                       'id', 'action_type', 'config', 'order'
+                                   )),
+        } for d in dispositions])
+
+
+class LeadStagesListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        stages = LeadStage.objects.filter(is_active=True).order_by('order')
+        return Response([{
+            'id':        str(s.id),
+            'name':      s.name,
+            'slug':      s.slug,
+            'color':     s.color,
+            'is_won':    s.is_won,
+            'is_closed': s.is_closed,
+        } for s in stages])
+
+
+# ── WebRTC Call Tracking ──────────────────────────────────────────────────
+
+class StartWebrtcCallView(APIView):
+    """
+    POST /api/calls/start-webrtc-call/
+    Called by the frontend the moment the agent fires a WebRTC/JsSIP outbound call.
+    Creates the Call record immediately so it appears in the timeline and calls page.
+    body: { customer_phone, lead_id?, followup_id? }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        from django.utils import timezone as tz
+
+        phone       = (request.data.get('customer_phone') or '').strip()
+        lead_id     = request.data.get('lead_id')
+
+        if not phone:
+            return Response({'error': 'customer_phone is required'}, status=400)
+
+        # Resolve agent extension
+        caller = ''
+        try:
+            from apps.users.models import Extension
+            ext = Extension.objects.get(user=request.user, is_active=True)
+            caller = ext.number
+        except Exception:
+            caller = str(request.user.id)[:8]
+
+        # Resolve lead
+        lead = None
+        if lead_id:
+            try:
+                from apps.leads.models import Lead
+                lead = Lead.objects.get(pk=lead_id)
+            except Exception:
+                pass
+
+        from .models import Call
+        import uuid as _uuid
+        call = Call.objects.create(
+            uniqueid   = f'webrtc-{_uuid.uuid4().hex[:12]}',
+            caller     = caller,
+            callee     = phone,
+            direction  = 'outbound',
+            status     = 'ringing',
+            agent      = request.user,
+            lead       = lead,
+            started_at = tz.now(),
+        )
+
+        return Response({
+            'call_id':     str(call.id),
+            'caller':      caller,
+            'callee':      phone,
+            'lead_id':     str(lead.id) if lead else None,
+            'message':     'Call record created.',
+        }, status=201)
+
+
+class EndWebrtcCallView(APIView):
+    """
+    PATCH /api/calls/{call_id}/end-webrtc-call/
+    Called by the frontend when the WebRTC call ends (idle).
+    Updates status and duration.
+    body: { end_cause: 'ended'|'busy'|'no_answer'|'failed'|'cancel', duration? }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, call_id):
+        from django.utils import timezone as tz
+        from .models import Call
+
+        try:
+            call = Call.objects.get(pk=call_id, agent=request.user)
+        except Call.DoesNotExist:
+            return Response({'error': 'Call not found'}, status=404)
+
+        end_cause = (request.data.get('end_cause') or 'ended').lower()
+        duration  = int(request.data.get('duration') or 0)
+
+        # If call was already marked answered by AMI/AgentConnect — keep it
+        if call.status == 'answered':
+            final_status = 'answered'
+        # Map JsSIP end cause → Call status
+        elif 'busy' in end_cause:
+            final_status = 'busy'
+        elif 'no_answer' in end_cause or 'no answer' in end_cause or 'unavailable' in end_cause:
+            final_status = 'no_answer'
+        elif 'cancel' in end_cause or 'reject' in end_cause or 'forbidden' in end_cause:
+            final_status = 'no_answer'
+        elif 'failed' in end_cause or 'error' in end_cause:
+            final_status = 'failed'
+        else:
+            # 'ended' or 'Normal Clearing' = the call was actually answered
+            final_status = 'answered'
+
+        # Calculate duration from started_at if not provided
+        if duration == 0 and call.started_at and final_status == 'answered':
+            delta    = (tz.now() - call.started_at).total_seconds()
+            duration = max(0, int(delta))
+
+        call.status   = final_status
+        call.ended_at = tz.now()
+        call.duration = duration
+        call.save(update_fields=['status', 'ended_at', 'duration'])
+
+        return Response({
+            'call_id': str(call.id),
+            'status':  final_status,
+            'duration': duration,
+            'message': 'Call record updated.',
+        })
+
+
+# ── Disposition CRUD (Settings) ──────────────────────────────────────────────
+
+class DispositionViewSet(viewsets.ModelViewSet):
+    """
+    CRUD للـ Dispositions — مع filter على الـ direction.
+    GET /api/calls/dispositions-crud/?direction=inbound
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends    = [DjangoFilterBackend]
+    filterset_fields   = ['direction', 'is_active']
+
+    def get_queryset(self):
+        return Disposition.objects.prefetch_related('actions').order_by('order', 'name')
+
+    def get_serializer_class(self):
+        from .serializers import DispositionFullSerializer
+        return DispositionFullSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        """Soft delete — لو في completions مرتبطة، اعمله inactive بدل ما تمسحه"""
+        instance = self.get_object()
+        try:
+            instance.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except Exception:
+            # في completions مرتبطة — soft delete
+            instance.is_active = False
+            instance.save(update_fields=['is_active'])
+            return Response(
+                {'detail': 'Disposition deactivated (has linked call records).'},
+                status=status.HTTP_200_OK
+            )
+
+
+class DispositionActionViewSet(viewsets.ModelViewSet):
+    """
+    CRUD للـ actions الخاصة بكل disposition.
+    POST /api/calls/disposition-actions/  body: { disposition, action_type, config, order }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        from .models import DispositionAction
+        qs = DispositionAction.objects.select_related('disposition')
+        disp_id = self.request.query_params.get('disposition')
+        if disp_id:
+            qs = qs.filter(disposition_id=disp_id)
+        return qs.order_by('order')
+
+    def get_serializer_class(self):
+        from .serializers import DispositionActionSerializer
+        return DispositionActionSerializer
+
+    def perform_create(self, serializer):
+        from .models import DispositionAction
+        serializer.save()
+
+
+class MarkCallAnsweredView(APIView):
+    """PATCH /api/calls/{call_id}/mark-answered/ — marks inbound SIP call as answered"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, call_id):
+        from django.utils import timezone as tz
+        from .models import Call
+        try:
+            call = Call.objects.select_related('lead').get(pk=call_id)
+        except Call.DoesNotExist:
+            return Response({'error': 'Call not found'}, status=404)
+        # Update call status only if still ringing — AMI may have already set
+        # it to busy/no_answer due to a race condition, but we still want to
+        # record that the agent answered (same fix pattern as Issue 15).
+        if call.status in ('ringing', 'incoming'):
+            call.status     = 'answered'
+            call.agent      = request.user
+            call.started_at = tz.now()
+            call.save(update_fields=['status', 'agent', 'started_at'])
+
+            # Auto-assign lead to answering agent so they can view it immediately
+            if call.lead_id and not call.lead.assigned_to_id:
+                call.lead.assigned_to = request.user
+                call.lead.save(update_fields=['assigned_to'])
+
+        # Always log the answered event (deduplicated) regardless of status.
+        from .models import CallAgentEvent
+        from apps.leads.models import LeadEvent
+        offered_evt = CallAgentEvent.objects.filter(
+            call=call, agent=request.user, event_type='offered'
+        ).order_by('-created_at').first()
+        ring_dur = 0
+        if offered_evt:
+            ring_dur = int((tz.now() - offered_evt.created_at).total_seconds())
+        already_answered = CallAgentEvent.objects.filter(
+            call=call, agent=request.user, event_type='answered'
+        ).exists()
+        if not already_answered:
+            CallAgentEvent.objects.create(
+                call=call,
+                agent=request.user,
+                event_type='answered',
+                ring_duration=ring_dur,
+                note=f'Answered via popup after {ring_dur}s ring',
+            )
+            if call.lead_id:
+                LeadEvent.objects.create(
+                    lead=call.lead,
+                    event_type='call_answered',
+                    actor=request.user,
+                    new_value=request.user.get_full_name(),
+                    note=f'Answered by {request.user.get_full_name()} after {ring_dur}s',
+                )
+
+            # If AMI wrote a stale 'timeout' event for this agent before the
+            # click landed, remove it — the agent's answer is the source of truth.
+            CallAgentEvent.objects.filter(
+                call=call, agent=request.user, event_type='timeout'
+            ).delete()
+
+        return Response({
+            'call_id':       str(call.id),
+            'status':        call.status,
+            'event_logged':  not already_answered,
+        })
+
+
+class RejectCallView(APIView):
+    """PATCH /api/calls/{call_id}/reject/ — marks inbound call as no_answer when agent rejects"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, call_id):
+        from django.utils import timezone as tz
+        from .models import Call
+        from apps.leads.models import LeadEvent
+        try:
+            call = Call.objects.get(pk=call_id)
+        except Call.DoesNotExist:
+            return Response({'error': 'Call not found'}, status=404)
+
+        # Update call status only if still ringing — AMI timeout may have
+        # already set it to no_answer/busy, but we still want to log the event.
+        if call.status in ('ringing', 'incoming'):
+            call.status   = 'no_answer'
+            call.ended_at = tz.now()
+            call.save(update_fields=['status', 'ended_at'])
+
+        # Always create the rejected event (deduplicated) regardless of status.
+        from .models import CallAgentEvent
+        already_rejected = CallAgentEvent.objects.filter(
+            call=call,
+            agent=request.user,
+            event_type='rejected',
+        ).exists()
+        if not already_rejected:
+            CallAgentEvent.objects.create(
+                call=call,
+                agent=request.user,
+                event_type='rejected',
+                note=f'Agent {request.user.get_full_name()} rejected call',
+            )
+            if call.lead_id:
+                LeadEvent.objects.create(
+                    lead=call.lead,
+                    event_type='call_rejected',
+                    actor=request.user,
+                    new_value=request.user.get_full_name(),
+                    note=f'Call rejected by {request.user.get_full_name()}',
+                )
+        return Response({'call_id': str(call.id), 'status': call.status})
+
+
+class DismissCallView(APIView):
+    """PATCH /api/calls/{call_id}/dismiss/ — agent closed popup without action (X button)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, call_id):
+        from django.utils import timezone as tz
+        from .models import Call, CallAgentEvent
+        from apps.leads.models import LeadEvent
+        try:
+            call = Call.objects.get(pk=call_id)
+        except Call.DoesNotExist:
+            return Response({'error': 'Call not found'}, status=404)
+        already = CallAgentEvent.objects.filter(
+            call=call, agent=request.user, event_type='dismissed'
+        ).exists()
+        if not already:
+            offered_evt = CallAgentEvent.objects.filter(
+                call=call, agent=request.user, event_type='offered'
+            ).order_by('-created_at').first()
+            ring_dur = 0
+            if offered_evt:
+                ring_dur = int((tz.now() - offered_evt.created_at).total_seconds())
+            CallAgentEvent.objects.create(
+                call=call,
+                agent=request.user,
+                event_type='dismissed',
+                ring_duration=ring_dur,
+                note=f'Popup dismissed (X button) after {ring_dur}s',
+            )
+            if call.lead_id:
+                LeadEvent.objects.create(
+                    lead=call.lead,
+                    event_type='call_rejected',
+                    actor=request.user,
+                    new_value=request.user.get_full_name(),
+                    note=f'Popup dismissed by {request.user.get_full_name()} after {ring_dur}s',
+                )
+        return Response({'call_id': str(call.id), 'event': 'dismissed'})
+
+
+class AgentCallStatsView(APIView):
+    """GET /api/calls/agent-stats/ — per-agent call statistics"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        from .models import CallAgentEvent
+
+        days = int(request.query_params.get('days', 7))
+        since = tz.now() - timedelta(days=days)
+
+        agent_id = request.query_params.get('agent_id')
+        qs = CallAgentEvent.objects.filter(created_at__gte=since)
+        if agent_id:
+            qs = qs.filter(agent_id=agent_id)
+
+        stats = qs.values('agent_id', 'event_type').annotate(
+            count=Count('id'),
+            avg_ring=Avg('ring_duration'),
+        ).order_by('agent_id', 'event_type')
+
+        from .serializers import CallAgentEventSerializer
+        return Response({
+            'period_days': days,
+            'stats': list(stats),
+        })
+
+
+class PopupShownView(APIView):
+    """POST /api/calls/{call_id}/popup-shown/ — frontend reports popup rendered."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, call_id):
+        from .models import Call, CallAgentEvent
+        try:
+            call = Call.objects.get(pk=call_id)
+        except Call.DoesNotExist:
+            return Response({'error': 'Call not found'}, status=404)
+        already = CallAgentEvent.objects.filter(
+            call=call, agent=request.user, event_type='popup_shown'
+        ).exists()
+        if not already:
+            CallAgentEvent.objects.create(
+                call=call, agent=request.user, event_type='popup_shown',
+                note='Incoming-call popup rendered',
+            )
+        return Response({'call_id': str(call.id), 'event': 'popup_shown'})
+
+
+class AgentActivityView(APIView):
+    """GET /api/calls/agent-activity/ — full timeline of agent events.
+
+    Query params: agent_id, days (default 7), event_type, call_id.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.utils import timezone as tz
+        from datetime import timedelta
+        from .models import CallAgentEvent
+        from .serializers import CallAgentEventSerializer
+
+        days = int(request.query_params.get('days', 7))
+        since = tz.now() - timedelta(days=days)
+        qs = CallAgentEvent.objects.filter(
+            created_at__gte=since
+        ).select_related('agent', 'call', 'call__lead').order_by('-created_at')
+
+        agent_id = request.query_params.get('agent_id')
+        if agent_id:
+            qs = qs.filter(agent_id=agent_id)
+        event_type = request.query_params.get('event_type')
+        if event_type:
+            qs = qs.filter(event_type=event_type)
+        call_id = request.query_params.get('call_id')
+        if call_id:
+            qs = qs.filter(call_id=call_id)
+
+        qs = qs[:500]
+        return Response(CallAgentEventSerializer(qs, many=True).data)

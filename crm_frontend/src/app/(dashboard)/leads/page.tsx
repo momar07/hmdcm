@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { StatCard } from '@/components/ui/StatCard';
 import { Spinner } from '@/components/ui/Spinner';
 import type { Lead } from '@/types';
+import { getLeadDisplayName } from '@/lib/leads';
 
 const SOURCE_LABELS: Record<string, string> = {
   call: 'Inbound Call', web: 'Website', referral: 'Referral',
@@ -63,7 +64,7 @@ function isStale(dateStr: string | null, days = 7): boolean {
   return diff > days * 24 * 60 * 60 * 1000;
 }
 
-type SortKey = 'created_at' | 'updated_at' | 'value' | 'title' | null;
+type SortKey = 'created_at' | 'updated_at' | 'value' | 'full_name' | null;
 type SortDir = 'asc' | 'desc';
 type ViewMode = 'table' | 'cards';
 
@@ -189,9 +190,9 @@ export default function LeadsPage() {
 
   const exportCsv = () => {
     if (!leads.length) return;
-    const headers = ['Title', 'Phone', 'Email', 'Company', 'Status', 'Stage', 'Source', 'Assigned', 'Value', 'Created'];
+    const headers = ['Name', 'Phone', 'Email', 'Company', 'Status', 'Stage', 'Source', 'Assigned', 'Value', 'Created'];
     const rows = leads.map(l => [
-      l.title, l.phone || '', l.email || '', l.company || '',
+      getLeadDisplayName(l), l.phone || '', l.email || '', l.company || '',
       l.status_name || '', l.stage_name || '', l.source || '',
       l.assigned_name || '', l.value || '', l.created_at || '',
     ]);
@@ -224,10 +225,10 @@ export default function LeadsPage() {
           className="mt-1 rounded border-gray-300 text-blue-600 shrink-0"/>
         <div className={`w-10 h-10 rounded-full flex items-center justify-center
                          font-semibold text-sm shrink-0 ${getAvatarColor(lead.id)}`}>
-          {getInitials(lead.title)}
+          {getInitials(getLeadDisplayName(lead))}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-gray-900 truncate">{lead.title}</p>
+          <p className="font-semibold text-gray-900 truncate">{getLeadDisplayName(lead)}</p>
           <p className="text-xs text-gray-500 font-mono truncate">{lead.phone || '—'}</p>
           {lead.company && <p className="text-xs text-gray-400 truncate">{lead.company}</p>}
         </div>
@@ -427,8 +428,8 @@ export default function LeadsPage() {
             {selected.size} lead{selected.size > 1 ? 's' : ''} selected
           </span>
           <div className="flex gap-2">
-            <Button size="xs" variant="secondary" onClick={exportCsv}>Export selected</Button>
-            <Button size="xs" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
+            <Button size="sm" variant="secondary" onClick={exportCsv}>Export selected</Button>
+            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
           </div>
         </div>
       )}
@@ -479,7 +480,7 @@ export default function LeadsPage() {
                         className="rounded border-gray-300 text-blue-600"/>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                      <SortHeader k="title" label="Lead"/>
+                      <SortHeader k="full_name" label="Lead"/>
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Stage</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
@@ -507,10 +508,10 @@ export default function LeadsPage() {
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center
                                            font-semibold text-xs shrink-0 ${getAvatarColor(lead.id)}`}>
-                            {getInitials(lead.title)}
+                            {getInitials(getLeadDisplayName(lead))}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-900 truncate max-w-xs">{lead.title}</p>
+                            <p className="font-medium text-gray-900 truncate max-w-xs">{getLeadDisplayName(lead)}</p>
                             <p className="text-xs text-gray-400 font-mono">{lead.phone || '—'}</p>
                           </div>
                         </div>

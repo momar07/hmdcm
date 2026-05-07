@@ -74,6 +74,13 @@ export default function QuotationBuilder({ quotation, leadId }: Props) {
     }
   }, [settings]);
 
+  // Sync lead from URL param if it arrives after first render
+  useEffect(() => {
+    if (leadId && !isEdit && !lead) {
+      setLead(leadId);
+    }
+  }, [leadId, isEdit]);
+
   // ── Totals ────────────────────────────────────────────────
   const subtotal   = items.reduce((sum, item) => {
     const price = Number(item.unit_price ?? 0);
@@ -221,8 +228,13 @@ export default function QuotationBuilder({ quotation, leadId }: Props) {
               <select className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={lead} onChange={e => setLead(e.target.value)}>
                 <option value="">No lead linked</option>
+                {lead && !(leads as any[]).find((l: any) => l.id === lead) && (
+                  <option value={lead}>Linked lead (loading…)</option>
+                )}
                 {(leads as any[]).map((l: any) => (
-                  <option key={l.id} value={l.id}>{l.title}</option>
+                  <option key={l.id} value={l.id}>
+                    {l.full_name || l.company || `Lead ${l.phone || l.id.slice(0,8)}`}
+                  </option>
                 ))}
               </select>
             </div>

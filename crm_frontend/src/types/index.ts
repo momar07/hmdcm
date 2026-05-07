@@ -131,11 +131,9 @@ export interface LeadStage {
 
 export interface Lead {
   id:             string;
-  title:          string;
+  full_name:      string;
   phone:          string;
   email:          string;
-  first_name:     string;
-  last_name:      string;
   company:        string;
   address:        string;
   city:           string;

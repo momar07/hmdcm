@@ -151,10 +151,10 @@ class QuotationSerializer(serializers.ModelSerializer):
         return obj.agent.get_full_name() if obj.agent else ""
 
     def get_lead_name(self, obj):
-        return obj.lead.get_full_name() if obj.lead else ""
+        return obj.lead.get_display_name() if obj.lead else ""
 
     def get_lead_title(self, obj):
-        return obj.lead.title if obj.lead else ""
+        return obj.lead.get_display_name() if obj.lead else ""
 
     def get_is_expired(self, obj):
         if obj.valid_until and obj.status not in ("accepted", "rejected", "expired"):

@@ -57,8 +57,7 @@ class CallListSerializer(serializers.ModelSerializer):
     def get_lead_name(self, obj):
         if not obj.lead:
             return obj.caller or 'Unknown'
-        full = obj.lead.get_full_name() if hasattr(obj.lead, 'get_full_name') else ''
-        return full or obj.lead.title or obj.caller or 'Unknown'
+        return obj.lead.get_display_name() or obj.caller or 'Unknown'
 
     def get_has_recording(self, obj):
         return hasattr(obj, 'recording') and bool(obj.recording)
@@ -83,8 +82,7 @@ class CallDetailSerializer(serializers.ModelSerializer):
     def get_lead_name(self, obj):
         if not obj.lead:
             return obj.caller or 'Unknown'
-        full = obj.lead.get_full_name() if hasattr(obj.lead, 'get_full_name') else ''
-        return full or obj.lead.title or obj.caller or 'Unknown'
+        return obj.lead.get_display_name() or obj.caller or 'Unknown'
 
 
 class CallAgentEventSerializer(serializers.ModelSerializer):
