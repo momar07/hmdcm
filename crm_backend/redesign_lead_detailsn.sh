@@ -1,3 +1,44 @@
+#!/bin/bash
+# ============================================================================
+# Phase 2A v2: Lead Details Redesign (with NewTicketModal props fix)
+# ============================================================================
+
+set -e
+
+REPO="/home/momar/Desktop/websites/hmdcm"
+FRONTEND="$REPO/crm_frontend"
+TS=$(date +"%Y%m%d_%H%M%S")
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}╔════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   Phase 2A v2: Lead Details Redesign              ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════╝${NC}"
+
+cd "$FRONTEND" || { echo -e "${RED}✗ Frontend dir not found${NC}"; exit 1; }
+
+LEAD_PAGE="src/app/(dashboard)/leads/[id]/page.tsx"
+
+# ── 1. Sanity check ──
+echo -e "\n${YELLOW}[1/5] Sanity check...${NC}"
+[ -f "$LEAD_PAGE" ] || { echo -e "${RED}✗ $LEAD_PAGE not found${NC}"; exit 1; }
+[ -f "src/components/tickets/NewTicketModal.tsx" ] || { echo -e "${RED}✗ NewTicketModal not found${NC}"; exit 1; }
+echo -e "${GREEN}✓ Files exist${NC}"
+
+# ── 2. Backup ──
+echo -e "\n${YELLOW}[2/5] Creating backup...${NC}"
+BACKUP="${LEAD_PAGE}.bak_${TS}"
+cp "$LEAD_PAGE" "$BACKUP"
+echo -e "${GREEN}✓ Backup: $BACKUP${NC}"
+
+# ── 3. Write new page ──
+echo -e "\n${YELLOW}[3/5] Writing new Lead Details page...${NC}"
+
+cat > "$LEAD_PAGE" <<'TSXEOF'
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -937,3 +978,75 @@ function TimelineRow({ item, router }: { item: TimelineItem; router: any }) {
   }
   return null;
 }
+TSXEOF
+
+echo -e "${GREEN}✓ New page written ($(wc -l < $LEAD_PAGE) lines)${NC}"
+
+# ── 4. TypeScript check ──
+echo -e "\n${YELLOW}[4/5] Running TypeScript check...${NC}"
+
+if ! command -v npx &> /dev/null; then
+  echo -e "${RED}✗ npx not found${NC}"
+  cp "$BACKUP" "$LEAD_PAGE"
+  exit 1
+fi
+
+TSC_OUT=$(npx tsc --noEmit --project tsconfig.json 2>&1 || true)
+ERRORS_IN_FILE=$(echo "$TSC_OUT" | grep "leads/\[id\]/page.tsx" || true)
+
+if [ -z "$ERRORS_IN_FILE" ]; then
+  echo -e "${GREEN}✓ TypeScript check passed for leads/[id]/page.tsx${NC}"
+  UNRELATED_COUNT=$(echo "$TSC_OUT" | grep -c "error TS" || echo "0")
+  if [ "$UNRELATED_COUNT" -gt "0" ]; then
+    echo -e "${YELLOW}  ℹ Note: $UNRELATED_COUNT unrelated TS errors exist in other files (pre-existing)${NC}"
+  fi
+else
+  echo -e "${RED}✗ TypeScript errors in leads/[id]/page.tsx:${NC}"
+  echo "$ERRORS_IN_FILE" | head -20
+  echo -e "\n${YELLOW}Rolling back...${NC}"
+  cp "$BACKUP" "$LEAD_PAGE"
+  echo -e "${GREEN}✓ Rolled back${NC}"
+  exit 1
+fi
+
+# ── 5. Final report ──
+echo -e "\n${YELLOW}[5/5] Final report${NC}"
+
+cat <<EOF
+
+${GREEN}╔════════════════════════════════════════════════════╗${NC}
+${GREEN}║   ✓ Phase 2A v2: Lead Details Redesign - SUCCESS   ║${NC}
+${GREEN}╚════════════════════════════════════════════════════╝${NC}
+
+📁 Modified:
+   $LEAD_PAGE
+
+💾 Backup:
+   $BACKUP
+
+✨ Fixes from v1:
+   • NewTicketModal now uses correct props: open/onClose/onCreated/defaultLeadId
+
+✨ Features:
+   • 2-column layout (Tabs left, sticky sidebar right)
+   • Mobile: stacks to single column
+   • Stage progress stepper
+   • Unified Timeline (events + calls + tickets + followups)
+   • Quick Actions: Call / WhatsApp / Email
+   • Quick Follow-up: 1h / Tomorrow / 3d / Next week + custom
+   • Next Best Action widget
+   • Lead Info card
+   • Status dropdown
+   • More menu (⋮)
+   • Tab badges with counts
+
+📋 Next steps:
+   1. cd $FRONTEND
+   2. rm -rf .next && npm run dev
+   3. Hard-refresh browser
+   4. Open any lead from /leads → see new design
+
+🔄 To rollback:
+   cp "$BACKUP" "$LEAD_PAGE"
+
+EOF

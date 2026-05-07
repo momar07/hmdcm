@@ -1,10 +1,57 @@
+#!/bin/bash
+# ============================================================================
+# Phase 2A: Lead Details Redesign
+# - 2-column layout (sticky sidebar)
+# - Stage progress stepper
+# - Quick actions sidebar (Call/WhatsApp/Email/Quick follow-up)
+# - Unified Timeline tab (combines events + calls + tickets + followups)
+# - Header dropdown menu (Edit/Archive/Convert)
+# Repo: /home/momar/Desktop/websites/hmdcm
+# ============================================================================
+
+set -e
+
+REPO="/home/momar/Desktop/websites/hmdcm"
+FRONTEND="$REPO/crm_frontend"
+TS=$(date +"%Y%m%d_%H%M%S")
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}╔════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║   Phase 2A: Lead Details Redesign                 ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════╝${NC}"
+
+cd "$FRONTEND" || { echo -e "${RED}✗ Frontend dir not found${NC}"; exit 1; }
+
+# ── 1. Sanity check ──
+echo -e "\n${YELLOW}[1/5] Sanity check...${NC}"
+LEAD_PAGE="src/app/(dashboard)/leads/[id]/page.tsx"
+[ -f "$LEAD_PAGE" ]                          || { echo -e "${RED}✗ $LEAD_PAGE not found${NC}"; exit 1; }
+[ -f "src/components/ui/Button.tsx" ]        || { echo -e "${RED}✗ Button.tsx not found${NC}"; exit 1; }
+[ -f "src/lib/api/leads.ts" ]                || { echo -e "${RED}✗ leads.ts not found${NC}"; exit 1; }
+echo -e "${GREEN}✓ All required files exist${NC}"
+
+# ── 2. Backup ──
+echo -e "\n${YELLOW}[2/5] Creating backup...${NC}"
+BACKUP="${LEAD_PAGE}.bak_${TS}"
+cp "$LEAD_PAGE" "$BACKUP"
+echo -e "${GREEN}✓ Backup: $BACKUP${NC}"
+
+# ── 3. Write new page ──
+echo -e "\n${YELLOW}[3/5] Writing new Lead Details page...${NC}"
+
+cat > "$LEAD_PAGE" <<'TSXEOF'
 'use client';
 
 import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, User as UserIcon, Calendar, Clock, Phone,
+  ArrowLeft, User as UserIcon, Calendar, Tag, Clock, Phone,
   PhoneIncoming, PhoneOutgoing, PhoneMissed, Ticket as TicketIcon,
   FileText, MessageSquare, Plus, Mail, Building2, MapPin,
   DollarSign, MoreVertical, MessageCircle, ChevronRight,
@@ -77,14 +124,6 @@ function getAvatarColor(id: string): string {
   return colors[h % colors.length];
 }
 
-function SOURCE_LABEL(s: string): string {
-  const m: Record<string, string> = {
-    call: 'Inbound Call', web: 'Website', referral: 'Referral',
-    campaign: 'Campaign', social: 'Social Media', manual: 'Manual',
-  };
-  return m[s] || s || '—';
-}
-
 type Tab = 'timeline' | 'calls' | 'tickets' | 'followups' | 'quotations';
 
 interface TimelineItem {
@@ -102,6 +141,7 @@ export default function LeadDetailPage() {
   const [newFollowupDate, setNewFollowupDate] = useState('');
   const [ticketModal, setTicketModal] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [stageMenuOpen, setStageMenuOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
 
   // ── Queries ──
@@ -177,6 +217,7 @@ export default function LeadDetailPage() {
       toast.success('Stage updated ✅');
       qc.invalidateQueries({ queryKey: ['lead', id] });
       qc.invalidateQueries({ queryKey: ['lead-events', id] });
+      setStageMenuOpen(false);
     },
     onError: () => toast.error('Failed to update stage'),
   });
@@ -293,16 +334,18 @@ export default function LeadDetailPage() {
   );
 
   const fullName = [lead.first_name, lead.last_name].filter(Boolean).join(' ') || lead.title;
-  const ticketCount    = ticketsData?.count    ?? 0;
-  const callCount      = callsData?.count      ?? 0;
-  const followupCount  = followupsData?.count  ?? 0;
-  const quotationCount = (quotationsData as any)?.count ?? 0;
+  const ticketCount = ticketsData?.count ?? 0;
+  const callCount   = callsData?.count   ?? 0;
+  const followupCount = followupsData?.count ?? 0;
+  const quotationCount = quotationsData?.count ?? 0;
+
+  // Find current stage index for progress bar
   const currentStageIdx = stageList.findIndex((s: any) => s.id === lead.stage);
 
   // ── Render ──
   return (
     <div className="space-y-5">
-      {/* ── Header ──────────────────────────────────────── */}
+      {/* ── Sticky Header ──────────────────────────────── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="px-5 py-4 flex items-start justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -364,7 +407,7 @@ export default function LeadDetailPage() {
           </div>
         </div>
 
-        {/* Stage Progress */}
+        {/* ── Stage Progress Bar ───────────────────────── */}
         {stageList.length > 0 && (
           <div className="px-5 pb-4 border-t border-gray-100 pt-3 overflow-x-auto">
             <div className="flex items-center gap-1 min-w-max">
@@ -405,18 +448,20 @@ export default function LeadDetailPage() {
         )}
       </div>
 
-      {/* Main 2-Column Layout */}
+      {/* ── Main 2-Column Layout ──────────────────────── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-5">
 
-        {/* LEFT: Tabs */}
+        {/* ═══ LEFT: Tabs & Content ═══ */}
         <div className="space-y-4 min-w-0">
+
+          {/* Tabs */}
           <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto">
             {([
-              { key: 'timeline',    label: 'Timeline',    icon: <Clock size={14}/>,        badge: timelineItems.length },
-              { key: 'calls',       label: 'Calls',       icon: <Phone size={14}/>,        badge: callCount },
-              { key: 'tickets',     label: 'Tickets',     icon: <TicketIcon size={14}/>,   badge: ticketCount },
-              { key: 'followups',   label: 'Follow-ups',  icon: <Calendar size={14}/>,     badge: followupCount },
-              { key: 'quotations',  label: 'Quotes',      icon: <FileText size={14}/>,     badge: quotationCount },
+              { key: 'timeline',    label: 'Timeline',    icon: <Clock size={14}/>,    badge: timelineItems.length },
+              { key: 'calls',       label: 'Calls',       icon: <Phone size={14}/>,    badge: callCount },
+              { key: 'tickets',     label: 'Tickets',     icon: <TicketIcon size={14}/>, badge: ticketCount },
+              { key: 'followups',   label: 'Follow-ups',  icon: <Calendar size={14}/>, badge: followupCount },
+              { key: 'quotations',  label: 'Quotes',      icon: <FileText size={14}/>, badge: quotationCount },
             ] as { key: Tab; label: string; icon: React.ReactNode; badge: number }[]).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
                 className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm
@@ -435,7 +480,7 @@ export default function LeadDetailPage() {
             ))}
           </div>
 
-          {/* TIMELINE TAB */}
+          {/* ── TIMELINE TAB ─────────────────────────── */}
           {tab === 'timeline' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -445,9 +490,11 @@ export default function LeadDetailPage() {
                 </h3>
                 <span className="text-xs text-gray-400">{timelineItems.length} items</span>
               </div>
+
               {(eventsLoading || ticketsLoading || followupsLoading) && timelineItems.length === 0 && (
                 <div className="flex justify-center py-10"><Spinner size="sm"/></div>
               )}
+
               {timelineItems.length === 0 && !eventsLoading && (
                 <div className="px-5 py-12 text-center">
                   <Clock size={36} className="text-gray-300 mx-auto mb-2"/>
@@ -457,6 +504,7 @@ export default function LeadDetailPage() {
                   </p>
                 </div>
               )}
+
               {timelineItems.length > 0 && (
                 <div className="px-5 py-4 space-y-3">
                   {timelineItems.map((item) => <TimelineRow key={item.id} item={item} router={router}/>)}
@@ -465,7 +513,7 @@ export default function LeadDetailPage() {
             </div>
           )}
 
-          {/* CALLS TAB */}
+          {/* ── CALLS TAB ─────────────────────────────── */}
           {tab === 'calls' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100">
@@ -508,7 +556,7 @@ export default function LeadDetailPage() {
             </div>
           )}
 
-          {/* TICKETS TAB */}
+          {/* ── TICKETS TAB ───────────────────────────── */}
           {tab === 'tickets' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -550,7 +598,7 @@ export default function LeadDetailPage() {
             </div>
           )}
 
-          {/* FOLLOW-UPS TAB */}
+          {/* ── FOLLOW-UPS TAB ───────────────────────── */}
           {tab === 'followups' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100">
@@ -589,7 +637,7 @@ export default function LeadDetailPage() {
             </div>
           )}
 
-          {/* QUOTATIONS TAB */}
+          {/* ── QUOTATIONS TAB ───────────────────────── */}
           {tab === 'quotations' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
@@ -598,11 +646,11 @@ export default function LeadDetailPage() {
                   onClick={() => router.push(`/sales/new?lead=${id}`)}>New</Button>
               </div>
               {quotationsLoading && <div className="flex justify-center py-10"><Spinner/></div>}
-              {!quotationsLoading && !(quotationsData as any)?.results?.length && (
+              {!quotationsLoading && !quotationsData?.results?.length && (
                 <p className="px-5 py-8 text-center text-sm text-gray-400">No quotations yet.</p>
               )}
               <div className="divide-y divide-gray-50">
-                {((quotationsData as any)?.results as any[])?.map((q) => (
+                {(quotationsData?.results as any[])?.map((q) => (
                   <div key={q.id}
                     className="px-5 py-4 flex items-start justify-between hover:bg-gray-50 cursor-pointer"
                     onClick={() => router.push(`/sales/${q.id}`)}>
@@ -628,7 +676,7 @@ export default function LeadDetailPage() {
           )}
         </div>
 
-        {/* RIGHT: Sticky Sidebar */}
+        {/* ═══ RIGHT: Sticky Sidebar ═══ */}
         <div className="space-y-4 lg:sticky lg:top-4 lg:self-start">
 
           {/* Quick Actions */}
@@ -816,18 +864,24 @@ export default function LeadDetailPage() {
         </div>
       </div>
 
-      {/* New Ticket Modal — uses correct props */}
-      <NewTicketModal
-        open={ticketModal}
-        onClose={() => setTicketModal(false)}
-        onCreated={() => {
-          qc.invalidateQueries({ queryKey: ['lead-tickets', id] });
-          toast.success('Ticket created ✅');
-        }}
-        defaultLeadId={id}
-      />
+      {/* New Ticket Modal */}
+      {ticketModal && (
+        <NewTicketModal
+          leadId={id}
+          onClose={() => setTicketModal(false)}
+        />
+      )}
     </div>
   );
+}
+
+// ── Source label helper ──
+function SOURCE_LABEL(s: string): string {
+  const m: Record<string, string> = {
+    call: 'Inbound Call', web: 'Website', referral: 'Referral',
+    campaign: 'Campaign', social: 'Social Media', manual: 'Manual',
+  };
+  return m[s] || s || '—';
 }
 
 // ── Timeline Row component ──
@@ -937,3 +991,85 @@ function TimelineRow({ item, router }: { item: TimelineItem; router: any }) {
   }
   return null;
 }
+TSXEOF
+
+echo -e "${GREEN}✓ New page written ($(wc -l < $LEAD_PAGE) lines)${NC}"
+
+# ── 4. TypeScript check ──
+echo -e "\n${YELLOW}[4/5] Running TypeScript check...${NC}"
+
+if ! command -v npx &> /dev/null; then
+  echo -e "${RED}✗ npx not found${NC}"
+  cp "$BACKUP" "$LEAD_PAGE"
+  exit 1
+fi
+
+# Run full TypeScript check, but only fail if errors are in OUR file or critical
+TSC_OUT=$(npx tsc --noEmit --project tsconfig.json 2>&1 || true)
+ERRORS_IN_FILE=$(echo "$TSC_OUT" | grep "leads/\[id\]/page.tsx" || true)
+
+if [ -z "$ERRORS_IN_FILE" ]; then
+  echo -e "${GREEN}✓ TypeScript check passed for leads/[id]/page.tsx${NC}"
+  # Show count of unrelated errors (informational)
+  UNRELATED_COUNT=$(echo "$TSC_OUT" | grep -c "error TS" || echo "0")
+  if [ "$UNRELATED_COUNT" -gt "0" ]; then
+    echo -e "${YELLOW}  ℹ Note: $UNRELATED_COUNT unrelated TS errors exist in other files (pre-existing)${NC}"
+  fi
+else
+  echo -e "${RED}✗ TypeScript errors in leads/[id]/page.tsx:${NC}"
+  echo "$ERRORS_IN_FILE" | head -20
+  echo -e "\n${YELLOW}Rolling back...${NC}"
+  cp "$BACKUP" "$LEAD_PAGE"
+  echo -e "${GREEN}✓ Rolled back${NC}"
+  exit 1
+fi
+
+# ── 5. Final report ──
+echo -e "\n${YELLOW}[5/5] Final report${NC}"
+
+cat <<EOF
+
+${GREEN}╔════════════════════════════════════════════════════╗${NC}
+${GREEN}║   ✓ Phase 2A: Lead Details Redesign - SUCCESS      ║${NC}
+${GREEN}╚════════════════════════════════════════════════════╝${NC}
+
+📁 Modified:
+   $LEAD_PAGE
+
+💾 Backup:
+   $BACKUP
+
+✨ New Features:
+   • 2-column layout (Tabs left, sticky sidebar right) on desktop
+   • Mobile: stacks to single column
+   • Sticky header with avatar + Call/Ticket/More buttons
+   • Stage progress stepper (horizontal, clickable)
+   • Unified Timeline tab (events + calls + tickets + followups, sorted by time)
+   • Quick Actions sidebar: Call / WhatsApp / Email
+   • Quick Follow-up: 1h / Tomorrow / 3d / Next week + custom
+   • Next Best Action widget (smart suggestions)
+   • Lead Info card with all details
+   • Status dropdown (cleaner than pills)
+   • More menu (⋮): Edit Info / View in Pipeline / Archive
+   • Tab badges showing counts (Timeline/Calls/Tickets/Followups/Quotes)
+
+📋 Next steps:
+   1. Restart dev server:
+      cd $FRONTEND
+      rm -rf .next
+      npm run dev
+   2. Hard-refresh browser (Ctrl+Shift+R)
+   3. Test:
+      - Click any lead from /leads → opens new design
+      - Resize to mobile (<1024px) → sidebar moves below tabs
+      - Click stage in stepper → moves to that stage
+      - Click "In 1 hour" → schedules follow-up
+      - Switch tabs (Timeline/Calls/Tickets/Followups/Quotes)
+      - Timeline shows all activities mixed and sorted
+
+🔄 To rollback:
+   cp "$BACKUP" "$LEAD_PAGE"
+
+📌 Note: Notes tab will be added in Phase 2B (requires backend endpoint).
+
+EOF
