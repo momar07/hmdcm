@@ -21,7 +21,6 @@ import {
   LayoutGrid,
   Activity,
   CheckSquare,
-  ShieldCheck,
 } from 'lucide-react';
 import { useAuthStore, useUIStore, useAgentStatusStore } from '@/store';
 import type { Role } from '@/types';
@@ -105,11 +104,6 @@ const NAV_ITEMS: NavItem[] = [
     roles: ['admin'],
   },
   {
-    href: '/admin/audit', label: 'Audit Logs',
-    icon: <ShieldCheck size={18} />,
-    roles: ['admin'],
-  },
-    {
     href: '/settings', label: 'Settings',
     icon: <Settings size={18} />,
     roles: ['admin'],
