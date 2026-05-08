@@ -6,5 +6,4 @@ export { campaignsApi } from './campaigns';
 export { reportsApi }   from './reports';
 export { dashboardApi } from './dashboard';
 export { usersApi }     from './users';
-export { auditApi }     from './audit';
 export { default as api } from './axios';

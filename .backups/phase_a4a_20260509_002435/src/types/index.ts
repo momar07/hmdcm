@@ -537,34 +537,3 @@ export interface Quotation {
   updated_at:     string;
 }
 
-
-
-// ── Audit log ─────────────────────────────────────────────────────────────
-export type AuditAction =
-  | 'create' | 'update' | 'delete'
-  | 'login'  | 'logout' | 'export' | 'call';
-
-export interface AuditLogEntry {
-  id:          string;
-  user:        string | null;
-  user_name:   string;
-  action:      AuditAction;
-  model_name:  string;       // currently the API path
-  object_id:   string;
-  object_repr: string;
-  changes:     Record<string, unknown>;
-  ip_address:  string | null;
-  timestamp:   string;
-}
-
-export interface ActivityLogEntry {
-  id:          string;
-  user:        string | null;
-  user_name:   string;
-  verb:        string;        // e.g. 'lead.archived'
-  description: string;
-  extra:       Record<string, unknown>;
-  lead:        string | null;
-  call:        string | null;
-  timestamp:   string;
-}

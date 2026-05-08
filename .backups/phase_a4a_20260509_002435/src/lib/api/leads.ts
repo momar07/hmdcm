@@ -76,15 +76,4 @@ export const leadsApi = {
   // ── Follow-up date sync ──────────────────────────────────
   setFollowupDate: (leadId: string, followup_date: string | null) =>
     api.patch(`/leads/${leadId}/followup-date/`, { followup_date }),
-
-  // ── Archive / Restore / Permanent delete ──────────────────
-  archive: (leadId: string) =>
-    api.post(`/leads/${leadId}/archive/`),
-
-  restore: (leadId: string) =>
-    api.post(`/leads/${leadId}/restore/`),
-
-  /** Admin only. Body must contain {"confirmation": "DELETE"}. */
-  permanentDelete: (leadId: string) =>
-    api.post(`/leads/${leadId}/permanent-delete/`, { confirmation: 'DELETE' }),
 };
