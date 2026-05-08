@@ -30,10 +30,6 @@ class AuditLog(models.Model):
     class Meta:
         db_table = 'audit_logs'
         ordering = ['-timestamp']
-        indexes = [
-            models.Index(fields=['user',   '-timestamp'], name='audit_user_ts_idx'),
-            models.Index(fields=['action', '-timestamp'], name='audit_action_ts_idx'),
-        ]
 
     def __str__(self):
         return f'[{self.action}] {self.model_name}:{self.object_id} by {self.user}'
@@ -64,11 +60,6 @@ class ActivityLog(models.Model):
     class Meta:
         db_table = 'activity_logs'
         ordering = ['-timestamp']
-        indexes = [
-            models.Index(fields=['user', '-timestamp'], name='activity_user_ts_idx'),
-            models.Index(fields=['verb', '-timestamp'], name='activity_verb_ts_idx'),
-            models.Index(fields=['lead', '-timestamp'], name='activity_lead_ts_idx'),
-        ]
 
     def __str__(self):
         return f'{self.user} {self.verb}'
