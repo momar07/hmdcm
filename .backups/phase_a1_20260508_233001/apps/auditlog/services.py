@@ -16,17 +16,13 @@ def log_action(user, action, model_name='', object_id='',
     )
 
 
-def log_activity(user, verb, description='',
+def log_activity(user, verb, description='', customer=None,
                  lead=None, call=None, extra=None):
-    """Create a human-readable ActivityLog entry.
-
-    Use transaction.on_commit() in callers if the activity should only be
-    recorded when the surrounding transaction succeeds.
-    """
     ActivityLog.objects.create(
         user=user,
         verb=verb,
         description=description,
+        customer=customer,
         lead=lead,
         call=call,
         extra=extra or {},
