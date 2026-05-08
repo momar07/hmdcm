@@ -1,9 +1,6 @@
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.db import transaction
 from .models import Call, CallCompletion, Disposition, DispositionAction
-from apps.auditlog.services import log_activity
-from apps.auditlog import constants as audit_actions
 import logging
 
 logger = logging.getLogger(__name__)
@@ -251,30 +248,6 @@ def complete_call(call_id: str, agent, data: dict) -> CallCompletion:
         completion.followup_created = followup
         completion.save(update_fields=['followup_created'])
 
-    # ── ActivityLog: call.completed ─────────────────────
-    try:
-        transaction.on_commit(lambda: log_activity(
-            user=agent,
-            verb=audit_actions.CALL_COMPLETED,
-            description=(
-                f'Completed call {call.id} '
-                f'(disposition: {disposition.name})'
-            ),
-            lead=call.lead,
-            call=call,
-            extra={
-                'call_id':         str(call.id),
-                'disposition':     disposition.name,
-                'disposition_code': disposition.code,
-                'next_action':     next_action,
-                'duration_secs':   call.duration,
-                'direction':       call.direction,
-                'role':            getattr(agent, 'role', None),
-            },
-        ))
-    except Exception:
-        pass
-    
     return completion
 
 

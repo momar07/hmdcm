@@ -15,9 +15,6 @@ from .selectors import get_all_calls
 from .services import complete_call, get_pending_completions
 from apps.common.permissions import IsAgent
 from apps.leads.models import LeadStage
-from apps.auditlog.services import log_activity
-from apps.auditlog import constants as audit_actions
-from apps.common.utils import get_client_ip
 
 
 class CallViewSet(viewsets.ModelViewSet):
@@ -138,29 +135,6 @@ class CallViewSet(viewsets.ModelViewSet):
             s.close()
 
             if 'Success' in resp or 'Queued' in resp:
-                # ── ActivityLog: call.made ─────────────────────────────
-                try:
-                    lead_id = request.data.get('lead_id')
-                    lead_obj = None
-                    if lead_id:
-                        from apps.leads.models import Lead
-                        lead_obj = Lead.objects.filter(pk=lead_id).first()
-                    log_activity(
-                        user=request.user,
-                        verb=audit_actions.CALL_MADE,
-                        description=f'Outbound call to {phone}',
-                        lead=lead_obj,
-                        extra={
-                            'phone':           phone,
-                            'agent_extension': agent_ext,
-                            'direction':       'outbound',
-                            'action_id':       action_id,
-                            'ip':              get_client_ip(request),
-                            'role':            request.user.role,
-                        },
-                    )
-                except Exception:
-                    pass  # never block the call on logging failure
                 return Response({'message': f'Dialing {phone} from ext {agent_ext}', 'action_id': action_id})
             else:
                 return Response({'error': f'AMI response: {resp[:200]}'}, status=status.HTTP_502_BAD_GATEWAY)
