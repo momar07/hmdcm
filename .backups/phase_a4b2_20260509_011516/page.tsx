@@ -75,7 +75,6 @@ export default function LeadsPage() {
 
   // ── State ──────────────────────────────────────────────
   const [search, setSearch]            = useState('');
-  const [archivedFilter, setArchivedFilter] = useState<'active' | 'archived' | 'all'>('active');
   const [statusFilter, setStatusFilter] = useState('');
   const [stageFilter, setStageFilter]   = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
@@ -121,9 +120,8 @@ export default function LeadsPage() {
     if (sourceFilter)   params.source    = sourceFilter;
     if (agentFilter)    params.assigned_to = agentFilter;
     if (sortKey)        params.ordering = (sortDir === 'desc' ? '-' : '') + sortKey;
-        if (archivedFilter !== 'active') params.archived = archivedFilter;
     return params;
-  }, [page, search, statusFilter, stageFilter, sourceFilter, agentFilter, sortKey, sortDir, archivedFilter]);
+  }, [page, search, statusFilter, stageFilter, sourceFilter, agentFilter, sortKey, sortDir]);
 
   // ── Leads query ─────────────────────────────────────────
   const { data, isLoading, isFetching } = useQuery({
@@ -230,14 +228,7 @@ export default function LeadsPage() {
           {getInitials(getLeadDisplayName(lead))}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="font-semibold text-gray-900 truncate">{getLeadDisplayName(lead)}</p>
-            {!lead.is_active && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-700 shrink-0">
-                Archived
-              </span>
-            )}
-          </div>
+          <p className="font-semibold text-gray-900 truncate">{getLeadDisplayName(lead)}</p>
           <p className="text-xs text-gray-500 font-mono truncate">{lead.phone || '—'}</p>
           {lead.company && <p className="text-xs text-gray-400 truncate">{lead.company}</p>}
         </div>
@@ -329,25 +320,6 @@ export default function LeadsPage() {
             className="col-span-2 md:col-span-1"/>
         </div>
       )}
-
-      {/* ── Active / Archived / All Filter Tabs ───────────── */}
-      <div className="flex items-center gap-1 border-b border-gray-200">
-        {(['active', 'archived', 'all'] as const).map((opt) => (
-          <button
-            key={opt}
-            onClick={() => { setArchivedFilter(opt); setPage(1); }}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              archivedFilter === opt
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
-            }`}
-          >
-            {opt === 'active'   && 'Active'}
-            {opt === 'archived' && 'Archived'}
-            {opt === 'all'      && 'All'}
-          </button>
-        ))}
-      </div>
 
       {/* ── Search + Filter Toggle + View Mode ─────────────── */}
       <div className="flex flex-wrap gap-2 items-center">
