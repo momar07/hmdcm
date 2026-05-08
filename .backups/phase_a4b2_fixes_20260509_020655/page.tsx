@@ -130,7 +130,6 @@ export default function LeadsPage() {
     queryKey: ['leads', queryParams],
     queryFn:  () => leadsApi.list(queryParams).then(r => r.data),
     placeholderData: (prev: any) => prev,
-    refetchOnMount: 'always',
   });
 
   const leads: Lead[] = data?.results ?? [];
@@ -540,7 +539,7 @@ export default function LeadsPage() {
                             {getInitials(getLeadDisplayName(lead))}
                           </div>
                           <div className="min-w-0">
-                            <p className="font-medium text-gray-900 truncate max-w-xs">{getLeadDisplayName(lead)}{!lead.is_active && (<span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-200 text-gray-700">Archived</span>)}</p>
+                            <p className="font-medium text-gray-900 truncate max-w-xs">{getLeadDisplayName(lead)}</p>
                             <p className="text-xs text-gray-400 font-mono">{lead.phone || '—'}</p>
                           </div>
                         </div>

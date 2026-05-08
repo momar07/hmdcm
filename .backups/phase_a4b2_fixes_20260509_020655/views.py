@@ -5,7 +5,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied, NotFound
-from rest_framework.filters import SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
 from apps.auditlog.services import log_activity
@@ -51,8 +50,7 @@ def _build_extra(request, **kw):
 
 class LeadViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
-    filter_backends    = [DjangoFilterBackend, SearchFilter]
-    search_fields      = ['full_name', 'phone', 'email', 'company']
+    filter_backends    = [DjangoFilterBackend]
     filterset_fields   = ['status', 'priority', 'source',
                           'assigned_to', 'campaign', 'stage']
 
