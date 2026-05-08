@@ -9,7 +9,6 @@ import {
   FileText, MessageSquare, Plus, Mail, Building2, MapPin,
   DollarSign, MoreVertical, MessageCircle, ChevronRight,
   Check, Lightbulb, X, TrendingUp,
-  Archive, RotateCcw, Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { leadsApi } from '@/lib/api/leads';
@@ -24,7 +23,6 @@ import { NewTicketModal } from '@/components/tickets/NewTicketModal';
 import { PriorityBadge, StatusBadge as TicketStatusBadge } from '@/components/tickets/TicketBadge';
 import type { LeadEvent } from '@/types';
 import { getLeadDisplayName } from '@/lib/leads';
-import { session } from '@/lib/auth/session';
 
 // ── Helpers ───────────────────────────────────────────────────
 const EVENT_LABELS: Record<string, { label: string; color: string; icon: string }> = {
@@ -106,10 +104,6 @@ export default function LeadDetailPage() {
   const [ticketModal, setTicketModal] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  const currentUser = session.getUser();
-  const isAdmin = currentUser?.role === 'admin';
 
   // ── Queries ──
   const { data: lead, isLoading } = useQuery({
@@ -213,46 +207,6 @@ export default function LeadDetailPage() {
       err?.response?.data?.followup_date?.[0] ||
       err?.response?.data?.detail || 'Failed to set follow-up date'
     )),
-  });
-
-  const archiveMutation = useMutation({
-    mutationFn: () => leadsApi.archive(id),
-    onSuccess: () => {
-      toast.success('Lead archived');
-      qc.invalidateQueries({ queryKey: ['lead', id] });
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      setActionsOpen(false);
-    },
-    onError: (err: any) => toast.error(
-      err?.response?.data?.detail || 'Failed to archive lead'
-    ),
-  });
-
-  const restoreMutation = useMutation({
-    mutationFn: () => leadsApi.restore(id),
-    onSuccess: () => {
-      toast.success('Lead restored');
-      qc.invalidateQueries({ queryKey: ['lead', id] });
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      setActionsOpen(false);
-    },
-    onError: (err: any) => toast.error(
-      err?.response?.data?.detail || 'Failed to restore lead'
-    ),
-  });
-
-  const permanentDeleteMutation = useMutation({
-    mutationFn: () => leadsApi.permanentDelete(id),
-    onSuccess: () => {
-      toast.success('Lead permanently deleted');
-      qc.invalidateQueries({ queryKey: ['leads'] });
-      setDeleteModalOpen(false);
-      setDeleteConfirmText('');
-      router.push('/leads');
-    },
-    onError: (err: any) => toast.error(
-      err?.response?.data?.detail || 'Failed to delete lead'
-    ),
   });
 
   // ── Unified timeline ──
@@ -399,7 +353,7 @@ export default function LeadDetailPage() {
               {actionsOpen && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setActionsOpen(false)}/>
-                  <div className="absolute right-0 mt-1 w-52 bg-white rounded-lg border border-gray-200 shadow-lg z-20 py-1">
+                  <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg border border-gray-200 shadow-lg z-20 py-1">
                     <button className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
                       onClick={() => { setActionsOpen(false); toast('Edit not implemented yet', { icon: 'ℹ️' }); }}>
                       <UserIcon size={14}/> Edit Info
@@ -409,35 +363,10 @@ export default function LeadDetailPage() {
                       <ChevronRight size={14}/> View in Pipeline
                     </button>
                     <div className="border-t border-gray-100 my-1"/>
-
-                    {lead.is_active ? (
-                      <button
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-amber-50 text-amber-700 flex items-center gap-2 disabled:opacity-50"
-                        disabled={archiveMutation.isPending}
-                        onClick={() => archiveMutation.mutate()}>
-                        <Archive size={14}/>
-                        {archiveMutation.isPending ? 'Archiving...' : 'Archive'}
-                      </button>
-                    ) : (
-                      <button
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-green-50 text-green-700 flex items-center gap-2 disabled:opacity-50"
-                        disabled={restoreMutation.isPending}
-                        onClick={() => restoreMutation.mutate()}>
-                        <RotateCcw size={14}/>
-                        {restoreMutation.isPending ? 'Restoring...' : 'Restore'}
-                      </button>
-                    )}
-
-                    {isAdmin && (
-                      <>
-                        <div className="border-t border-gray-100 my-1"/>
-                        <button
-                          className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
-                          onClick={() => { setActionsOpen(false); setDeleteModalOpen(true); }}>
-                          <Trash2 size={14}/> Delete Permanently
-                        </button>
-                      </>
-                    )}
+                    <button className="w-full px-3 py-2 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
+                      onClick={() => { setActionsOpen(false); toast.error('Archive not implemented yet'); }}>
+                      <X size={14}/> Archive
+                    </button>
                   </div>
                 </>
               )}
@@ -757,7 +686,7 @@ export default function LeadDetailPage() {
               <input type="datetime-local" value={newFollowupDate}
                 onChange={e => setNewFollowupDate(e.target.value)}
                 className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300"/>
-              <Button variant="primary" size="sm"
+              <Button variant="primary" size="xs"
                 disabled={!newFollowupDate || setFollowupDateMutation.isPending}
                 onClick={() => setFollowupDateMutation.mutate(
                   newFollowupDate.length === 16 ? newFollowupDate + ':00' : newFollowupDate
@@ -907,59 +836,6 @@ export default function LeadDetailPage() {
         }}
         defaultLeadId={id}
       />
-
-      {/* Permanent Delete Confirmation Modal (admin only) */}
-      {deleteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-             onClick={() => setDeleteModalOpen(false)}>
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6"
-               onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                <Trash2 size={18} className="text-red-600"/>
-              </div>
-              <div className="min-w-0">
-                <h3 className="text-base font-bold text-gray-900">Delete lead permanently?</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  This will permanently remove <span className="font-semibold">{fullName}</span>
-                  {' '}and cannot be undone. The audit log will keep a record of the deletion.
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
-              <p className="text-xs text-red-700">
-                Type <span className="font-mono font-bold">DELETE</span> below to confirm.
-              </p>
-            </div>
-
-            <input
-              type="text"
-              autoFocus
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="Type DELETE to confirm"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 mb-4"
-            />
-
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => { setDeleteModalOpen(false); setDeleteConfirmText(''); }}
-                disabled={permanentDeleteMutation.isPending}
-                className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50">
-                Cancel
-              </button>
-              <button
-                onClick={() => permanentDeleteMutation.mutate()}
-                disabled={deleteConfirmText !== 'DELETE' || permanentDeleteMutation.isPending}
-                className="px-3 py-1.5 rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700
-                           disabled:bg-red-300 disabled:cursor-not-allowed">
-                {permanentDeleteMutation.isPending ? 'Deleting...' : 'Delete Permanently'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
