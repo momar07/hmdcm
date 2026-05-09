@@ -76,26 +76,23 @@ export function IncomingCallPopup() {
   const incomingCallRef = useRef(incomingCall);
   useEffect(() => { incomingCallRef.current = incomingCall; }, [incomingCall]);
 
-  // Screen-pop lookup whenever ringing (WS may arrive without lead_id)
+  // When SIP rings but WS event hasn't arrived yet, do a screen-pop lookup
   useEffect(() => {
-    const phone = sipIncoming?.from || incomingCall?.caller;
-    const wsHasLead = !!incomingCall?.lead_id;
-    if (callStatus === 'incoming' && phone && !wsHasLead) {
+    if (callStatus === 'incoming' && !incomingCall && sipIncoming?.from) {
+      const phone = sipIncoming.from;
       import('@/lib/api/calls').then(({ callsApi }) => {
         callsApi.screenPop(phone).then((res: any) => {
           const data = res.data ?? res;
           const leads = data?.leads ?? data?.results ?? [];
           if (Array.isArray(leads) && leads.length > 0) {
             setScreenPopLead(leads[0]);
-          } else {
-            setScreenPopLead(null);
           }
-        }).catch(() => setScreenPopLead(null));
+        }).catch(() => {});
       });
-    } else if (wsHasLead) {
+    } else if (incomingCall) {
       setScreenPopLead(null);
     }
-  }, [callStatus, incomingCall?.lead_id, incomingCall?.caller, sipIncoming?.from]);
+  }, [callStatus, incomingCall, sipIncoming?.from]);
 
   const fmt = (s: number) =>
     `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;

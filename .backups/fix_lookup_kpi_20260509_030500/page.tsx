@@ -143,8 +143,7 @@ export default function LeadsPage() {
       l.priority_name?.toLowerCase().includes('high') ||
       l.priority_name?.toLowerCase().includes('hot')
     ).length;
-    const stagesArr    = Array.isArray(stageData) ? stageData : ((stageData as any)?.results ?? []);
-    const wonStages    = stagesArr.filter((s: any) => s.is_won).map((s: any) => s.id);
+    const wonStages    = (stageData as any[]).filter(s => s.is_won).map(s => s.id);
     const won          = leads.filter(l => l.stage && wonStages.includes(l.stage)).length;
     const totalValue   = leads.reduce((sum, l) => sum + (Number(l.value) || 0), 0);
     return { totalCount, newThisWeek, hot, won, totalValue };
@@ -400,7 +399,7 @@ export default function LeadsPage() {
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg
                            focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All</option>
-                {(Array.isArray(statusData) ? statusData : ((statusData as any)?.results ?? [])).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {(statusData as any[]).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div>
@@ -410,7 +409,7 @@ export default function LeadsPage() {
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg
                            focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All</option>
-                {(Array.isArray(stageData) ? stageData : ((stageData as any)?.results ?? [])).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {(stageData as any[]).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div>
