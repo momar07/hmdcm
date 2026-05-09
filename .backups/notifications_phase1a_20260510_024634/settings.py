@@ -48,7 +48,6 @@ INSTALLED_APPS = [
     'apps.sales',
     'apps.auditlog',
     'apps.asterisk',
-    'apps.notifications',
 ]
 
 MIDDLEWARE = [

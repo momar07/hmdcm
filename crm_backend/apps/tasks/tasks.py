@@ -40,6 +40,21 @@ def send_task_reminders(self):
                         'assigned_by': 'System Reminder',
                     }
                 )
+            # Persist as in-app notification (Phase 1A)
+            try:
+                from apps.notifications.services import create_notification
+                create_notification(
+                    recipient=task.assigned_to,
+                    type='task_reminder',
+                    title=f'⏰ Reminder: {task.title}',
+                    body=f'Priority: {task.priority}',
+                    data={'task_id': str(task.id), 'priority': task.priority},
+                    link=f'/tasks/{task.id}',
+                    priority='high' if task.priority in ['high', 'urgent'] else 'normal',
+                    push_realtime=False,  # WS already sent above
+                )
+            except Exception as _ne:
+                logger.warning(f'[TaskReminder] notif persist failed: {_ne}')
             task.reminder_sent = True
             task.save(update_fields=['reminder_sent'])
             count += 1

@@ -130,19 +130,3 @@ class CallEventConsumer(AsyncWebsocketConsumer):
             'event':        event.get('event'),
             'comment':      event.get('comment'),
         }))
-
-    async def notification_new(self, event):
-        """Generic in-app notification pushed by apps.notifications.services."""
-        await self.send_json({
-            'event':      'notification_new',
-            'id':         event.get('id'),
-            'notif_type': event.get('notif_type'),
-            'title':      event.get('title'),
-            'body':       event.get('body'),
-            'data':       event.get('data', {}),
-            'link':       event.get('link', ''),
-            'priority':   event.get('priority', 'normal'),
-            'is_read':    event.get('is_read', False),
-            'created_at': event.get('created_at'),
-        })
-
