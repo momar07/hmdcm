@@ -44,12 +44,4 @@ export const agentStatusApi = {
   set:  (status: 'available' | 'away' | 'offline' | 'on_call' | 'busy') =>
           api.post('/users/me/queue-status/', { status }),
   live: ()                          => api.get('/users/live-agents/'),
-
-  /** Admin / supervisor forces another agent's status. */
-  forceStatus: (id: string, status: 'available' | 'away' | 'offline', reason?: string) =>
-    api.post(`/users/${id}/force-status/`, { status, reason }),
-
-  /** Extended agent info for the drawer (today's stats, recent calls, session). */
-  agentDetails: (id: string) =>
-    api.get(`/users/${id}/agent-details/`),
 };

@@ -20,8 +20,6 @@ interface AgentRow {
   status:       string;
   status_since: string | null;
   extension:    string | null;
-  team_id?:     string | null;
-  team_name?:   string | null;
 }
 
 interface LiveData {
@@ -34,7 +32,6 @@ interface LiveData {
     offline:   number;
     total:     number;
   };
-  server_now?: string;
 }
 
 // ── Status config ─────────────────────────────────────────────
@@ -152,9 +149,8 @@ export default function LiveAgentsPage() {
   const { user } = useAuthStore();
   const qc       = useQueryClient();
 
-  // single page-wide tick (1s) — server-synced via server_now offset
+  // single page-wide tick (1s) — replaces N intervals from useDuration
   const [now, setNow] = useState(() => Date.now());
-  const [serverOffset, setServerOffset] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
@@ -169,17 +165,6 @@ export default function LiveAgentsPage() {
     queryFn:         () => agentStatusApi.live().then((r) => r.data),
     refetchInterval: 10_000,
   });
-
-  // Recompute server-time offset whenever fresh data arrives
-  useEffect(() => {
-    if (data?.server_now) {
-      const serverMs = new Date(data.server_now).getTime();
-      setServerOffset(serverMs - Date.now());
-    }
-  }, [data?.server_now]);
-
-  // Server-corrected timestamp passed to all AgentCards
-  const syncedNow = now + serverOffset;
 
   // WebSocket — real-time status updates (auto-reconnect + cookie auth)
   useAppSocket({
@@ -216,7 +201,7 @@ export default function LiveAgentsPage() {
         <PageHeader title="My Status" subtitle="Your current queue status" />
         {me ? (
           <div className="max-w-sm">
-            <AgentCard agent={me} now={syncedNow} />
+            <AgentCard agent={me} now={now} />
           </div>
         ) : (
           <div className="text-gray-400 text-sm">Loading...</div>
@@ -337,7 +322,7 @@ export default function LiveAgentsPage() {
       ) : (
         <div className="space-y-2">
           {agents.map((a) => (
-            <AgentCard key={a.id} agent={a} now={syncedNow} />
+            <AgentCard key={a.id} agent={a} now={now} />
           ))}
         </div>
       )}

@@ -178,9 +178,6 @@ export default function LiveAgentsPage() {
     }
   }, [data?.server_now]);
 
-  // Server-corrected timestamp passed to all AgentCards
-  const syncedNow = now + serverOffset;
-
   // WebSocket — real-time status updates (auto-reconnect + cookie auth)
   useAppSocket({
     path:    '/ws/calls/',
@@ -224,6 +221,8 @@ export default function LiveAgentsPage() {
       </div>
     );
   }
+
+  const syncedNow = now + serverOffset;
 
   const summary = data?.summary ?? {
     available: 0, on_call: 0, away: 0, busy: 0, offline: 0, total: 0,
