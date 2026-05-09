@@ -77,13 +77,6 @@ export const callsApi = {
 
   agentStats: (params?: { days?: number; agent_id?: string }) =>
     api.get('/calls/agent-stats/', { params }),
-
-  // ── Call Recordings ──────────────────────────────────────────────────────
-  recordingBlob: (callId: string) =>
-    api.get(`/calls/${callId}/recording/`, { responseType: 'blob' }),
-
-  recordingDownload: (callId: string) =>
-    api.get(`/calls/${callId}/recording/download/`, { responseType: 'blob' }),
 };
 
 // ── Disposition CRUD types ────────────────────────────────────────────────────

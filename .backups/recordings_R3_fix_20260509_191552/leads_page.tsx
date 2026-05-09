@@ -400,7 +400,7 @@ export default function LeadsPage() {
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg
                            focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All</option>
-                {(Array.isArray(statusData) ? statusData : ((statusData as any)?.results ?? [])).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {(Array.isArray(statusData) ? statusData : ((statusData as any)?.results ?? [])).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div>
@@ -410,7 +410,7 @@ export default function LeadsPage() {
                 className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg
                            focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">All</option>
-                {(Array.isArray(stageData) ? stageData : ((stageData as any)?.results ?? [])).map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {(Array.isArray(stageData) ? stageData : ((stageData as any)?.results ?? [])).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div>

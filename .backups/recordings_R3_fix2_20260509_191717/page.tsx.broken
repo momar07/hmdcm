@@ -353,7 +353,6 @@ export default function LeadDetailPage() {
   const callCount      = callsData?.count      ?? 0;
   const followupCount  = followupsData?.count  ?? 0;
   const quotationCount = (quotationsData as any)?.count ?? 0;
-  const recordingCount = (callsData?.results ?? []).reduce((sum: number, c: any) => sum + ((c as any).recordings?.length ?? 0), 0);
   const currentStageIdx = stageList.findIndex((s: any) => s.id === lead.stage);
 
   // ── Render ──
@@ -498,8 +497,8 @@ export default function LeadDetailPage() {
               { key: 'calls',       label: 'Calls',       icon: <Phone size={14}/>,        badge: callCount },
               { key: 'tickets',     label: 'Tickets',     icon: <TicketIcon size={14}/>,   badge: ticketCount },
               { key: 'followups',   label: 'Follow-ups',  icon: <Calendar size={14}/>,     badge: followupCount },
-              { key: 'quotations',  label: 'Quotes',      icon: <FileText size={14}/>,     badge: quotationCount },
-              { key: 'recordings',  label: 'Recordings', icon: <Mic size={14}/>,          badge: recordingCount },
+              { key: 'quotations',  label: 'Quotes',      icon: <FileText size={14},
+      { key: 'recordings',  label: 'Quotes',      icon: <FileText size={14}/>,     badge: quotationCount },
             ] as { key: Tab; label: string; icon: React.ReactNode; badge: number }[]).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
                 className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm
