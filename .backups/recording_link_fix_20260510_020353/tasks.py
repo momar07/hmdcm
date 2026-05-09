@@ -449,13 +449,7 @@ def process_ami_event(self, event: dict):
         # ── event handlers ────────────────────────────────────
         from apps.leads.models import Lead, LeadStage, LeadEvent
 
-        if event_name == 'VarSet':
-            # MIXMONITOR_FILENAME is set the moment Asterisk starts recording.
-            # Link the file to the Call as soon as we see it.
-            _link_recording_from_varset(event)
-            return
-
-        elif event_name == 'Newchannel':
+        if event_name == 'Newchannel':
             chan_name = event.get('Channel', '')
             if chan_name.startswith('Local/'):
                 logger.debug(f'[AMI] Skipping Local channel: {chan_name}')
@@ -673,13 +667,6 @@ def process_ami_event(self, event: dict):
                                 ring_duration=offered_evt.ring_duration or duration,
                                 note=evt_note,
                             )
-
-                    # Recording fallback: if VarSet was missed, scan the
-                    # recordings folder by uniqueid to link the file post-hangup.
-                    try:
-                        _scan_recording_for_call(call)
-                    except Exception as _re:
-                        logger.warning(f'[Recording] scan-on-hangup failed: {_re}')
 
                     notify_call_ended.delay(str(call.id), status)
 
