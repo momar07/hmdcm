@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient }       from '@tanstack/react-query';
 import {
   Phone, Coffee, WifiOff, Wifi, RefreshCw, ShieldAlert, Eye, EyeOff,
-  Search, Filter as FilterIcon, LayoutGrid, List as ListIcon,
+  Search, Filter as FilterIcon,
 } from 'lucide-react';
 import { agentStatusApi }                 from '@/lib/api/users';
 import { PageHeader }                     from '@/components/ui/PageHeader';
@@ -142,76 +142,6 @@ function AgentCard({ agent, now, onClick }: {
   );
 }
 
-
-function AgentTile({ agent, now, onClick }: {
-  agent: AgentRow; now: number; onClick?: () => void;
-}) {
-  const cfg      = STATUS_CFG[agent.status] ?? STATUS_CFG.offline;
-  const duration = formatDuration(agent.status_since, now);
-
-  // compact card colors by status
-  const ringByStatus: Record<string, string> = {
-    available: 'ring-green-200 hover:ring-green-300',
-    on_call:   'ring-blue-200 hover:ring-blue-300',
-    busy:      'ring-orange-200 hover:ring-orange-300',
-    away:      'ring-yellow-200 hover:ring-yellow-300',
-    offline:   'ring-gray-200 hover:ring-gray-300',
-  };
-  const ring = ringByStatus[agent.status] ?? ringByStatus.offline;
-
-  return (
-    <div
-      onClick={onClick}
-      className={`group relative bg-white rounded-xl border border-gray-100
-                  shadow-sm hover:shadow-md transition-all p-4
-                  flex flex-col items-center text-center gap-2
-                  ring-1 ${ring}
-                  ${onClick ? 'cursor-pointer' : ''}
-                  ${agent.status === 'offline' ? 'opacity-60' : ''}`}
-    >
-      {/* Top status bar */}
-      <div className={`absolute top-0 left-0 right-0 h-1 rounded-t-xl ${cfg.dot}`} />
-
-      {/* Avatar with status dot */}
-      <div className="relative mt-1">
-        <div className="w-14 h-14 rounded-full bg-gradient-to-br
-                        from-blue-500 to-blue-700 flex items-center
-                        justify-center text-white font-bold text-lg">
-          {agent.name.charAt(0).toUpperCase()}
-        </div>
-        <span className={`absolute -bottom-0.5 -right-0.5 w-4 h-4
-                          rounded-full ring-2 ring-white ${cfg.dot}`} />
-      </div>
-
-      {/* Name */}
-      <div className="w-full min-w-0">
-        <p className="text-sm font-semibold text-gray-900 truncate">
-          {agent.name}
-        </p>
-        {agent.team_name && (
-          <p className="text-[10px] text-gray-400 truncate">{agent.team_name}</p>
-        )}
-      </div>
-
-      {/* Status badge */}
-      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gray-50">
-        {cfg.icon}
-        <span className="text-xs font-medium text-gray-700">{cfg.label}</span>
-      </div>
-
-      {/* Duration + Extension row */}
-      <div className="w-full flex items-center justify-between text-[11px] text-gray-400 mt-1">
-        {agent.extension ? (
-          <span className="font-mono bg-gray-50 px-1.5 py-0.5 rounded">
-            Ext {agent.extension}
-          </span>
-        ) : <span/>}
-        {duration && <span className="font-mono">{duration}</span>}
-      </div>
-    </div>
-  );
-}
-
 // ── Main Page ────────────────────────────────────────────────
 type StatusFilter = 'all' | 'available' | 'on_call' | 'busy' | 'away' | 'offline';
 
@@ -232,18 +162,6 @@ export default function LiveAgentsPage() {
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>('all');
   const [groupByTeam,    setGroupByTeam]    = useState(false);
   const [drawerAgentId,  setDrawerAgentId]  = useState<string | null>(null);
-
-  // View mode (cards | list) — persisted in localStorage
-  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
-  useEffect(() => {
-    const saved = typeof window !== 'undefined'
-      ? localStorage.getItem('liveAgents.viewMode') : null;
-    if (saved === 'cards' || saved === 'list') setViewMode(saved);
-  }, []);
-  useEffect(() => {
-    if (typeof window !== 'undefined')
-      localStorage.setItem('liveAgents.viewMode', viewMode);
-  }, [viewMode]);
 
   const { data, isLoading, isFetching, refetch } = useQuery<LiveData>({
     queryKey:        ['live-agents'],
@@ -367,30 +285,6 @@ export default function LiveAgentsPage() {
         subtitle={`${summary.total} agents · auto-refresh every 10s`}
         actions={
           <div className="flex items-center gap-2">
-            {/* View mode toggle */}
-            <div className="flex border border-gray-200 rounded-lg p-0.5 bg-white">
-              <button
-                onClick={() => setViewMode('cards')}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'cards'
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-gray-400 hover:text-gray-600'}`}
-                title="Cards view"
-              >
-                <LayoutGrid size={14}/>
-              </button>
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-1.5 rounded transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-gray-400 hover:text-gray-600'}`}
-                title="List view"
-              >
-                <ListIcon size={14}/>
-              </button>
-            </div>
-
             {hasTeams && (
               <button
                 onClick={() => setGroupByTeam(v => !v)}
@@ -508,20 +402,11 @@ export default function LiveAgentsPage() {
 
       {/* Agents list */}
       {isLoading ? (
-        viewMode === 'cards' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3
-                          lg:grid-cols-4 xl:grid-cols-5 gap-3">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="h-44 bg-gray-100 rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
-            ))}
-          </div>
-        )
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-16 bg-gray-100 rounded-xl animate-pulse" />
+          ))}
+        </div>
       ) : visible.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <WifiOff size={48} className="mx-auto mb-3 text-gray-200" />
@@ -542,31 +427,13 @@ export default function LiveAgentsPage() {
               <h3 className="text-xs font-semibold text-gray-500 uppercase mb-2 px-1">
                 {group.name} ({group.agents.length})
               </h3>
-              {viewMode === 'cards' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3
-                                lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {group.agents.map(a => (
-                    <AgentTile key={a.id} agent={a} now={syncedNow}
-                               onClick={() => setDrawerAgentId(a.id)}/>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {group.agents.map(a => (
-                    <AgentCard key={a.id} agent={a} now={syncedNow}
-                               onClick={() => setDrawerAgentId(a.id)}/>
-                  ))}
-                </div>
-              )}
+              <div className="space-y-2">
+                {group.agents.map(a => (
+                  <AgentCard key={a.id} agent={a} now={syncedNow}
+                             onClick={() => setDrawerAgentId(a.id)}/>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
-      ) : viewMode === 'cards' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3
-                        lg:grid-cols-4 xl:grid-cols-5 gap-3">
-          {visible.map((a) => (
-            <AgentTile key={a.id} agent={a} now={syncedNow}
-                       onClick={() => setDrawerAgentId(a.id)}/>
           ))}
         </div>
       ) : (
