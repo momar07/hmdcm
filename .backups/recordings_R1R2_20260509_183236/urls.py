@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter, SimpleRouter
-from .views import (, CallRecordingStreamView, CallRecordingDownloadView
+from .views import (
     MarkCallAnsweredView,
     RejectCallView,
     DismissCallView,
@@ -29,9 +29,6 @@ disp_router.register(r'dispositions-crud', DispositionViewSet, basename='disposi
 disp_router.register(r'disposition-actions', DispositionActionViewSet, basename='disposition-action')
 
 urlpatterns = [
-    path('<uuid:call_id>/recording/',          CallRecordingStreamView.as_view(),   name='call-recording-stream'),
-    path('<uuid:call_id>/recording/download/', CallRecordingDownloadView.as_view(), name='call-recording-download'),
-
     # explicit paths أولاً
     path('complete/<uuid:call_id>/',         CallCompleteView.as_view(),       name='call-complete'),
     path('pending-completions/',             PendingCompletionsView.as_view(), name='pending-completions'),

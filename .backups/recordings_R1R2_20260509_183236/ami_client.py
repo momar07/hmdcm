@@ -149,8 +149,6 @@ class AMIClient:
             'QueueMemberStatus',
             # Agent events
             'AgentLogin', 'AgentLogoff',
-            # Recording events
-            'VarSet',
             'AgentCalled',
             'AgentConnect', 'AgentComplete', 'AgentRinghangup',
         }

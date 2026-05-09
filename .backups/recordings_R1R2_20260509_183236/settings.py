@@ -218,6 +218,3 @@ ASTERISK_INBOUND_CONTEXTS = [
         'from-trunk,from-pstn,from-did,from-sip-external,ext-did,from-external,from-did-direct,from-pstn-toheader'
     ).split(',') if c.strip()
 ]
-
-# ── Asterisk Recordings (NFS mount) ──
-ASTERISK_RECORDINGS_PATH = os.environ.get('ASTERISK_RECORDINGS_PATH', '/mnt/asterisk-recordings')

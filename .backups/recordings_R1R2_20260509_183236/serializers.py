@@ -64,7 +64,6 @@ class CallListSerializer(serializers.ModelSerializer):
 
 
 class CallDetailSerializer(serializers.ModelSerializer):
-    recordings = CallRecordingSerializer(many=True, read_only=True)
     events      = CallEventSerializer(many=True, read_only=True)
     recording   = CallRecordingSerializer(read_only=True)
     agent_name  = serializers.SerializerMethodField()

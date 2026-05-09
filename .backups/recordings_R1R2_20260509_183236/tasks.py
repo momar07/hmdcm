@@ -1,4 +1,3 @@
-import re
 import logging
 from celery import shared_task
 from asgiref.sync import async_to_sync
@@ -1014,73 +1013,3 @@ def handle_vip_call(self, call_id: str):
 
     logger.info(f'[Automation] VIP alert for {call.lead.get_full_name() if call.lead else "Unknown"} ({lead.company or "No company"})')
     return f'VIP alert: {call.lead.get_full_name() if call.lead else "Unknown"}'
-
-
-# ── Recording linkage (added by R1+R2 patch) ──────────────────────────
-def _link_recording_from_varset(event):
-    """
-    Handle AMI VarSet event with Variable=MIXMONITOR_FILENAME.
-    Links the recording filename to the Call via uniqueid.
-    """
-    try:
-        from apps.calls.models import Call, CallRecording
-        var = event.get('Variable', '')
-        if var != 'MIXMONITOR_FILENAME':
-            return
-        filename_full = (event.get('Value') or '').strip()
-        uniqueid = (event.get('Uniqueid') or '').strip()
-        if not filename_full or not uniqueid:
-            return
-        # Asterisk gives full path like /var/spool/asterisk/monitor/2026/05/09/q-901-...wav
-        # Keep only the relative path (after monitor/)
-        m = re.search(r'monitor/(.+)$', filename_full)
-        rel_path = m.group(1) if m else filename_full.split('/')[-1]
-        call = Call.objects.filter(uniqueid=uniqueid).first()
-        if not call:
-            logger.info(f'[Recording] No Call yet for uniqueid={uniqueid}, will retry on Hangup')
-            return
-        CallRecording.objects.get_or_create(
-            call=call,
-            filename=rel_path,
-            defaults={'url': f'/api/calls/{call.id}/recording/'}
-        )
-        logger.info(f'[Recording] Linked {rel_path} to call {call.id}')
-    except Exception as e:
-        logger.warning(f'[Recording] link failed: {e}')
-
-
-def _scan_recording_for_call(call):
-    """
-    Fallback: when Hangup arrives but no VarSet was captured,
-    scan the recordings folder for a file whose name contains the uniqueid.
-    """
-    try:
-        import os, glob
-        from django.conf import settings as dj_settings
-        from apps.calls.models import CallRecording
-        if not call.uniqueid:
-            return
-        if CallRecording.objects.filter(call=call).exists():
-            return  # already linked
-        base = getattr(dj_settings, 'ASTERISK_RECORDINGS_PATH', '/mnt/asterisk-recordings')
-        # Build YYYY/MM/DD path from started_at
-        if call.started_at:
-            d = call.started_at
-            day_dir = os.path.join(base, f'{d.year:04d}', f'{d.month:02d}', f'{d.day:02d}')
-            patterns = [day_dir + f'/*{call.uniqueid}*.wav']
-        else:
-            # Fallback: search all of today and yesterday
-            patterns = [base + f'/*/*/*/*{call.uniqueid}*.wav']
-        for pat in patterns:
-            matches = glob.glob(pat)
-            if matches:
-                rel = os.path.relpath(matches[0], base)
-                CallRecording.objects.get_or_create(
-                    call=call,
-                    filename=rel,
-                    defaults={'url': f'/api/calls/{call.id}/recording/'}
-                )
-                logger.info(f'[Recording] Fallback-linked {rel} to call {call.id}')
-                return
-    except Exception as e:
-        logger.warning(f'[Recording] fallback scan failed: {e}')
