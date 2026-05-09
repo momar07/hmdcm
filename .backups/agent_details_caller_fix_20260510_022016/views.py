@@ -341,7 +341,7 @@ class AgentDetailsView(APIView):
             recent.append({
                 'id':         str(c.id),
                 'lead_name':  c.lead.get_display_name() if c.lead_id else None,
-                'caller':     c.caller,
+                'caller':     c.caller_number,
                 'direction':  c.direction,
                 'status':     c.status,
                 'duration':   c.duration,
