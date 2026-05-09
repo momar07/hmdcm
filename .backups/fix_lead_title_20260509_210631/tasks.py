@@ -35,10 +35,10 @@ def notify_incoming_call(self, call_id: str):
     if lead:
         lead_display_name = lead.get_full_name()
         if lead_display_name and lead.phone and lead_display_name.strip() == lead.phone.strip():
-            lead_display_name = lead.company or caller_name_clean or lead.phone
+            lead_display_name = lead.title or caller_name_clean or lead.phone
         lead_data = {
             'lead_id':        str(lead.id),
-            'lead_title':     lead.get_display_name(),
+            'lead_title':     lead.title,
             'lead_phone':     lead.phone or call.caller,
             'lead_stage':     lead.stage.name  if lead.stage  else None,
             'lead_status':    lead.status.name if lead.status else None,
