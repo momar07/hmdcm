@@ -9,7 +9,7 @@ import {
   FileText, MessageSquare, Plus, Mail, Building2, MapPin,
   DollarSign, MoreVertical, MessageCircle, ChevronRight,
   Check, Lightbulb, X, TrendingUp,
-  Archive, RotateCcw, Trash2, Mic, Download as DownloadIcon, Play, Pause
+  Archive, RotateCcw, Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { leadsApi } from '@/lib/api/leads';
@@ -88,7 +88,7 @@ function SOURCE_LABEL(s: string): string {
   return m[s] || s || '—';
 }
 
-type Tab = 'timeline' | 'calls' | 'tickets' | 'followups' | 'quotations' | 'recordings';
+type Tab = 'timeline' | 'calls' | 'tickets' | 'followups' | 'quotations';
 
 interface TimelineItem {
   id:        string;
@@ -707,10 +707,6 @@ export default function LeadDetailPage() {
               </div>
             </div>
           )}
-
-      {tab === 'recordings' && (
-        <RecordingsTab calls={callsData?.results || []} />
-      )}
         </div>
 
         {/* RIGHT: Sticky Sidebar */}
@@ -1075,132 +1071,3 @@ function TimelineRow({ item, router }: { item: TimelineItem; router: any }) {
   }
   return null;
 }
-
-// ── RecordingsTab Component ───────────────────────────────────────
-function RecordingsTab({ calls }: { calls: any[] }) {
-  const callsWithRecordings = (calls || []).filter(
-    (c: any) => Array.isArray(c.recordings) && c.recordings.length > 0
-  );
-
-  if (callsWithRecordings.length === 0) {
-    return (
-      <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-        <Mic size={40} className="text-gray-300 mx-auto mb-3"/>
-        <p className="text-sm text-gray-500 mb-1">No recordings yet for this lead.</p>
-        <p className="text-xs text-gray-400">Recordings will appear here automatically after each call.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {callsWithRecordings.map((call: any) =>
-        (call.recordings || []).map((rec: any) => (
-          <RecordingRow key={rec.id} call={call} recording={rec} />
-        ))
-      )}
-    </div>
-  );
-}
-
-function RecordingRow({ call, recording }: { call: any; recording: any }) {
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadAudio = async () => {
-    if (audioUrl) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const r = await callsApi.recordingBlob(call.id);
-      const blob = r.data instanceof Blob ? r.data : new Blob([r.data], { type: 'audio/wav' });
-      setAudioUrl(URL.createObjectURL(blob));
-    } catch (e: any) {
-      setError(e?.response?.status === 404 ? 'Recording file not found' : 'Failed to load recording');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const downloadFile = async () => {
-    try {
-      const r = await callsApi.recordingDownload(call.id);
-      const blob = r.data instanceof Blob ? r.data : new Blob([r.data], { type: 'audio/wav' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = recording.filename.split('/').pop() || `call-${call.id}.wav`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      toast.error('Download failed');
-    }
-  };
-
-  const dirIcon = call.direction === 'inbound'
-    ? <PhoneIncoming size={14} className="text-blue-500"/>
-    : <PhoneOutgoing size={14} className="text-green-500"/>;
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-sm transition-shadow">
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        {dirIcon}
-        <span className="text-sm font-medium text-gray-900">
-          {call.direction === 'inbound' ? 'Incoming' : 'Outgoing'} call
-        </span>
-        <span className="text-xs text-gray-400">·</span>
-        <span className="text-xs text-gray-500">{call.agent_name || 'Unknown agent'}</span>
-        <span className="text-xs text-gray-400">·</span>
-        <span className="text-xs text-gray-500">
-          {call.started_at ? new Date(call.started_at).toLocaleString() : '—'}
-        </span>
-        {call.duration > 0 && (
-          <>
-            <span className="text-xs text-gray-400">·</span>
-            <span className="text-xs text-gray-500">{Math.floor(call.duration / 60)}:{String(call.duration % 60).padStart(2, '0')}</span>
-          </>
-        )}
-        <button
-          onClick={downloadFile}
-          className="ml-auto inline-flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 transition-colors"
-          title="Download"
-        >
-          <DownloadIcon size={14}/> Download
-        </button>
-      </div>
-
-      {!audioUrl && !loading && (
-        <button
-          onClick={loadAudio}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-sm font-medium transition-colors"
-        >
-          <Play size={14}/> Load &amp; Play Recording
-        </button>
-      )}
-
-      {loading && (
-        <div className="flex items-center justify-center py-3 text-xs text-gray-500">
-          <Spinner size="sm"/> <span className="ml-2">Loading recording...</span>
-        </div>
-      )}
-
-      {error && (
-        <div className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-          {error}
-        </div>
-      )}
-
-      {audioUrl && (
-        <audio controls src={audioUrl} className="w-full" preload="metadata">
-          Your browser does not support audio playback.
-        </audio>
-      )}
-
-      <div className="mt-2 text-[10px] text-gray-400 font-mono truncate">
-        {recording.filename}
-      </div>
-    </div>
-  );
-}
-

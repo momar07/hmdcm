@@ -187,8 +187,6 @@ export interface Call {
   has_recording: boolean;
   recording_url: string;
   created_at:    string;
-  recordings?: CallRecording[];
-
 }
 
 export interface Disposition {
@@ -569,13 +567,4 @@ export interface ActivityLogEntry {
   lead:        string | null;
   call:        string | null;
   timestamp:   string;
-}
-
-export interface CallRecording {
-  id:           string;
-  filename:     string;
-  duration:     number;
-  play_url:     string;
-  download_url: string;
-  created_at:   string;
 }

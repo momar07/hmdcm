@@ -1,6 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter, SimpleRouter
-from .views import (, CallRecordingStreamView, CallRecordingDownloadView
+from .views import (
+    CallRecordingStreamView,
+    CallRecordingDownloadView,
     MarkCallAnsweredView,
     RejectCallView,
     DismissCallView,
