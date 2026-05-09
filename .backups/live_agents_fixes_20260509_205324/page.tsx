@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useQuery, useQueryClient }       from '@tanstack/react-query';
 import { Phone, Coffee, WifiOff, Wifi }   from 'lucide-react';
 import { agentStatusApi }                 from '@/lib/api/users';
 import { PageHeader }                     from '@/components/ui/PageHeader';
 import { useAuthStore }                   from '@/store';
-import { useAppSocket } from '@/lib/ws/useAppSocket';
 
 // ── Types ─────────────────────────────────────────────────────
 interface AgentRow {
@@ -156,6 +155,8 @@ function AgentCard({ agent }: { agent: AgentRow }) {
 export default function LiveAgentsPage() {
   const { user }   = useAuthStore();
   const qc         = useQueryClient();
+  const wsRef      = useRef<WebSocket | null>(null);
+
   // fetch live agents every 10s
   const { data, isLoading } = useQuery<LiveData>({
     queryKey:       ['live-agents'],
@@ -163,18 +164,34 @@ export default function LiveAgentsPage() {
     refetchInterval: 10_000,
   });
 
-  // WebSocket - real-time status updates (auto-reconnect + cookie auth)
-  useAppSocket({
-    path: '/ws/calls/',
-    enabled: !!user,
-    onOpen: () => console.log('[WS] Live agents connected'),
-    onMessage: (msg) => {
-      if (msg?.type === 'agent_status_update') {
-        qc.invalidateQueries({ queryKey: ['live-agents'] });
-      }
-    },
-    onError: (e) => console.warn('[WS] error', e),
-  });
+  // WebSocket — real-time status updates
+  useEffect(() => {
+    const token = localStorage.getItem('access_token') ||
+      (() => {
+        try {
+          const auth = JSON.parse(localStorage.getItem('crm-auth') || '{}');
+          return auth?.state?.user ? sessionStorage.getItem('access_token') : null;
+        } catch { return null; }
+      })();
+
+    const wsUrl = `ws://localhost:8000/ws/calls/?token=${token ?? ''}`;
+    const ws    = new WebSocket(wsUrl);
+    wsRef.current = ws;
+
+    ws.onopen    = () => console.log('[WS] Live agents connected');
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.type === 'agent_status_update') {
+          // refresh live agents list immediately
+          qc.invalidateQueries({ queryKey: ['live-agents'] });
+        }
+      } catch {}
+    };
+    ws.onerror   = (e) => console.warn('[WS] error', e);
+
+    return () => ws.close();
+  }, [qc]);
 
   // Agent sees only themselves — show simplified single-agent view
   if (user && user.role === 'agent') {
