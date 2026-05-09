@@ -33,7 +33,6 @@ class CallDispositionSerializer(serializers.ModelSerializer):
 
 class CallListSerializer(serializers.ModelSerializer):
     agent_name    = serializers.SerializerMethodField()
-    recordings    = CallRecordingSerializer(many=True, read_only=True)
     lead_name     = serializers.SerializerMethodField()
     has_recording = serializers.SerializerMethodField()
 
@@ -46,7 +45,7 @@ class CallListSerializer(serializers.ModelSerializer):
             'lead', 'lead_name',
             'duration', 'started_at', 'ended_at',
             'is_completed', 'completed_at',
-            'has_recording', 'recordings', 'created_at',
+            'has_recording', 'created_at',
         ]
 
     def get_agent_name(self, obj):

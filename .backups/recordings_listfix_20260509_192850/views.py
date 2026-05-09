@@ -38,7 +38,7 @@ class CallViewSet(viewsets.ModelViewSet):
         if lead_id:
             qs = Call.objects.select_related(
                 'agent', 'lead'
-            ).prefetch_related('events', 'recordings').filter(
+            ).prefetch_related('events').filter(
                 lead_id=lead_id
             ).distinct().order_by('-created_at')
         return qs
