@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import (UserViewSet, QueueViewSet, AgentQueueStatusView, LiveAgentsView, QueuesListView, ForceAgentStatusView, AgentDetailsView)
+from .views import UserViewSet, QueueViewSet, AgentQueueStatusView, LiveAgentsView, QueuesListView
 
 router = DefaultRouter()
 router.register('queues', QueueViewSet, basename='queue')
@@ -9,8 +9,6 @@ router.register('', UserViewSet, basename='user')
 urlpatterns = [
     path('me/queue-status/', AgentQueueStatusView.as_view(), name='agent-queue-status'),
     path('live-agents/',     LiveAgentsView.as_view(),       name='live-agents'),
-    path('<uuid:pk>/force-status/',  ForceAgentStatusView.as_view(), name='force-agent-status'),
-    path('<uuid:pk>/agent-details/', AgentDetailsView.as_view(),     name='agent-details'),
     path('queues-list/',     QueuesListView.as_view(),        name='queues-list'),
     path('', include(router.urls)),
 ]
