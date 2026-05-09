@@ -66,7 +66,7 @@ class CallEventConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_send(
                 'supervisors',
                 {
-                    'type':     'agent_status_update',
+                    'type':     'agent.status.update',
                     'agent_id': str(self.user.id),
                     'status':   data.get('status', 'available'),
                 }
@@ -109,24 +109,4 @@ class CallEventConsumer(AsyncWebsocketConsumer):
             'priority':    event.get('priority'),
             'due_date':    event.get('due_date'),
             'assigned_by': event.get('assigned_by'),
-        }))
-
-    async def quotation_pending(self, event):
-        """Notify supervisors that an agent submitted a quotation for approval."""
-        await self.send(text_data=json.dumps({
-            'type':         'quotation_pending',
-            'quotation_id': event.get('quotation_id'),
-            'ref_number':   event.get('ref_number'),
-            'agent_name':   event.get('agent_name'),
-            'total':        event.get('total'),
-        }))
-
-    async def quotation_update(self, event):
-        """Notify agent when their quotation is approved/rejected/revision-requested."""
-        await self.send(text_data=json.dumps({
-            'type':         'quotation_update',
-            'quotation_id': event.get('quotation_id'),
-            'ref_number':   event.get('ref_number'),
-            'event':        event.get('event'),
-            'comment':      event.get('comment'),
         }))
