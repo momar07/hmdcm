@@ -161,12 +161,11 @@ export default function ApprovalsPage() {
         )}
       </div>
 
-      {showNewModal && (
-        <NewApprovalModal
-          onClose={() => setShowNewModal(false)}
-          onCreated={() => { fetchApprovals(); fetchPending(); }}
-        />
-      )}
+      <NewApprovalModal
+        open={showNewModal}
+        onClose={() => setShowNewModal(false)}
+        onCreated={() => { fetchApprovals(); fetchPending(); }}
+      />
     </div>
   );
 }
