@@ -3,4 +3,3 @@ export { useCallStore } from './callStore';
 export { useUIStore }   from './uiStore';
 
 export { useAgentStatusStore } from './agentStatusStore';
-export { useNotificationsStore } from './notificationsStore';

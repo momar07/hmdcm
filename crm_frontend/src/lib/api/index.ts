@@ -8,3 +8,5 @@ export { dashboardApi } from './dashboard';
 export { usersApi }     from './users';
 export { auditApi }     from './audit';
 export { default as api } from './axios';
+export { notificationsApi } from './notifications';
+export type { Notification, NotificationType, NotificationPriority } from './notifications';

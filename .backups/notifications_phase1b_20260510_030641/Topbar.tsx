@@ -1,14 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState }               from 'react';
 import { Bell, PhoneCall, CheckSquare } from 'lucide-react';
-import { useAuthStore, useAgentStatusStore, useNotificationsStore } from '@/store';
+import { useAuthStore }            from '@/store';
 import { AgentStatusDropdown }     from './AgentStatusDropdown';
-import { NotificationsPanel }      from './NotificationsPanel';
+import { useAgentStatusStore }     from '@/store';
 import { NewApprovalModal }        from '@/components/approvals/NewApprovalModal';
-import { useAppSocket }            from '@/lib/ws/useAppSocket';
 import type { AgentStatus }        from '@/types';
-import type { Notification }       from '@/lib/api/notifications';
 
 const ROLE_COLORS: Record<string, string> = {
   admin:      'bg-purple-600',
@@ -30,61 +28,6 @@ export function Topbar() {
   const { status } = useAgentStatusStore();
   const [showApproval, setShowApproval] = useState(false);
 
-  const {
-    unreadCount, open, toggleOpen, setOpen,
-    fetchUnreadCount, addRealtime,
-  } = useNotificationsStore();
-
-  // 1) Initial unread count + polling fallback every 60s
-  useEffect(() => {
-    if (!user) return;
-    fetchUnreadCount();
-    const t = setInterval(fetchUnreadCount, 60_000);
-    return () => clearInterval(t);
-  }, [user, fetchUnreadCount]);
-
-  // 2) Realtime: listen on the agent-events WS for notification_new
-  useAppSocket({
-    path: '/ws/agent-events/',
-    enabled: !!user,
-    onMessage: (msg) => {
-      if (msg?.event === 'notification_new') {
-        const n: Notification = {
-          id:         msg.id,
-          type:       msg.notif_type,
-          title:      msg.title,
-          body:       msg.body ?? '',
-          data:       msg.data ?? {},
-          link:       msg.link ?? '',
-          priority:   msg.priority ?? 'normal',
-          is_read:    msg.is_read ?? false,
-          read_at:    null,
-          created_at: msg.created_at ?? new Date().toISOString(),
-        };
-        addRealtime(n);
-
-        // Optional: native browser notification when tab not focused
-        if (
-          typeof window !== 'undefined'
-          && 'Notification' in window
-          && document.visibilityState !== 'visible'
-          && Notification.permission === 'granted'
-        ) {
-          try { new Notification(n.title, { body: n.body, tag: n.id }); }
-          catch { /* ignore */ }
-        }
-      }
-    },
-  });
-
-  // 3) Request browser notification permission once
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window
-        && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => { /* ignore */ });
-    }
-  }, []);
-
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center
                        justify-between px-6 shrink-0">
@@ -96,6 +39,7 @@ export function Topbar() {
 
       {/* Right */}
       <div className="flex items-center gap-3">
+        {/* Extension badge */}
         {user?.extension && (
           <span className="hidden sm:inline-flex text-xs font-medium
                            bg-gray-100 text-gray-600 px-2.5 py-1 rounded-lg">
@@ -103,6 +47,7 @@ export function Topbar() {
           </span>
         )}
 
+        {/* Request Approval button — agents only */}
         {user?.role === 'agent' && (
           <button
             onClick={() => setShowApproval(true)}
@@ -115,27 +60,15 @@ export function Topbar() {
           </button>
         )}
 
+        {/* Agent Status Dropdown */}
         <AgentStatusDropdown />
 
-        {/* Notifications bell + panel */}
-        <div className="relative">
-          <button
-            onClick={toggleOpen}
-            className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            aria-label="Notifications"
-          >
-            <Bell size={18} className="text-gray-500" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px]
-                               px-1 bg-red-500 text-white text-[10px] font-bold
-                               rounded-full ring-2 ring-white flex items-center
-                               justify-center">
-                {unreadCount > 99 ? '99+' : unreadCount}
-              </span>
-            )}
-          </button>
-          {open && <NotificationsPanel onClose={() => setOpen(false)} />}
-        </div>
+        {/* Notifications */}
+        <button className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors">
+          <Bell size={18} className="text-gray-500" />
+          <span className="absolute top-1.5 right-1.5 w-2 h-2
+                           bg-red-500 rounded-full ring-2 ring-white" />
+        </button>
 
         {/* User avatar */}
         {user && (
@@ -164,6 +97,7 @@ export function Topbar() {
         )}
       </div>
 
+      {/* New Approval Modal */}
       <NewApprovalModal
         open={showApproval}
         onClose={() => setShowApproval(false)}
