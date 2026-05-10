@@ -49,6 +49,11 @@ export function Topbar() {
     if (!user) return;
     const unsub = subscribeAppSocket((msg) => {
       if (msg?.event === 'notification_new') {
+        // DEBUG: count how many times this callback fires per id
+        (window as any).__notifSeen = (window as any).__notifSeen || {};
+        const seen = (window as any).__notifSeen;
+        seen[msg.id] = (seen[msg.id] || 0) + 1;
+        console.log(`[NotifDebug] id=${msg.id} fired ${seen[msg.id]}x`);
         const n: Notification = {
           id:         msg.id,
           type:       msg.notif_type,
