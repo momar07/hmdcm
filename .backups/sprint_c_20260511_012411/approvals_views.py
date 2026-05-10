@@ -98,33 +98,6 @@ class ApprovalViewSet(viewsets.ModelViewSet):
             "ticket_number":     approval.ticket.ticket_number if approval.ticket else None,
         })
 
-        # Persistent notification for each supervisor/admin
-        try:
-            from django.contrib.auth import get_user_model
-            from apps.notifications.services import create_notification
-            User = get_user_model()
-            supervisors = User.objects.filter(role__in=["admin", "supervisor"], is_active=True)
-            amount_str = f" — Amount: {approval.amount}" if approval.amount else ""
-            for sup in supervisors:
-                create_notification(
-                    recipient = sup,
-                    type      = "approval_needed",
-                    title     = f"📋 New approval request: {approval.title}",
-                    body      = f"From {approval.requested_by.get_full_name()}{amount_str}",
-                    link      = f"/approvals",
-                    priority  = "high",
-                    data      = {
-                        "approval_id":       str(approval.id),
-                        "approval_type":     approval.approval_type,
-                        "requested_by_id":   str(approval.requested_by.id),
-                        "requested_by_name": approval.requested_by.get_full_name(),
-                        "amount":            str(approval.amount) if approval.amount else None,
-                    },
-                )
-        except Exception as e:
-            logger.warning(f"Persistent approval notify failed: {e}")
-
-
         return Response(
             ApprovalListSerializer(approval).data,
             status=status.HTTP_201_CREATED,
@@ -179,30 +152,6 @@ class ApprovalViewSet(viewsets.ModelViewSet):
             "reviewed_by":    user.get_full_name(),
         })
 
-        # Persistent in-app notification for the agent
-        try:
-            from apps.notifications.services import create_notification
-            decision = approval.status  # "approved" or "rejected"
-            icon     = "✅" if decision == "approved" else "❌"
-            create_notification(
-                recipient = approval.requested_by,
-                type      = "approval_update",
-                title     = f"{icon} Approval {decision}: {approval.title}",
-                body      = approval.review_comment or f"Your request has been {decision}.",
-                link      = f"/approvals",
-                priority  = "high",
-                data      = {
-                    "approval_id":    str(approval.id),
-                    "approval_type": approval.approval_type,
-                    "status":        decision,
-                    "review_comment": approval.review_comment,
-                    "reviewed_by":    user.get_full_name(),
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Persistent agent approval notify failed: {e}")
-
-
         return Response(ApprovalListSerializer(approval).data)
 
     # ── POST /api/approvals/{id}/reject/ ──────────────────────
@@ -244,30 +193,6 @@ class ApprovalViewSet(viewsets.ModelViewSet):
             "review_comment": approval.review_comment,
             "reviewed_by":    user.get_full_name(),
         })
-
-        # Persistent in-app notification for the agent
-        try:
-            from apps.notifications.services import create_notification
-            decision = approval.status  # "approved" or "rejected"
-            icon     = "✅" if decision == "approved" else "❌"
-            create_notification(
-                recipient = approval.requested_by,
-                type      = "approval_update",
-                title     = f"{icon} Approval {decision}: {approval.title}",
-                body      = approval.review_comment or f"Your request has been {decision}.",
-                link      = f"/approvals",
-                priority  = "high",
-                data      = {
-                    "approval_id":    str(approval.id),
-                    "approval_type": approval.approval_type,
-                    "status":        decision,
-                    "review_comment": approval.review_comment,
-                    "reviewed_by":    user.get_full_name(),
-                },
-            )
-        except Exception as e:
-            logger.warning(f"Persistent agent approval notify failed: {e}")
-
 
         return Response(ApprovalListSerializer(approval).data)
 

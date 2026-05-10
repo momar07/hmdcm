@@ -141,6 +141,25 @@ export default function DashboardLayout({
     if (event.type === 'followup_reminder') {
       window.dispatchEvent(new CustomEvent('followup:reminder', { detail: event }));
     }
+    if (event.type === 'approval_update') {
+      const ev = event as any;
+      const isApproved = ev.status === 'approved';
+      const msg = (isApproved ? '✅ Approved: ' : '❌ Rejected: ') + (ev.title ?? 'Approval Request');
+      const comment = ev.review_comment ? (' — ' + ev.review_comment) : '';
+      import('react-hot-toast').then(({ default: toast }) => {
+        toast(msg + comment, {
+          duration: 6000,
+          style: { borderLeft: '4px solid ' + (isApproved ? '#16a34a' : '#dc2626'), maxWidth: '360px' },
+        });
+      });
+    }
+    if (event.type === 'approval_request') {
+      const ev2 = event as any;
+      const msg2 = '📋 New request from ' + (ev2.requested_by_name ?? 'Agent') + ': ' + (ev2.title ?? '');
+      import('react-hot-toast').then(({ default: toast }) => {
+        toast(msg2, { duration: 7000, style: { borderLeft: '4px solid #2563eb' } });
+      });
+    }
   });
 
   // ringKey ref — no longer needs a separate effect

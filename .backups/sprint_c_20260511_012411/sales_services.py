@@ -180,94 +180,37 @@ def expire_overdue_quotations():
 
 
 def _notify_supervisors(quotation):
-    """Notify all supervisors: WS broadcast + persistent in-app notification."""
     try:
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
         channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                "supervisors",
-                {
-                    "type":       "quotation_pending",
-                    "quotation_id": str(quotation.id),
-                    "ref_number": quotation.ref_number,
-                    "agent_name": quotation.agent.get_full_name() if quotation.agent else "",
-                    "total":      str(quotation.total_amount),
-                },
-            )
+        if not channel_layer:
+            return
+        async_to_sync(channel_layer.group_send)(
+            "supervisors",
+            {
+                "type":       "quotation_pending",
+                "quotation_id": str(quotation.id),
+                "ref_number": quotation.ref_number,
+                "agent_name": quotation.agent.get_full_name() if quotation.agent else "",
+                "total":      str(quotation.total_amount),
+            },
+        )
     except Exception as e:
         logger.warning(f"WS notify supervisors failed: {e}")
 
-    # Persistent notification for each supervisor/admin
-    try:
-        from django.contrib.auth import get_user_model
-        from apps.notifications.services import create_notification
-        User = get_user_model()
-        supervisors = User.objects.filter(role__in=["admin", "supervisor"], is_active=True)
-        agent_name = quotation.agent.get_full_name() if quotation.agent else "Unknown"
-        for sup in supervisors:
-            create_notification(
-                recipient = sup,
-                type      = "quotation_pending",
-                title     = f"📄 Quotation pending: {quotation.ref_number}",
-                body      = f"From {agent_name} — total: {quotation.total_amount} {quotation.currency}",
-                link      = f"/sales/quotations/{quotation.id}",
-                priority  = "high",
-                data      = {
-                    "quotation_id": str(quotation.id),
-                    "ref_number":   quotation.ref_number,
-                    "agent_name":   agent_name,
-                    "total":        str(quotation.total_amount),
-                },
-            )
-    except Exception as e:
-        logger.warning(f"Persistent notify supervisors failed: {e}")
-
 
 def _notify_agent(quotation, event, comment=""):
-    """Notify the agent: WS push (FIXED group) + persistent notification."""
     try:
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
         channel_layer = get_channel_layer()
-        if channel_layer:
-            async_to_sync(channel_layer.group_send)(
-                f"agent_{quotation.agent_id}",   # FIX: was user_{id}
-                {
-                    "type":         "quotation_update",
-                    "quotation_id": str(quotation.id),
-                    "ref_number":   quotation.ref_number,
-                    "event":        event,
-                    "comment":      comment,
-                },
-            )
-    except Exception as e:
-        logger.warning(f"WS notify agent failed: {e}")
-
-    # Persistent in-app notification
-    try:
-        from apps.notifications.services import create_notification
-        if not quotation.agent_id:
+        if not channel_layer:
             return
-
-        event_meta = {
-            "approved":           {"icon": "✅", "label": "approved",          "priority": "high"},
-            "rejected":           {"icon": "❌", "label": "rejected",          "priority": "high"},
-            "revision_requested": {"icon": "✏️", "label": "needs revision",    "priority": "high"},
-        }
-        meta  = event_meta.get(event, {"icon": "ℹ️", "label": event, "priority": "normal"})
-        title = f"{meta['icon']} Quotation {meta['label']}: {quotation.ref_number}"
-        body  = comment or f"Your quotation has been {meta['label']}."
-
-        create_notification(
-            recipient = quotation.agent,
-            type      = "quotation_update",
-            title     = title,
-            body      = body,
-            link      = f"/sales/quotations/{quotation.id}",
-            priority  = meta["priority"],
-            data      = {
+        async_to_sync(channel_layer.group_send)(
+            f"user_{quotation.agent_id}",
+            {
+                "type":         "quotation_update",
                 "quotation_id": str(quotation.id),
                 "ref_number":   quotation.ref_number,
                 "event":        event,
@@ -275,4 +218,4 @@ def _notify_agent(quotation, event, comment=""):
             },
         )
     except Exception as e:
-        logger.warning(f"Persistent notify agent failed: {e}")
+        logger.warning(f"WS notify agent failed: {e}")
