@@ -6,7 +6,7 @@ import { useAuthStore, useAgentStatusStore, useNotificationsStore } from '@/stor
 import { AgentStatusDropdown }     from './AgentStatusDropdown';
 import { NotificationsPanel }      from './NotificationsPanel';
 import { NewApprovalModal }        from '@/components/approvals/NewApprovalModal';
-import { subscribeAppSocket }      from './AppSocketProvider';
+import { useAppSocket }            from '@/lib/ws/useAppSocket';
 import type { AgentStatus }        from '@/types';
 import type { Notification }       from '@/lib/api/notifications';
 
@@ -43,10 +43,11 @@ export function Topbar() {
     return () => clearInterval(t);
   }, [user, fetchUnreadCount]);
 
-  // 2) Realtime: subscribe to the singleton WS bus for notification_new
-  useEffect(() => {
-    if (!user) return;
-    const unsub = subscribeAppSocket((msg) => {
+  // 2) Realtime: listen on the agent-events WS for notification_new
+  useAppSocket({
+    path: '/ws/calls/',
+    enabled: !!user,
+    onMessage: (msg) => {
       if (msg?.event === 'notification_new') {
         const n: Notification = {
           id:         msg.id,
@@ -62,6 +63,7 @@ export function Topbar() {
         };
         addRealtime(n);
 
+        // Optional: native browser notification when tab not focused
         if (
           typeof window !== 'undefined'
           && 'Notification' in window
@@ -72,9 +74,8 @@ export function Topbar() {
           catch { /* ignore */ }
         }
       }
-    });
-    return unsub;
-  }, [user, addRealtime]);
+    },
+  });
 
   // 3) Request browser notification permission once
   useEffect(() => {

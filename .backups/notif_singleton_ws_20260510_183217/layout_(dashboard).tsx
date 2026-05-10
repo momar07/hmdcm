@@ -12,7 +12,6 @@ import { useSipStore } from '@/store/sipStore';
 import { useWebSocket }        from '@/lib/websocket/useWebSocket';
 import { ReminderToastListener } from '@/components/followups/ReminderToast';
 import type { WSEvent }        from '@/types';
-import { AppSocketProvider } from '@/components/layout/AppSocketProvider';
 
 export default function DashboardLayout({
   children,
@@ -198,7 +197,6 @@ export default function DashboardLayout({
 
 
   return (
-    <AppSocketProvider>
     <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar />
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
@@ -221,6 +219,5 @@ export default function DashboardLayout({
         />
       )}
     </div>
-      </AppSocketProvider>
   );
 }
