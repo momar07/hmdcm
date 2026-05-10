@@ -11,26 +11,38 @@ def _log_event(lead, event_type, actor=None, old_value='', new_value='', note=''
 
 
 def _notify_agent(agent, lead, message: str):
-    """Persist + push real-time lead_assigned notification."""
-    import logging
-    logger = logging.getLogger(__name__)
+    """Push WS notification to a specific agent."""
     try:
-        from apps.notifications.services import create_notification
-        create_notification(
-            recipient=agent,
-            notif_type='lead_assigned',
-            title=f'New lead: {lead.get_display_name()}',
-            body=message,
-            link=f'/leads/{lead.id}',
-            priority='normal',
-            data={
-                'lead_id':   str(lead.id),
-                'lead_name': lead.get_display_name(),
-            },
-            push_realtime=True,
-        )
+        from channels.layers import get_channel_layer
+        import threading, asyncio
+
+        payload = {
+            'type':    'lead_assigned',
+            'lead_id': str(lead.id),
+            'title':   lead.get_display_name(),
+            'message': message,
+            'lead_name': lead.get_display_name(),
+        }
+
+        def _run():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(
+                    get_channel_layer().group_send(
+                        f'agent_{agent.id}',
+                        {'type': 'call_event', 'payload': payload}
+                    )
+                )
+            finally:
+                loop.close()
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        t.join(timeout=3)
     except Exception as e:
-        logger.warning(f'[Lead] Notify agent error: {e}')
+        import logging
+        logging.getLogger(__name__).warning(f'[Lead] Notify agent error: {e}')
 
 
 def _sync_followup(lead, actor=None):

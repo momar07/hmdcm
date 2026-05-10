@@ -43,26 +43,6 @@ def send_followup_reminders(self):
                     'scheduled_at': f.scheduled_at.isoformat(),
                 }
             )
-            # Persistent in-app notification (bell)
-            try:
-                from apps.notifications.services import create_notification
-                create_notification(
-                    recipient=f.assigned_to,
-                    notif_type='followup_reminder',
-                    title=f'Follow-up reminder: {f.title}',
-                    body=f'Lead: {f.lead.get_full_name() if f.lead else "-"} | due {f.scheduled_at.strftime("%H:%M")}',
-                    link=f'/leads/{f.lead_id}' if f.lead_id else '/followups',
-                    priority='high',
-                    data={
-                        'followup_id':  str(f.id),
-                        'lead_id':      str(f.lead_id) if f.lead_id else None,
-                        'scheduled_at': f.scheduled_at.isoformat(),
-                    },
-                    push_realtime=False,  # WS already pushed above
-                )
-            except Exception as ne:
-                logger.warning(f'[Reminder] Notif persist failed for {f.id}: {ne}')
-
             f.reminder_sent = True
             f.save(update_fields=['reminder_sent'])
             count += 1

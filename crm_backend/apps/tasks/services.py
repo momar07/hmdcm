@@ -19,8 +19,9 @@ def create_task(title, assigned_to, assigned_by=None, **kwargs):
         action = 'created',
         detail = f'Task created and assigned to {assigned_to.get_full_name()}',
     )
-    # Send WebSocket notification to assigned agent
+    # WebSocket realtime push + persistent in-app notification
     _notify_agent(task)
+    _persist_notification(task)
     return task
 
 
@@ -38,7 +39,7 @@ def update_task_status(task, new_status, actor, comment=''):
         task   = task,
         actor  = actor,
         action = 'status_changed',
-        detail = f'{old_status} → {new_status}' + (f' | {comment}' if comment else ''),
+        detail = f'{old_status} -> {new_status}' + (f' | {comment}' if comment else ''),
     )
     return task
 
@@ -52,7 +53,7 @@ def _notify_agent(task):
         if not channel_layer:
             return
         async_to_sync(channel_layer.group_send)(
-            f'user_{task.assigned_to_id}',
+            f'agent_{task.assigned_to_id}',
             {
                 'type':     'task_assigned',
                 'task_id':  str(task.id),
@@ -64,3 +65,28 @@ def _notify_agent(task):
         )
     except Exception as e:
         logger.warning(f'Task WS notification failed: {e}')
+
+
+def _persist_notification(task):
+    """Save persistent in-app notification (bell icon)."""
+    try:
+        from apps.notifications.services import create_notification
+        assigner = task.assigned_by.get_full_name() if task.assigned_by else 'System'
+        create_notification(
+            recipient=task.assigned_to,
+            notif_type='task_assigned',
+            title=f'New task: {task.title}',
+            body=f'Assigned by {assigner}' + (
+                f' | priority: {task.priority}' if task.priority else ''
+            ),
+            link=f'/tasks/{task.id}',
+            priority='high' if task.priority in ('high', 'urgent') else 'normal',
+            data={
+                'task_id':  str(task.id),
+                'priority': task.priority,
+                'due_date': task.due_date.isoformat() if task.due_date else None,
+            },
+            push_realtime=True,
+        )
+    except Exception as e:
+        logger.warning(f'[Notif] task_assigned persist failed: {e}')
