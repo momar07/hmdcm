@@ -6,11 +6,10 @@ import {
   Bell, CheckCheck, Trash2, Phone, ClipboardList, FileText,
   Star, AlertCircle, Calendar, Inbox,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
 import { useNotificationsStore } from '@/store';
 import type { Notification, NotificationType } from '@/lib/api/notifications';
 
-const ICONS: Record<NotificationType, LucideIcon> = {
+const ICONS: Record<NotificationType, React.ComponentType<{ size?: number; className?: string }>> = {
   task_assigned:     ClipboardList,
   task_reminder:     ClipboardList,
   followup_reminder: Calendar,
