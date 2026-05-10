@@ -3,8 +3,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { CheckSquare, RefreshCw, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { approvalsApi, type ApprovalRequest } from "@/lib/api/approvals";
 import { ApprovalCard } from "@/components/approvals/ApprovalCard";
-import { NewApprovalModal } from "@/components/approvals/NewApprovalModal";
-import { Plus } from "lucide-react";
 import { useAuthStore } from "@/store";
 import { subscribeAppSocket } from "@/components/layout/AppSocketProvider";
 
@@ -24,7 +22,6 @@ export default function ApprovalsPage() {
   const [loading,      setLoading]        = useState(true);
   const [activeTab,    setActiveTab]      = useState<FilterStatus>("pending");
   const [pendingCount, setPendingCount]   = useState(0);
-  const [showNewModal, setShowNewModal]   = useState(false);
 
   const isSupervisor = user?.role === "supervisor" || user?.role === "admin";
 
@@ -54,21 +51,14 @@ export default function ApprovalsPage() {
   useEffect(() => {
     const unsub = subscribeAppSocket((msg: any) => {
       if (msg?.type !== "notification_new") return;
-      // Backend sends the actual notification type under "notif_type"
-      const notifType = msg?.notif_type ?? msg?.data?.type;
+      const t = msg?.data?.type ?? msg?.type;
+      const notifType = msg?.data?.type;
       if (notifType === "approval_needed" || notifType === "approval_update") {
         fetchApprovals();
         fetchPending();
       }
     });
     return () => { unsub(); };
-  }, [fetchApprovals, fetchPending]);
-
-  // Refetch when the user creates a new approval from anywhere in the app
-  useEffect(() => {
-    const handler = () => { fetchApprovals(); fetchPending(); };
-    window.addEventListener('approval:created', handler);
-    return () => window.removeEventListener('approval:created', handler);
   }, [fetchApprovals, fetchPending]);
 
   return (
@@ -93,18 +83,11 @@ export default function ApprovalsPage() {
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowNewModal(true)}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-white
-                bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
-              <Plus className="h-4 w-4" /> New Request
-            </button>
-            <button onClick={() => { fetchApprovals(); fetchPending(); }}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600
-                border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-              <RefreshCw className="h-4 w-4" /> Refresh
-            </button>
-          </div>
+          <button onClick={() => { fetchApprovals(); fetchPending(); }}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600
+              border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <RefreshCw className="h-4 w-4" /> Refresh
+          </button>
         </div>
 
         {/* Status Tabs */}
@@ -160,13 +143,6 @@ export default function ApprovalsPage() {
           </div>
         )}
       </div>
-
-      {showNewModal && (
-        <NewApprovalModal
-          onClose={() => setShowNewModal(false)}
-          onCreated={() => { fetchApprovals(); fetchPending(); }}
-        />
-      )}
     </div>
   );
 }

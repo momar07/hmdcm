@@ -45,9 +45,6 @@ export function NewApprovalModal({
         amount:        selectedType?.hasAmount && amount ? parseFloat(amount) : null,
         ticket:        defaultTicketId   ?? null,
       });
-      // Notify any open page (e.g. /approvals) to refetch immediately
-      try { window.dispatchEvent(new CustomEvent("approval:created")); } catch {}
-
       toast.success("Approval request sent ✅");
       onCreated();
       onClose();
