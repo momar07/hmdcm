@@ -80,9 +80,6 @@ export function NotificationsPanel({ onClose }: Props) {
     if (!n.is_read) await markRead(n.id);
     if (n.link) {
       router.push(n.link);
-      // Force a refresh so target page refetches data
-      // (covers cases where user is already on that route)
-      router.refresh();
       onClose();
     }
   };

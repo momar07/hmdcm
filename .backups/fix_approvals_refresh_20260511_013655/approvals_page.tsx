@@ -4,7 +4,6 @@ import { CheckSquare, RefreshCw, Clock, CheckCircle, XCircle, AlertCircle } from
 import { approvalsApi, type ApprovalRequest } from "@/lib/api/approvals";
 import { ApprovalCard } from "@/components/approvals/ApprovalCard";
 import { useAuthStore } from "@/store";
-import { subscribeAppSocket } from "@/components/layout/AppSocketProvider";
 
 type FilterStatus = "" | "pending" | "approved" | "rejected" | "cancelled";
 
@@ -46,20 +45,6 @@ export default function ApprovalsPage() {
 
   useEffect(() => { fetchApprovals(); }, [fetchApprovals]);
   useEffect(() => { fetchPending();   }, [fetchPending]);
-
-  // Live refetch when a new approval-related notification arrives
-  useEffect(() => {
-    const unsub = subscribeAppSocket((msg: any) => {
-      if (msg?.type !== "notification_new") return;
-      const t = msg?.data?.type ?? msg?.type;
-      const notifType = msg?.data?.type;
-      if (notifType === "approval_needed" || notifType === "approval_update") {
-        fetchApprovals();
-        fetchPending();
-      }
-    });
-    return () => { unsub(); };
-  }, [fetchApprovals, fetchPending]);
 
   return (
     <div className="min-h-screen bg-gray-50">
