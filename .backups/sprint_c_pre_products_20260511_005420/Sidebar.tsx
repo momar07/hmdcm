@@ -22,7 +22,6 @@ import {
   Activity,
   CheckSquare,
   ShieldCheck,
-  Package,
 } from 'lucide-react';
 import { useAuthStore, useUIStore, useAgentStatusStore } from '@/store';
 import type { Role } from '@/types';
@@ -83,11 +82,6 @@ const NAV_ITEMS: NavItem[] = [
   {
     href: '/tasks', label: 'Tasks',
     icon: <CheckSquare size={18} />,
-    roles: ['admin', 'supervisor', 'agent'],
-  },
-  {
-    href: '/sales/products', label: 'Products',
-    icon: <Package size={18} />,
     roles: ['admin', 'supervisor', 'agent'],
   },
   {
