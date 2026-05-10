@@ -9,7 +9,7 @@ import { DispositionModal }   from '@/components/calls/DispositionModal';
 import { SoftPhone }           from '@/components/softphone/SoftPhone';
 import { useAuthStore, useCallStore, useAgentStatusStore } from '@/store';
 import { useSipStore } from '@/store/sipStore';
-import { subscribeAppSocket }  from '@/components/layout/AppSocketProvider';
+import { useWebSocket }        from '@/lib/websocket/useWebSocket';
 import { ReminderToastListener } from '@/components/followups/ReminderToast';
 import type { WSEvent }        from '@/types';
 import { AppSocketProvider } from '@/components/layout/AppSocketProvider';
@@ -107,11 +107,8 @@ export default function DashboardLayout({
     prevCallStatus.current = callStatus;
   }, [callStatus]);
 
-  // Single shared WebSocket — listen via the singleton bus.
-  // (Old useWebSocket hook was removed because it opened a 2nd connection,
-  // doubling Channels-Redis group membership and causing ghost channels.)
-  useEffect(() => {
-    const unsub = subscribeAppSocket((event: any) => {
+  // WS event arrives → set directly without null-clear race condition
+  useWebSocket((event: WSEvent) => {
     if (event.type === 'incoming_call') {
       // Only show popup for agents with SIP extension — not admin/supervisor
       const { user: currentUser } = useAuthStore.getState();
@@ -144,10 +141,7 @@ export default function DashboardLayout({
     if (event.type === 'followup_reminder') {
       window.dispatchEvent(new CustomEvent('followup:reminder', { detail: event }));
     }
-    });
-    return () => { unsub(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
 
   // ringKey ref — no longer needs a separate effect
   useEffect(() => {}, [ringKey]);

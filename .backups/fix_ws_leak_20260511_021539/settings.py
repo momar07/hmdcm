@@ -97,11 +97,7 @@ CACHES = {
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
-        'CONFIG': {
-            'hosts':        [env('REDIS_URL', default='redis://localhost:6379/0')],
-            'expiry':       30,    # Individual message TTL (sec). Default: 60.
-            'group_expiry': 300,   # Ghost-channel cleanup (sec). Default: 86400 (24h).
-        },
+        'CONFIG': {'hosts': [env('REDIS_URL', default='redis://localhost:6379/0')]},
     }
 }
 
