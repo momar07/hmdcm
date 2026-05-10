@@ -48,7 +48,7 @@ def send_followup_reminders(self):
                 from apps.notifications.services import create_notification
                 create_notification(
                     recipient=f.assigned_to,
-                    type='followup_reminder',
+                    notif_type='followup_reminder',
                     title=f'Follow-up reminder: {f.title}',
                     body=f'Lead: {f.lead.get_full_name() if f.lead else "-"} | due {f.scheduled_at.strftime("%H:%M")}',
                     link=f'/leads/{f.lead_id}' if f.lead_id else '/followups',

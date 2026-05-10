@@ -18,7 +18,7 @@ def _notify_agent(agent, lead, message: str):
         from apps.notifications.services import create_notification
         create_notification(
             recipient=agent,
-            type='lead_assigned',
+            notif_type='lead_assigned',
             title=f'New lead: {lead.get_display_name()}',
             body=message,
             link=f'/leads/{lead.id}',

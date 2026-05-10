@@ -74,7 +74,7 @@ def _persist_notification(task):
         assigner = task.assigned_by.get_full_name() if task.assigned_by else 'System'
         create_notification(
             recipient=task.assigned_to,
-            type='task_assigned',
+            notif_type='task_assigned',
             title=f'New task: {task.title}',
             body=f'Assigned by {assigner}' + (
                 f' | priority: {task.priority}' if task.priority else ''
