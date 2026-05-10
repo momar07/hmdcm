@@ -49,8 +49,11 @@ export function Topbar() {
     if (!user) return;
     const unsub = subscribeAppSocket((msg) => {
       if (msg?.event === 'notification_new') {
-        // pull store actions fresh each time -> stable deps below
-        const { addRealtime: add } = useNotificationsStore.getState();
+        // DEBUG: count how many times this callback fires per id
+        (window as any).__notifSeen = (window as any).__notifSeen || {};
+        const seen = (window as any).__notifSeen;
+        seen[msg.id] = (seen[msg.id] || 0) + 1;
+        console.log(`[NotifDebug] id=${msg.id} fired ${seen[msg.id]}x`);
         const n: Notification = {
           id:         msg.id,
           type:       msg.notif_type,
@@ -63,7 +66,7 @@ export function Topbar() {
           read_at:    null,
           created_at: msg.created_at ?? new Date().toISOString(),
         };
-        add(n);
+        addRealtime(n);
 
         // Unified UX: same WS event drives both bell + toast
         const accent =
@@ -71,7 +74,6 @@ export function Topbar() {
           n.priority === 'high'   ? '#f97316' :
           '#2563eb';
         toast(n.body ? `${n.title}\n${n.body}` : n.title, {
-          id: n.id,  // dedupe — react-hot-toast collapses same id
           duration: 6000,
           style: { borderLeft: `4px solid ${accent}`, maxWidth: '360px', whiteSpace: 'pre-line' },
         });
@@ -88,7 +90,7 @@ export function Topbar() {
       }
     });
     return unsub;
-  }, [user]);
+  }, [user, addRealtime]);
 
   // 3) Request browser notification permission once
   useEffect(() => {

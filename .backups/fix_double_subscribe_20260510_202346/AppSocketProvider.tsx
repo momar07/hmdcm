@@ -21,18 +21,7 @@ class MessageBus {
     return () => this.listeners.delete(fn);
   }
 
-  private lastKey = '';
-  private lastTs   = 0;
-
   emit(msg: any) {
-    // Drop exact-duplicate broadcasts seen within 150ms.
-    // Guards against StrictMode double-mount + multi-WS race conditions.
-    const key = (msg?.id ?? '') + '|' + (msg?.event ?? msg?.type ?? '');
-    const now = Date.now();
-    if (key && key === this.lastKey && now - this.lastTs < 150) return;
-    this.lastKey = key;
-    this.lastTs  = now;
-
     this.listeners.forEach((l) => {
       try { l(msg); } catch (e) { console.error('[bus] listener error', e); }
     });
