@@ -133,7 +133,7 @@ class CallEventConsumer(AsyncWebsocketConsumer):
 
     async def notification_new(self, event):
         """Generic in-app notification pushed by apps.notifications.services."""
-        await self.send(text_data=json.dumps({
+        await self.send_json({
             'event':      'notification_new',
             'id':         event.get('id'),
             'notif_type': event.get('notif_type'),
@@ -144,6 +144,5 @@ class CallEventConsumer(AsyncWebsocketConsumer):
             'priority':   event.get('priority', 'normal'),
             'is_read':    event.get('is_read', False),
             'created_at': event.get('created_at'),
-        }))
-        logger.info(f"[WS] notification_new dispatched -> {event.get('title')}")
+        })
 

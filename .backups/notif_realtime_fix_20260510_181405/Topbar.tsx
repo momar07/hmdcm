@@ -45,7 +45,7 @@ export function Topbar() {
 
   // 2) Realtime: listen on the agent-events WS for notification_new
   useAppSocket({
-    path: '/ws/calls/',
+    path: '/ws/agent-events/',
     enabled: !!user,
     onMessage: (msg) => {
       if (msg?.event === 'notification_new') {
