@@ -9,7 +9,7 @@ import {
 import { agentStatusApi }                 from '@/lib/api/users';
 import { PageHeader }                     from '@/components/ui/PageHeader';
 import { useAuthStore }                   from '@/store';
-import { subscribeAppSocket }             from '@/components/layout/AppSocketProvider';
+import { useAppSocket }                   from '@/lib/ws/useAppSocket';
 import toast                              from 'react-hot-toast';
 import { AgentDetailsDrawer }             from './AgentDetailsDrawer';
 
@@ -260,16 +260,18 @@ export default function LiveAgentsPage() {
 
   const syncedNow = now + serverOffset;
 
-  // WebSocket — real-time status updates (via shared singleton bus)
-  useEffect(() => {
-    if (!user) return;
-    const unsub = subscribeAppSocket((msg: any) => {
+  // WebSocket — real-time status updates
+  useAppSocket({
+    path:    '/ws/calls/',
+    enabled: !!user,
+    onOpen:    () => console.log('[WS] Live agents connected'),
+    onMessage: (msg) => {
       if (msg?.type === 'agent_status_update') {
         qc.invalidateQueries({ queryKey: ['live-agents'] });
       }
-    });
-    return unsub;
-  }, [user, qc]);
+    },
+    onError: (e) => console.warn('[WS] error', e),
+  });
 
   // Permission gate
   const allowed = !!user && ['admin', 'supervisor', 'agent'].includes(user.role);
