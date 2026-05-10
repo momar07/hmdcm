@@ -112,33 +112,6 @@ def notify_incoming_call(self, call_id: str):
     t.start()
     t.join(timeout=5)
 
-    # ── Persistent in-app notification (bell) — only if assigned to a specific agent
-    if call.agent_id:
-        try:
-            from apps.notifications.services import create_notification
-            caller_label = (
-                (lead.get_display_name() if lead else None)
-                or caller_name_clean
-                or call.caller
-                or 'Unknown caller'
-            )
-            create_notification(
-                recipient = call.agent,
-                type      = 'call_incoming',
-                title     = f'📞 Incoming call: {caller_label}',
-                body      = f'From {call.caller}' + (f' · {lead.company}' if lead and lead.company else ''),
-                link      = f'/leads/{lead.id}' if lead else '/calls',
-                priority  = 'high',
-                data      = {
-                    'call_id':   str(call.id),
-                    'caller':    call.caller,
-                    'lead_id':   str(lead.id) if lead else None,
-                },
-                push_realtime = True,
-            )
-        except Exception as ne:
-            logger.warning(f'[Notif] call_incoming persist failed: {ne}')
-
     return f'Notified: {call_id}'
 
 
@@ -984,32 +957,6 @@ def handle_missed_call(self, call_id: str):
         status        = 'pending',
     )
 
-    # ── Persistent in-app notification for the missed call
-    try:
-        from apps.notifications.services import create_notification
-        caller_label = (
-            (call.lead.get_full_name() if call.lead else None)
-            or call.caller
-            or 'Unknown'
-        )
-        create_notification(
-            recipient = agent,
-            type      = 'call_missed',
-            title     = f'☎️ Missed call from {caller_label}',
-            body      = f'A callback was scheduled in {delay_hours}h · phone {call.caller}',
-            link      = f'/leads/{call.lead.id}' if call.lead else f'/calls',
-            priority  = 'high',
-            data      = {
-                'call_id':  str(call.id),
-                'caller':   call.caller,
-                'lead_id':  str(call.lead.id) if call.lead else None,
-                'duration': call.duration,
-            },
-            push_realtime = True,
-        )
-    except Exception as ne:
-        logger.warning(f'[Notif] call_missed persist failed: {ne}')
-
     logger.info(f'[Automation] Callback created for missed call {call_id} → agent {agent}')
     return f'Callback created for {call_id}'
 
@@ -1055,42 +1002,28 @@ def handle_vip_call(self, call_id: str):
 
     channel_layer = get_channel_layer()
 
-    # Persistent in-app notifications + live WS (handled by create_notification)
-    try:
-        from apps.notifications.services import create_notification
-    except Exception:
-        create_notification = None
-
     for sup in supervisors:
-        # Live WS payload for existing UI listeners (keeps backwards compatibility)
-        try:
-            async_to_sync(channel_layer.group_send)(
-                f'agent_{sup.id}',
-                {'type': 'call_event', 'payload': payload},
-            )
-        except Exception as exc:
-            logger.error(f'[Automation] VIP push failed for {sup.id}: {exc}')
-
-        # Persistent VIP notification (bell + toast)
-        if create_notification:
+        async def _push(sid=str(sup.id)):
             try:
-                create_notification(
-                    recipient = sup,
-                    type      = 'vip_call',
-                    title     = f'⭐ VIP incoming: {lead.get_full_name()}',
-                    body      = f'{lead.company or "VIP customer"} · phone {payload["lead_phone"]}',
-                    link      = f'/leads/{lead.id}',
-                    priority  = 'urgent',
-                    data      = {
-                        'call_id':   str(call.id),
-                        'lead_id':   str(lead.id),
-                        'lead_name': lead.get_full_name(),
-                        'company':   lead.company or '',
-                    },
-                    push_realtime = True,
+                await channel_layer.group_send(
+                    f'agent_{sid}',
+                    {'type': 'call_event', 'payload': payload}
                 )
-            except Exception as ne:
-                logger.warning(f'[Notif] vip_call persist failed: {ne}')
+                logger.info(f'[Automation] VIP alert sent to supervisor {sid}')
+            except Exception as exc:
+                logger.error(f'[Automation] VIP push failed for {sid}: {exc}')
+
+        import threading, asyncio
+        def _run():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(_push())
+            finally:
+                loop.close()
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
 
     logger.info(f'[Automation] VIP alert for {call.lead.get_full_name() if call.lead else "Unknown"} ({lead.company or "No company"})')
     return f'VIP alert: {call.lead.get_full_name() if call.lead else "Unknown"}'
