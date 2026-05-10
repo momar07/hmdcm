@@ -135,10 +135,15 @@ export default function DashboardLayout({
         setStatus(s as any);
       }
     }
-    // task_assigned & lead_assigned now flow through the unified
-    // notification_new event (handled in Topbar via notificationsStore +
-    // toast). We only keep the DOM dispatch for followup reminder UI.
-    if (event.type === 'followup_reminder') {
+    if (event.type === 'task_assigned') {
+      import('react-hot-toast').then(({ default: toast }) => {
+        toast(`📋 New Task: ${(event as any).title} — Priority: ${(event as any).priority?.toUpperCase() ?? ''}`, {
+          duration: 8000,
+        });
+      });
+
+    } else if (event.type === 'followup_reminder') {
+      // Dispatch DOM event — ReminderToastListener handles the toast UI
       window.dispatchEvent(new CustomEvent('followup:reminder', { detail: event }));
     }
     if (event.type === 'approval_update') {
@@ -150,6 +155,15 @@ export default function DashboardLayout({
         toast(msg + comment, {
           duration: 6000,
           style: { borderLeft: '4px solid ' + (isApproved ? '#16a34a' : '#dc2626'), maxWidth: '360px' },
+        });
+      });
+    }
+    if (event.type === 'lead_assigned') {
+      const ev = event as any;
+      import('react-hot-toast').then(({ default: toast }) => {
+        toast('📋 ' + ev.message, {
+          duration: 6000,
+          style: { borderLeft: '4px solid #7c3aed', maxWidth: '360px' },
         });
       });
     }

@@ -9,7 +9,6 @@ import { NewApprovalModal }        from '@/components/approvals/NewApprovalModal
 import { subscribeAppSocket }      from './AppSocketProvider';
 import type { AgentStatus }        from '@/types';
 import type { Notification }       from '@/lib/api/notifications';
-import toast                       from 'react-hot-toast';
 
 const ROLE_COLORS: Record<string, string> = {
   admin:      'bg-purple-600',
@@ -62,16 +61,6 @@ export function Topbar() {
           created_at: msg.created_at ?? new Date().toISOString(),
         };
         addRealtime(n);
-
-        // Unified UX: same WS event drives both bell + toast
-        const accent =
-          n.priority === 'urgent' ? '#dc2626' :
-          n.priority === 'high'   ? '#f97316' :
-          '#2563eb';
-        toast(n.body ? `${n.title}\n${n.body}` : n.title, {
-          duration: 6000,
-          style: { borderLeft: `4px solid ${accent}`, maxWidth: '360px', whiteSpace: 'pre-line' },
-        });
 
         if (
           typeof window !== 'undefined'
