@@ -111,7 +111,7 @@ class ApprovalViewSet(viewsets.ModelViewSet):
                     type      = "approval_needed",
                     title     = f"📋 New approval request: {approval.title}",
                     body      = f"From {approval.requested_by.get_full_name()}{amount_str}",
-                    link      = f"/approvals?tab=pending&id={approval.id}",
+                    link      = f"/approvals",
                     priority  = "high",
                     data      = {
                         "approval_id":       str(approval.id),
@@ -189,7 +189,7 @@ class ApprovalViewSet(viewsets.ModelViewSet):
                 type      = "approval_update",
                 title     = f"{icon} Approval {decision}: {approval.title}",
                 body      = approval.review_comment or f"Your request has been {decision}.",
-                link      = f"/approvals?tab={decision}&id={approval.id}",
+                link      = f"/approvals",
                 priority  = "high",
                 data      = {
                     "approval_id":    str(approval.id),
@@ -255,7 +255,7 @@ class ApprovalViewSet(viewsets.ModelViewSet):
                 type      = "approval_update",
                 title     = f"{icon} Approval {decision}: {approval.title}",
                 body      = approval.review_comment or f"Your request has been {decision}.",
-                link      = f"/approvals?tab={decision}&id={approval.id}",
+                link      = f"/approvals",
                 priority  = "high",
                 data      = {
                     "approval_id":    str(approval.id),

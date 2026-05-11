@@ -1,6 +1,5 @@
 "use client";
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import React, { useState, useEffect, useCallback } from "react";
 import { CheckSquare, RefreshCw, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import { approvalsApi, type ApprovalRequest } from "@/lib/api/approvals";
 import { ApprovalCard } from "@/components/approvals/ApprovalCard";
@@ -28,43 +27,6 @@ export default function ApprovalsPage() {
   const [showNewModal, setShowNewModal]   = useState(false);
 
   const isSupervisor = user?.role === "supervisor" || user?.role === "admin";
-
-  // ── Tab + ID from URL query (Bug #8) ──
-  const searchParams = useSearchParams();
-  const router       = useRouter();
-  const pathname     = usePathname();
-  const urlTab       = searchParams.get("tab") as FilterStatus | null;
-  const urlId        = searchParams.get("id");
-  const [highlightId, setHighlightId] = useState<string | null>(null);
-  const cardRefs     = useRef<Record<string, HTMLDivElement | null>>({});
-
-  // When URL params change (user clicks notification → next/navigation updates them),
-  // switch the active tab and remember which approval to highlight.
-  useEffect(() => {
-    if (urlTab && urlTab !== activeTab) {
-      setActiveTab(urlTab);
-    }
-    if (urlId) {
-      setHighlightId(urlId);
-    }
-  }, [urlTab, urlId]);
-
-  // After approvals list loads, scroll to the highlighted card and clear URL query
-  useEffect(() => {
-    if (!highlightId || approvals.length === 0) return;
-    const el = cardRefs.current[highlightId];
-    if (el) {
-      setTimeout(() => {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 150);
-      const t = setTimeout(() => {
-        setHighlightId(null);
-        router.replace(pathname, { scroll: false });
-      }, 3000);
-      return () => clearTimeout(t);
-    }
-  }, [highlightId, approvals, pathname, router]);
-
 
   const fetchApprovals = useCallback(async () => {
     setLoading(true);
@@ -188,21 +150,12 @@ export default function ApprovalsPage() {
         ) : (
           <div className="grid gap-3">
             {approvals.map(a => (
-              <div
+              <ApprovalCard
                 key={a.id}
-                ref={el => { cardRefs.current[a.id] = el; }}
-                className={`transition-all rounded-xl ${
-                  highlightId === a.id
-                    ? "ring-2 ring-blue-400 ring-offset-2 shadow-lg"
-                    : ""
-                }`}
-              >
-                <ApprovalCard
-                  approval={a}
-                  canReview={isSupervisor}
-                  onUpdated={() => { fetchApprovals(); fetchPending(); }}
-                />
-              </div>
+                approval={a}
+                canReview={isSupervisor}
+                onUpdated={() => { fetchApprovals(); fetchPending(); }}
+              />
             ))}
           </div>
         )}
