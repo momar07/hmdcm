@@ -66,13 +66,6 @@ export default function ApprovalsPage() {
   }, [highlightId, approvals, pathname, router]);
 
 
-  const fetchPending = useCallback(async () => {
-    try {
-      const res = await approvalsApi.pending();
-      setPendingCount(res.data.count ?? 0);
-    } catch {}
-  }, []);
-
   const fetchApprovals = useCallback(async () => {
     setLoading(true);
     try {
@@ -83,11 +76,16 @@ export default function ApprovalsPage() {
       setApprovals(list);
     } catch { setApprovals([]); }
     finally   { setLoading(false); }
-    // Always refresh the pending counter alongside the list (Bug fix)
-    fetchPending();
-  }, [activeTab, fetchPending]);
+  }, [activeTab]);
 
-useEffect(() => { fetchApprovals(); }, [fetchApprovals]);
+  const fetchPending = useCallback(async () => {
+    try {
+      const res = await approvalsApi.pending();
+      setPendingCount(res.data.count ?? 0);
+    } catch {}
+  }, []);
+
+  useEffect(() => { fetchApprovals(); }, [fetchApprovals]);
   useEffect(() => { fetchPending();   }, [fetchPending]);
 
   // Live refetch when a new approval-related notification arrives
