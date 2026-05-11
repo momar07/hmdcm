@@ -105,7 +105,7 @@ function SOURCE_LABEL(s: string): string {
   return m[s] || s || '—';
 }
 
-type Tab = 'notes' | 'timeline' | 'calls' | 'quotations' | 'approvals' | 'tasks' | 'tickets' | 'followups' | 'recordings';
+type Tab = 'timeline' | 'calls' | 'tickets' | 'followups' | 'quotations' | 'recordings';
 
 interface TimelineItem {
   id:        string;
@@ -118,11 +118,12 @@ export default function LeadDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>('notes');
+  const [tab, setTab] = useState<Tab>('timeline');
   const [newFollowupDate, setNewFollowupDate] = useState('');
   const [ticketModal, setTicketModal] = useState(false);
   const [noteModal,   setNoteModal]   = useState(false);
   const [noteText,    setNoteText]    = useState('');
+  const [timelineFilter, setTimelineFilter] = useState<'all' | 'notes' | 'calls' | 'quotations' | 'approvals' | 'tasks'>('all');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -396,9 +397,6 @@ export default function LeadDetailPage() {
   const followupCount  = followupsData?.count  ?? 0;
   const quotationCount = (quotationsData as any)?.count ?? 0;
   const recordingCount = (callsData?.results ?? []).reduce((sum: number, c: any) => sum + ((c as any).recordings?.length ?? 0), 0);
-  const notesCount      = (events as any[]).filter(e => e.event_type === 'note_added').length;
-  const approvalsCount  = (events as any[]).filter(e => ['approval_requested','approval_approved','approval_rejected'].includes(e.event_type)).length;
-  const tasksCount      = (events as any[]).filter(e => ['task_created','task_completed'].includes(e.event_type)).length;
   const currentStageIdx = stageList.findIndex((s: any) => s.id === lead.stage);
 
   // ── Render ──
@@ -433,7 +431,11 @@ export default function LeadDetailPage() {
                 <span className="hidden sm:inline">Call</span>
               </button>
             )}
-<div className="relative">
+            <Button variant="primary" size="sm" icon={<TicketIcon size={14}/>}
+              onClick={() => setTicketModal(true)}>
+              <span className="hidden sm:inline">Ticket</span>
+            </Button>
+            <div className="relative">
               <button onClick={() => setActionsOpen(v => !v)}
                 className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
                 <MoreVertical size={16} className="text-gray-600"/>
@@ -502,16 +504,18 @@ export default function LeadDetailPage() {
                       disabled={moveStage.isPending || isCurrent}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
                                   transition-all whitespace-nowrap
-                                  ${isCurrent
-                                    ? 'shadow-lg ring-2 ring-offset-2 scale-105 font-bold'
-                                    : 'opacity-60 hover:opacity-100 bg-gray-100 text-gray-500'}
+                                  ${isCurrent ? 'shadow-md ring-2 ring-offset-1' :
+                                   isActive   ? 'opacity-90' :
+                                                'opacity-50 hover:opacity-100'}
                                   disabled:cursor-default`}
-                      style={isCurrent ? {
-                        backgroundColor: s.color,
-                        color:           '#FFFFFF',
-                        // @ts-ignore — ring color via inline custom prop
-                        ['--tw-ring-color' as any]: s.color,
-                      } : {}}>
+                      style={{
+                        backgroundColor: isCurrent ? s.color
+                                       : isActive  ? s.color + '30'
+                                                   : '#F3F4F6',
+                        color:           isCurrent ? '#FFF'
+                                       : isActive  ? s.color
+                                                   : '#6B7280',
+                      }}>
                       {isActive && <Check size={11}/>}
                       {s.name}
                     </button>
@@ -533,15 +537,12 @@ export default function LeadDetailPage() {
         <div className="space-y-4 min-w-0">
           <div className="flex gap-1 bg-gray-100 p-1 rounded-xl overflow-x-auto">
             {([
-              { key: 'notes',       label: 'Notes',       icon: <MessageSquare size={14}/>, badge: notesCount },
-              { key: 'timeline',    label: 'Timeline',    icon: <Clock size={14}/>,         badge: timelineItems.length },
-              { key: 'calls',       label: 'Calls',       icon: <Phone size={14}/>,         badge: callCount },
-              { key: 'quotations',  label: 'Quotes',      icon: <FileText size={14}/>,      badge: quotationCount },
-              { key: 'approvals',   label: 'Approvals',   icon: <ShieldCheck size={14}/>,   badge: approvalsCount },
-              { key: 'tasks',       label: 'Tasks',       icon: <CheckSquare size={14}/>,   badge: tasksCount },
-              { key: 'tickets',     label: 'Tickets',     icon: <TicketIcon size={14}/>,    badge: ticketCount },
-              { key: 'followups',   label: 'Follow-ups',  icon: <Calendar size={14}/>,      badge: followupCount },
-              { key: 'recordings',  label: 'Recordings',  icon: <Mic size={14}/>,           badge: recordingCount },
+              { key: 'timeline',    label: 'Timeline',    icon: <Clock size={14}/>,        badge: timelineItems.length },
+              { key: 'calls',       label: 'Calls',       icon: <Phone size={14}/>,        badge: callCount },
+              { key: 'tickets',     label: 'Tickets',     icon: <TicketIcon size={14}/>,   badge: ticketCount },
+              { key: 'followups',   label: 'Follow-ups',  icon: <Calendar size={14}/>,     badge: followupCount },
+              { key: 'quotations',  label: 'Quotes',      icon: <FileText size={14}/>,     badge: quotationCount },
+              { key: 'recordings',  label: 'Recordings', icon: <Mic size={14}/>,          badge: recordingCount },
             ] as { key: Tab; label: string; icon: React.ReactNode; badge: number }[]).map(t => (
               <button key={t.key} onClick={() => setTab(t.key)}
                 className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm
@@ -560,155 +561,40 @@ export default function LeadDetailPage() {
             ))}
           </div>
 
-          {/* NOTES TAB */}
-          {tab === 'notes' && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <MessageSquare size={14} className="text-gray-400"/>
-                  Notes ({notesCount})
-                </h3>
-                <button
-                  onClick={() => setNoteModal(true)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg
-                             bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold transition-colors">
-                  <Plus size={14}/> Add Note
-                </button>
-              </div>
-              {eventsLoading && notesCount === 0 && (
-                <div className="flex justify-center py-10"><Spinner size="sm"/></div>
-              )}
-              {notesCount === 0 && !eventsLoading && (
-                <div className="px-5 py-12 text-center">
-                  <MessageSquare size={36} className="text-gray-300 mx-auto mb-2"/>
-                  <p className="text-sm text-gray-400">No notes yet.</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Click <span className="font-semibold">+ Add Note</span> to record one.
-                  </p>
-                </div>
-              )}
-              {notesCount > 0 && (
-                <div className="px-5 py-4 space-y-3">
-                  {(events as any[])
-                    .filter(e => e.event_type === 'note_added')
-                    .map(e => (
-                      <div key={e.id} className="flex gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
-                          <MessageSquare size={14} className="text-gray-600"/>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 text-xs text-gray-500 mb-1">
-                            <span className="font-semibold text-gray-700">{e.actor_name || 'System'}</span>
-                            <span>·</span>
-                            <span>{timeAgo(e.created_at)}</span>
-                          </div>
-                          <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">
-                            {e.note || e.notes || '(empty note)'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* APPROVALS TAB */}
-          {tab === 'approvals' && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-              <div className="px-5 py-3 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <ShieldCheck size={14} className="text-gray-400"/>
-                  Approvals ({approvalsCount})
-                </h3>
-              </div>
-              {approvalsCount === 0 && (
-                <div className="px-5 py-12 text-center">
-                  <ShieldCheck size={36} className="text-gray-300 mx-auto mb-2"/>
-                  <p className="text-sm text-gray-400">No approval activity yet.</p>
-                </div>
-              )}
-              {approvalsCount > 0 && (
-                <div className="px-5 py-4 space-y-3">
-                  {(events as any[])
-                    .filter(e => ['approval_requested','approval_approved','approval_rejected'].includes(e.event_type))
-                    .map(e => {
-                      const meta = EVENT_LABELS[e.event_type] || { label: e.event_type, color: 'bg-gray-100 text-gray-700', icon: '•' };
-                      return (
-                        <div key={e.id} className="flex gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
-                          <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shrink-0 text-base">
-                            {meta.icon}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 text-xs mb-1">
-                              <span className={`px-2 py-0.5 rounded-full font-semibold ${meta.color}`}>{meta.label}</span>
-                              <span className="text-gray-400">·</span>
-                              <span className="text-gray-500">{e.actor_name || 'System'}</span>
-                              <span className="text-gray-400">·</span>
-                              <span className="text-gray-500">{timeAgo(e.created_at)}</span>
-                            </div>
-                            {(e.note || e.notes) && (
-                              <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{e.note || e.notes}</p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TASKS TAB */}
-          {tab === 'tasks' && (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-              <div className="px-5 py-3 border-b border-gray-100">
-                <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                  <CheckSquare size={14} className="text-gray-400"/>
-                  Tasks ({tasksCount})
-                </h3>
-              </div>
-              {tasksCount === 0 && (
-                <div className="px-5 py-12 text-center">
-                  <CheckSquare size={36} className="text-gray-300 mx-auto mb-2"/>
-                  <p className="text-sm text-gray-400">No task activity yet.</p>
-                </div>
-              )}
-              {tasksCount > 0 && (
-                <div className="px-5 py-4 space-y-3">
-                  {(events as any[])
-                    .filter(e => ['task_created','task_completed'].includes(e.event_type))
-                    .map(e => {
-                      const meta = EVENT_LABELS[e.event_type] || { label: e.event_type, color: 'bg-gray-100 text-gray-700', icon: '•' };
-                      return (
-                        <div key={e.id} className="flex gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
-                          <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shrink-0 text-base">
-                            {meta.icon}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 text-xs mb-1">
-                              <span className={`px-2 py-0.5 rounded-full font-semibold ${meta.color}`}>{meta.label}</span>
-                              <span className="text-gray-400">·</span>
-                              <span className="text-gray-500">{e.actor_name || 'System'}</span>
-                              <span className="text-gray-400">·</span>
-                              <span className="text-gray-500">{timeAgo(e.created_at)}</span>
-                            </div>
-                            {(e.note || e.notes) && (
-                              <p className="text-sm text-gray-700 whitespace-pre-wrap break-words">{e.note || e.notes}</p>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-          )}
-
-                    {/* TIMELINE TAB */}
+          {/* TIMELINE TAB */}
           {tab === 'timeline' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-<div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+        {/* Timeline Toolbar — Filter chips + Add Note */}
+        <div className="timeline-filter-chips flex items-center justify-between gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {([
+              ['all',        'All',        '🗂️'],
+              ['notes',      'Notes',      '📝'],
+              ['calls',      'Calls',      '📞'],
+              ['quotations', 'Quotations', '💰'],
+              ['approvals',  'Approvals',  '🛡️'],
+              ['tasks',      'Tasks',      '📋'],
+            ] as const).map(([key, label, icon]) => (
+              <button
+                key={key}
+                onClick={() => setTimelineFilter(key as any)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors
+                            ${timelineFilter === key
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                <span className="mr-1">{icon}</span>{label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setNoteModal(true)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg
+                       bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold transition-colors">
+            <Plus size={14}/> Add Note
+          </button>
+        </div>
+
+              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <MessageSquare size={14} className="text-gray-400"/>
                   Activity Timeline
