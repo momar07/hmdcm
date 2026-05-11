@@ -311,10 +311,22 @@ export default function LeadDetailPage() {
       items.push({ id: `fu-${f.id}`, type: 'followup', timestamp: f.scheduled_at || f.created_at, data: f });
     });
 
-    return items
+    const sorted = items
       .filter(i => i.timestamp)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [events, callsData, ticketsData, followupsData]);
+
+    // Apply category filter
+    if (timelineFilter === 'all') return sorted;
+
+    return sorted.filter(it => {
+      if (timelineFilter === 'calls')       return it.type === 'call';
+      if (timelineFilter === 'notes')       return it.type === 'event' && (it.data.event_type === 'note' || it.data.event_type === 'note_added');
+      if (timelineFilter === 'quotations')  return it.type === 'event' && it.data.event_type?.startsWith('quotation_');
+      if (timelineFilter === 'approvals')   return it.type === 'event' && it.data.event_type?.startsWith('approval_');
+      if (timelineFilter === 'tasks')       return it.type === 'event' && it.data.event_type?.startsWith('task_');
+      return true;
+    });
+  }, [events, callsData, ticketsData, followupsData, timelineFilter]);
 
   // ── Quick follow-up helpers ──
   const quickFollowup = (hoursFromNow: number) => {
