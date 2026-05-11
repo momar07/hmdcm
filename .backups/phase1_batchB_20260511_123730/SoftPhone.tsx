@@ -129,17 +129,6 @@ export function SoftPhone() {
         }).then((res: any) => {
           webrtcCallIdRef.current  = res.data?.call_id ?? null;
           callStartTimeRef.current = Date.now();
-          // ── Save to sessionStorage for refresh recovery (Bug #9) ──
-          try {
-            sessionStorage.setItem('hmdcm:active_call', JSON.stringify({
-              call_id:      res.data?.call_id ?? null,
-              caller_phone: targetPhone,
-              lead_id:      ctx?.leadId   ?? null,
-              lead_name:    null,
-              direction:    'outbound',
-              started_at:   Date.now(),
-            }));
-          } catch (_) {}
         }).catch(() => {});
       });
     }
@@ -149,32 +138,9 @@ export function SoftPhone() {
       const cause    = lastEndCauseRef.current || 'ended';
       webrtcCallIdRef.current = null;
       externalDialRef.current = null;
-      // Clear refresh recovery (call ended cleanly)
-      try { sessionStorage.removeItem('hmdcm:active_call'); } catch (_) {}
       import('@/lib/api/calls').then(({ callsApi }) => {
         callsApi.endWebrtcCall(callId, { end_cause: cause, duration }).catch(() => {});
       });
-    }
-  }, [localCallStatus]);
-
-
-  // Save inbound calls to sessionStorage when answered (Bug #9 refresh recovery)
-  useEffect(() => {
-    if (localCallStatus === 'active' && !webrtcCallIdRef.current) {
-      // This is likely an inbound call (no webrtc id stored for inbound trunk calls)
-      const incoming = useSipStore.getState().incoming;
-      if (incoming?.from) {
-        try {
-          sessionStorage.setItem('hmdcm:active_call', JSON.stringify({
-            call_id:      null,
-            caller_phone: incoming.from,
-            lead_id:      null,
-            lead_name:    incoming.displayName ?? null,
-            direction:    'inbound',
-            started_at:   Date.now(),
-          }));
-        } catch (_) {}
-      }
     }
   }, [localCallStatus]);
 

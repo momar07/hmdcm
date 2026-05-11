@@ -7,8 +7,6 @@ import { Topbar }              from '@/components/layout/Topbar';
 import { IncomingCallPopup, unlockAudio } from '@/components/calls/IncomingCallPopup';
 import { DispositionModal }   from '@/components/calls/DispositionModal';
 import { SoftPhone }           from '@/components/softphone/SoftPhone';
-import { CallRecoveryBanner } from '@/components/calls/CallRecoveryBanner';
-import { useCallGuard }       from '@/lib/sip/useCallGuard';
 import { useAuthStore, useCallStore, useAgentStatusStore } from '@/store';
 import { useSipStore } from '@/store/sipStore';
 import { subscribeAppSocket }  from '@/components/layout/AppSocketProvider';
@@ -48,7 +46,6 @@ export default function DashboardLayout({
     }
   }, [hydrated, isAuthenticated, router]);
 
-  useCallGuard();   // Warn user before unload if in active call
   const { setStatus } = useAgentStatusStore();
   const prevCallStatus = useRef<string>('idle');
   const pendingCallIdRef = useRef<string | null>(null);
@@ -184,7 +181,6 @@ export default function DashboardLayout({
         </main>
       </div>
       <IncomingCallPopup />
-      <CallRecoveryBanner />
       <SoftPhone />
       <ReminderToastListener />
       {dispModal && dispModal.callId && (
