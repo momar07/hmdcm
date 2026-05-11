@@ -245,11 +245,12 @@ export interface AgentDashboard {
   open_leads:         number;
   pending_followups:  number;
   due_followups:      number;
-  // My Work counters (Feature #7)
-  my_tasks:           number;
-  my_quotations:      number;
-  my_tickets:         number;
-  my_approvals:       number;
+  // Work queue counters (Feature #7)
+  my_tasks_pending:      number;
+  my_tasks_overdue:      number;
+  my_quotations_pending: number;
+  my_tickets_open:       number;
+  my_approvals_pending:  number;
 }
 
 export interface SupervisorDashboard {
