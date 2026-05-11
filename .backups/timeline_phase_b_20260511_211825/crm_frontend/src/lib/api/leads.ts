@@ -73,10 +73,6 @@ export const leadsApi = {
   events: (leadId: string) =>
     api.get<LeadEvent[]>(`/leads/${leadId}/events/`),
 
-  // ── Activity notes (manual) ──────────────────────────────
-  addNote: (leadId: string, note: string) =>
-    api.post<LeadEvent>(`/leads/${leadId}/add-note/`, { note }),
-
   // ── Follow-up date sync ──────────────────────────────────
   setFollowupDate: (leadId: string, followup_date: string | null) =>
     api.patch(`/leads/${leadId}/followup-date/`, { followup_date }),

@@ -28,35 +28,18 @@ import { session } from '@/lib/auth/session';
 
 // ── Helpers ───────────────────────────────────────────────────
 const EVENT_LABELS: Record<string, { label: string; color: string; icon: string }> = {
-  // Core lifecycle
-  created:             { label: 'Lead Created',        color: 'bg-blue-100 text-blue-700',       icon: '🆕' },
-  stage_changed:       { label: 'Stage Changed',       color: 'bg-purple-100 text-purple-700',   icon: '📌' },
-  status_changed:      { label: 'Status Changed',      color: 'bg-yellow-100 text-yellow-700',   icon: '🔄' },
-  assigned:            { label: 'Assigned',            color: 'bg-indigo-100 text-indigo-700',   icon: '👤' },
-  followup_set:        { label: 'Follow-up Scheduled', color: 'bg-green-100 text-green-700',     icon: '📅' },
-  won:                 { label: 'Won 🎉',              color: 'bg-green-200 text-green-800',     icon: '🏆' },
-  lost:                { label: 'Lost',                color: 'bg-red-100 text-red-700',         icon: '❌' },
-  // Notes
-  note:                { label: 'Note Added',          color: 'bg-gray-100 text-gray-700',       icon: '📝' },
-  note_added:          { label: 'Note Added',          color: 'bg-gray-100 text-gray-700',       icon: '📝' },
-  // Calls
-  call_offered:        { label: 'Call Offered',        color: 'bg-sky-100 text-sky-700',         icon: '📞' },
-  call_answered:       { label: 'Call Answered',       color: 'bg-emerald-100 text-emerald-700', icon: '✅' },
-  call_rejected:       { label: 'Call Rejected',       color: 'bg-red-100 text-red-700',         icon: '🚫' },
-  call_no_answer:      { label: 'No Answer',           color: 'bg-amber-100 text-amber-700',     icon: '⏰' },
-  // Quotations
-  quotation_created:   { label: 'Quotation Created',   color: 'bg-purple-100 text-purple-700',   icon: '💰' },
-  quotation_sent:      { label: 'Quotation Sent',      color: 'bg-indigo-100 text-indigo-700',   icon: '📤' },
-  quotation_approved:  { label: 'Quotation Approved',  color: 'bg-green-100 text-green-700',     icon: '✅' },
-  quotation_rejected:  { label: 'Quotation Rejected',  color: 'bg-red-100 text-red-700',         icon: '❌' },
-  quotation_accepted:  { label: 'Quotation Accepted',  color: 'bg-emerald-100 text-emerald-700', icon: '🎉' },
-  // Approvals
-  approval_requested:  { label: 'Approval Requested',  color: 'bg-yellow-100 text-yellow-700',   icon: '🛡️' },
-  approval_approved:   { label: 'Approval Approved',   color: 'bg-green-100 text-green-700',     icon: '✅' },
-  approval_rejected:   { label: 'Approval Rejected',   color: 'bg-red-100 text-red-700',         icon: '❌' },
-  // Tasks
-  task_created:        { label: 'Task Created',        color: 'bg-blue-100 text-blue-700',       icon: '📋' },
-  task_completed:      { label: 'Task Completed',      color: 'bg-emerald-100 text-emerald-700', icon: '✔️' },
+  created:        { label: 'Lead Created',         color: 'bg-blue-100 text-blue-700',     icon: '🆕' },
+  stage_changed:  { label: 'Stage Changed',        color: 'bg-purple-100 text-purple-700', icon: '📌' },
+  status_changed: { label: 'Status Changed',       color: 'bg-yellow-100 text-yellow-700', icon: '🔄' },
+  assigned:       { label: 'Assigned',             color: 'bg-indigo-100 text-indigo-700', icon: '👤' },
+  followup_set:   { label: 'Follow-up Scheduled',  color: 'bg-green-100 text-green-700',   icon: '📅' },
+  won:            { label: 'Won 🎉',               color: 'bg-green-200 text-green-800',   icon: '🏆' },
+  lost:           { label: 'Lost',                 color: 'bg-red-100 text-red-700',       icon: '❌' },
+  note:           { label: 'Note Added',           color: 'bg-gray-100 text-gray-700',     icon: '📝' },
+  call_offered:   { label: 'Call Offered',         color: 'bg-sky-100 text-sky-700',       icon: '📞' },
+  call_answered:  { label: 'Call Answered',        color: 'bg-emerald-100 text-emerald-700', icon: '✅' },
+  call_rejected:  { label: 'Call Rejected',        color: 'bg-red-100 text-red-700',       icon: '🚫' },
+  call_no_answer: { label: 'No Answer',            color: 'bg-amber-100 text-amber-700',   icon: '⏰' },
 };
 
 function formatDuration(s: number) {
@@ -121,9 +104,6 @@ export default function LeadDetailPage() {
   const [tab, setTab] = useState<Tab>('timeline');
   const [newFollowupDate, setNewFollowupDate] = useState('');
   const [ticketModal, setTicketModal] = useState(false);
-  const [noteModal,   setNoteModal]   = useState(false);
-  const [noteText,    setNoteText]    = useState('');
-  const [timelineFilter, setTimelineFilter] = useState<'all' | 'notes' | 'calls' | 'quotations' | 'approvals' | 'tasks'>('all');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -235,18 +215,7 @@ export default function LeadDetailPage() {
     )),
   });
 
-  const addNoteMutation = useMutation({
-    mutationFn: (text: string) => leadsApi.addNote(id, text).then(r => r.data),
-    onSuccess: () => {
-      toast.success('Note added ✅');
-      qc.invalidateQueries({ queryKey: ['lead-events', id] });
-      setNoteText('');
-      setNoteModal(false);
-    },
-    onError: () => toast.error('Failed to add note'),
-  });
-
-    const archiveMutation = useMutation({
+  const archiveMutation = useMutation({
     mutationFn: () => leadsApi.archive(id),
     onSuccess: () => {
       toast.success('Lead archived');
@@ -312,22 +281,10 @@ export default function LeadDetailPage() {
       items.push({ id: `fu-${f.id}`, type: 'followup', timestamp: f.scheduled_at || f.created_at, data: f });
     });
 
-    const sorted = items
+    return items
       .filter(i => i.timestamp)
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-    // Apply category filter
-    if (timelineFilter === 'all') return sorted;
-
-    return sorted.filter(it => {
-      if (timelineFilter === 'calls')       return it.type === 'call';
-      if (timelineFilter === 'notes')       return it.type === 'event' && (it.data.event_type === 'note' || it.data.event_type === 'note_added');
-      if (timelineFilter === 'quotations')  return it.type === 'event' && it.data.event_type?.startsWith('quotation_');
-      if (timelineFilter === 'approvals')   return it.type === 'event' && it.data.event_type?.startsWith('approval_');
-      if (timelineFilter === 'tasks')       return it.type === 'event' && it.data.event_type?.startsWith('task_');
-      return true;
-    });
-  }, [events, callsData, ticketsData, followupsData, timelineFilter]);
+  }, [events, callsData, ticketsData, followupsData]);
 
   // ── Quick follow-up helpers ──
   const quickFollowup = (hoursFromNow: number) => {
@@ -564,36 +521,6 @@ export default function LeadDetailPage() {
           {/* TIMELINE TAB */}
           {tab === 'timeline' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        {/* Timeline Toolbar — Filter chips + Add Note */}
-        <div className="timeline-filter-chips flex items-center justify-between gap-2 mb-4 flex-wrap">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {([
-              ['all',        'All',        '🗂️'],
-              ['notes',      'Notes',      '📝'],
-              ['calls',      'Calls',      '📞'],
-              ['quotations', 'Quotations', '💰'],
-              ['approvals',  'Approvals',  '🛡️'],
-              ['tasks',      'Tasks',      '📋'],
-            ] as const).map(([key, label, icon]) => (
-              <button
-                key={key}
-                onClick={() => setTimelineFilter(key as any)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors
-                            ${timelineFilter === key
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                <span className="mr-1">{icon}</span>{label}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => setNoteModal(true)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg
-                       bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold transition-colors">
-            <Plus size={14}/> Add Note
-          </button>
-        </div>
-
               <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <MessageSquare size={14} className="text-gray-400"/>
@@ -986,50 +913,6 @@ export default function LeadDetailPage() {
         }}
         defaultLeadId={id}
       />
-
-      {/* ── Note Modal ─────────────────────────────────────── */}
-      {noteModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-             onClick={() => setNoteModal(false)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5"
-               onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                <span>📝</span> Add Note
-              </h3>
-              <button onClick={() => setNoteModal(false)}
-                      className="p-1 rounded hover:bg-gray-100">
-                <X size={16} className="text-gray-500"/>
-              </button>
-            </div>
-            <textarea
-              value={noteText}
-              onChange={(e) => setNoteText(e.target.value)}
-              placeholder="Type your note here..."
-              rows={4}
-              autoFocus
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg
-                         focus:ring-2 focus:ring-blue-400 focus:border-blue-400
-                         outline-none text-sm resize-none"
-            />
-            <div className="flex justify-end gap-2 mt-3">
-              <button onClick={() => { setNoteModal(false); setNoteText(''); }}
-                      className="px-3 py-1.5 text-sm rounded-lg border border-gray-300
-                                 hover:bg-gray-50 transition-colors">
-                Cancel
-              </button>
-              <button
-                onClick={() => noteText.trim() && addNoteMutation.mutate(noteText.trim())}
-                disabled={!noteText.trim() || addNoteMutation.isPending}
-                className="px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white
-                           hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed
-                           transition-colors">
-                {addNoteMutation.isPending ? 'Saving...' : 'Add Note'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Permanent Delete Confirmation Modal (admin only) */}
       {deleteModalOpen && (
