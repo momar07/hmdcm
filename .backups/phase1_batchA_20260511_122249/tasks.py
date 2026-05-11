@@ -338,21 +338,15 @@ def process_ami_event(self, event: dict):
                 logger.info(f'[AMI] Lead {call_obj.lead.id} auto-assigned to {agent}')
 
         def _log_agent_event(call_obj, agent, event_type, ring_duration=0, note=''):
-            """Create a CallAgentEvent record and a LeadEvent if call has a lead.
-            Uses get_or_create to prevent duplicate logs (Bug #1 fix)."""
+            """Create a CallAgentEvent record and a LeadEvent if call has a lead."""
             from .models import CallAgentEvent
-            _evt, _created = CallAgentEvent.objects.get_or_create(
-                call       = call_obj,
-                agent      = agent,
-                event_type = event_type,
-                defaults   = {
-                    'ring_duration': ring_duration,
-                    'note':          note,
-                },
+            CallAgentEvent.objects.create(
+                call          = call_obj,
+                agent         = agent,
+                event_type    = event_type,
+                ring_duration = ring_duration,
+                note          = note,
             )
-            if not _created:
-                logger.debug(f'[AMI] CallAgentEvent already exists: {event_type} agent={agent} call={call_obj.id} — skipped duplicate')
-                return
             logger.info(f'[AMI] CallAgentEvent: {event_type} agent={agent} call={call_obj.id} ring={ring_duration}s')
             if call_obj.lead:
                 event_map = {
@@ -515,19 +509,17 @@ def process_ami_event(self, event: dict):
 
             lead = _find_lead(caller)
 
-            _now = timezone.now()
             call, created = Call.objects.get_or_create(
                 uniqueid=uniqueid,
                 defaults={
-                    'caller':              caller,
-                    'caller_name':         caller_name,
-                    'callee':              callee,
-                    'direction':           direction,
-                    'status':              'ringing',
-                    'lead':                lead,
-                    'agent':               None,
-                    'started_at':          _now,
-                    'ringing_started_at':  _now,
+                    'caller':      caller,
+                    'caller_name': caller_name,
+                    'callee':      callee,
+                    'direction':   direction,
+                    'status':      'ringing',
+                    'lead':        lead,
+                    'agent':       None,
+                    'started_at':  timezone.now(),
                 }
             )
             logger.info(f'[AMI] Newchannel result: caller={caller!r} caller_name={caller_name!r} lead={lead.id if lead else None} call_created={created}')
@@ -543,19 +535,17 @@ def process_ami_event(self, event: dict):
 
             lead = _find_lead(caller)
 
-            _now = timezone.now()
             call, created = Call.objects.update_or_create(
                 uniqueid=uniqueid,
                 defaults={
-                    'caller':              caller,
-                    'caller_name':         caller_name,
-                    'callee':              queue,
-                    'direction':           'inbound',
-                    'status':              'ringing',
-                    'queue':               queue,
-                    'lead':                lead,
-                    'started_at':          _now,
-                    'ringing_started_at':  _now,
+                    'caller':      caller,
+                    'caller_name': caller_name,
+                    'callee':      queue,
+                    'direction':   'inbound',
+                    'status':      'ringing',
+                    'queue':       queue,
+                    'lead':        lead,
+                    'started_at':  timezone.now(),
                 }
             )
             # Create activity only for new calls
@@ -572,20 +562,13 @@ def process_ami_event(self, event: dict):
         elif event_name == 'Bridge':
             uid1 = event.get('Uniqueid1', '')
             uid2 = event.get('Uniqueid2', '')
-            _now = timezone.now()
             for uid in filter(None, [uid1, uid2, uniqueid]):
-                # Calculate ring_duration before updating
-                _call = Call.objects.filter(uniqueid=uid, status='ringing').first()
-                if _call:
-                    ring_dur = 0
-                    if _call.ringing_started_at:
-                        ring_dur = max(0, int((_now - _call.ringing_started_at).total_seconds()))
-                    Call.objects.filter(pk=_call.pk).update(
-                        status='answered',
-                        answered_at=_now,
-                        ring_duration=ring_dur,
-                    )
-                    logger.info(f'[AMI] Call answered: {uid} after {ring_dur}s ring')
+                updated = Call.objects.filter(uniqueid=uid, status='ringing').update(
+                    status='answered',
+                    started_at=timezone.now(),
+                )
+                if updated:
+                    logger.info(f'[AMI] Call answered: {uid}')
                     break
 
         elif event_name in ('Hangup', 'SoftHangupRequest'):
@@ -625,27 +608,9 @@ def process_ami_event(self, event: dict):
                 else:
                     status = 'no_answer'
 
-            # ── Compute durations properly (Bug #6 fix) ──
-            ring_dur = call_obj.ring_duration or 0
-            talk_dur = 0
-            no_answer_reason = ''
-
-            if status == 'answered' and call_obj.answered_at:
-                talk_dur = max(0, int((now - call_obj.answered_at).total_seconds()))
-            elif status == 'no_answer':
-                # Caller hung up OR agent didn't pick up — distinguish based on ring time
-                if call_obj.ringing_started_at:
-                    ring_dur = max(ring_dur, int((now - call_obj.ringing_started_at).total_seconds()))
-                # If rang >= 15s with no answer → agent_timeout, else caller_abandoned
-                # (15s is conservative; queue timeout in Asterisk is usually 20-30s)
-                no_answer_reason = 'agent_timeout' if ring_dur >= 15 else 'caller_abandoned'
-
-            # Total duration = ring + talk (matches what Asterisk reports)
-            duration = ring_dur + talk_dur
-            # If AMI sent a Duration value and it's larger, trust it
-            ami_duration = int(event.get('Duration', 0))
-            if ami_duration > duration:
-                duration = ami_duration
+            if duration == 0 and call_obj.started_at and status == 'answered':
+                delta = (now - call_obj.started_at).total_seconds()
+                duration = max(0, int(delta))
 
             updated = 0
             if uniqueid:
@@ -656,9 +621,6 @@ def process_ami_event(self, event: dict):
                     status=status,
                     ended_at=now,
                     duration=duration,
-                    ring_duration=ring_dur,
-                    talk_duration=talk_dur,
-                    no_answer_reason=no_answer_reason,
                 )
 
             if not updated and call_obj:
@@ -669,9 +631,6 @@ def process_ami_event(self, event: dict):
                     status=status,
                     ended_at=now,
                     duration=duration,
-                    ring_duration=ring_dur,
-                    talk_duration=talk_dur,
-                    no_answer_reason=no_answer_reason,
                 )
 
             if updated:
@@ -833,16 +792,10 @@ def process_ami_event(self, event: dict):
                 else:
                     call_obj = _resolve_call_from_event(event)
                     if call_obj:
-                        _now = timezone.now()
-                        # Calculate ring_duration from ringing_started_at
-                        ring_dur = ring_time
-                        if call_obj.ringing_started_at:
-                            ring_dur = max(0, int((_now - call_obj.ringing_started_at).total_seconds()))
                         Call.objects.filter(pk=call_obj.pk).update(
                             agent=agent,
                             status='answered',
-                            answered_at=_now,
-                            ring_duration=ring_dur,
+                            started_at=timezone.now(),
                         )
 
                         call_obj = Call.objects.filter(pk=call_obj.pk).select_related('lead').first()
@@ -988,32 +941,16 @@ def handle_missed_call(self, call_id: str):
     """
     Triggered when a call ends as no_answer.
     Creates a callback followup for the assigned agent.
-    Idempotent: skips if a 'call_missed' notification already exists for this call (Bug #2).
     """
     import datetime
     from django.utils import timezone as tz
     from .models import Call, AutomationRule
     from apps.followups.models import Followup
-    from apps.notifications.models import Notification
 
     try:
         call = Call.objects.select_related('agent', 'lead').get(pk=call_id)
     except Call.DoesNotExist:
         return
-
-    # ── Idempotency guard: skip if already processed (Bug #2 fix) ──
-    existing = Notification.objects.filter(
-        type='call_missed',
-        data__call_id=str(call.id),
-    ).exists()
-    if existing:
-        logger.info(f'[Automation] Missed-call already processed for {call_id} — skipping duplicate')
-        return f'Duplicate missed-call skipped: {call_id}'
-
-    # Also skip if a callback Followup was already created for this call
-    if Followup.objects.filter(call=call, followup_type='call', title__startswith='Callback:').exists():
-        logger.info(f'[Automation] Callback followup already exists for {call_id} — skipping duplicate')
-        return f'Duplicate callback skipped: {call_id}'
 
     rule = AutomationRule.objects.filter(
         trigger__in=['missed_call', 'no_answer'],

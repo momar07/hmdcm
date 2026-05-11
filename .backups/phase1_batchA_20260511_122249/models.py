@@ -83,17 +83,6 @@ class Call(BaseModel):
     duration    = models.PositiveIntegerField(default=0)
     started_at  = models.DateTimeField(null=True, blank=True)
     ended_at    = models.DateTimeField(null=True, blank=True)
-    # ── Ring/Answer timing (Phase 1 batch A) ──
-    ringing_started_at = models.DateTimeField(null=True, blank=True, db_index=True,
-        help_text='When channel started ringing (Newchannel/QueueCallerJoin)')
-    answered_at        = models.DateTimeField(null=True, blank=True,
-        help_text='When call was answered (Bridge/AgentConnect)')
-    ring_duration      = models.IntegerField(default=0,
-        help_text='Seconds spent ringing before answer or hangup')
-    talk_duration      = models.IntegerField(default=0,
-        help_text='Seconds of actual conversation (answered → ended)')
-    no_answer_reason   = models.CharField(max_length=24, blank=True, default='',
-        help_text='agent_timeout | caller_abandoned | empty for answered calls')
 
     # Relations
     agent       = models.ForeignKey('users.User', null=True, blank=True,
