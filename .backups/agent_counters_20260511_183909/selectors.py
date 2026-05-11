@@ -10,30 +10,11 @@ def get_agent_dashboard(user) -> dict:
     from apps.calls.models import Call
     from apps.followups.models import Followup
     from apps.leads.models import Lead
-    from apps.tasks.models import Task
-    from apps.sales.models import Quotation
-    from apps.tickets.models import Ticket
-    from apps.approvals.models import ApprovalRequest
 
-    now         = timezone.now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
     calls_today = Call.objects.filter(agent=user, started_at__gte=today_start)
     followups   = Followup.objects.filter(assigned_to=user, status='pending')
-
-    # ── My work queues (Feature #7) ──
-    my_tasks    = Task.objects.filter(
-        assigned_to=user, status__in=['pending', 'in_progress']
-    )
-    my_quotes   = Quotation.objects.filter(
-        agent=user, status__in=['draft', 'pending_approval', 'sent']
-    )
-    my_tickets  = Ticket.objects.filter(
-        agent=user, status__in=['open', 'in_progress', 'pending']
-    )
-    my_approvals = ApprovalRequest.objects.filter(
-        requested_by=user, status='pending'
-    )
 
     return {
         'calls_today':        calls_today.count(),
@@ -46,14 +27,8 @@ def get_agent_dashboard(user) -> dict:
         ).count(),
         'pending_followups':  followups.count(),
         'due_followups':      followups.filter(
-            scheduled_at__lte=now
+            scheduled_at__lte=timezone.now()
         ).count(),
-        # ── New counters (Feature #7) ──
-        'my_tasks_pending':       my_tasks.count(),
-        'my_tasks_overdue':       my_tasks.filter(due_date__lt=now).count(),
-        'my_quotations_pending':  my_quotes.count(),
-        'my_tickets_open':        my_tickets.count(),
-        'my_approvals_pending':   my_approvals.count(),
     }
 
 

@@ -1,11 +1,8 @@
 'use client';
 
 import { useQuery }     from '@tanstack/react-query';
-import Link from 'next/link';
 import { PhoneCall, Users, BookOpen, ClipboardList,
-         PhoneIncoming, PhoneOutgoing, Clock,
-         CheckSquare, FileText, Ticket as TicketIcon,
-         ShieldCheck } from 'lucide-react';
+         PhoneIncoming, PhoneOutgoing, Clock } from 'lucide-react';
 import { dashboardApi } from '@/lib/api/dashboard';
 import { StatCard }     from '@/components/ui/StatCard';
 import { PageHeader }   from '@/components/ui/PageHeader';
@@ -77,52 +74,6 @@ function AgentDashboardView({ data }: { data: AgentDashboard }) {
         trend={data.due_followups > 0 ? 'down' : 'neutral'}
         trendValue={data.due_followups > 0 ? `${data.due_followups} overdue` : 'All on track'}
       />
-
-      {/* ── Work Queues (Feature #7) ── */}
-      <Link href="/tasks" className="block hover:scale-[1.02] transition-transform">
-        <StatCard
-          title="My Tasks"
-          value={data.my_tasks_pending}
-          icon={<CheckSquare size={20} />}
-          color="blue"
-          subtitle={
-            data.my_tasks_overdue > 0
-              ? `${data.my_tasks_overdue} overdue`
-              : 'All on track'
-          }
-          trend={data.my_tasks_overdue > 0 ? 'down' : 'neutral'}
-        />
-      </Link>
-
-      <Link href="/sales/quotations" className="block hover:scale-[1.02] transition-transform">
-        <StatCard
-          title="My Quotations"
-          value={data.my_quotations_pending}
-          icon={<FileText size={20} />}
-          color="purple"
-          subtitle="Draft / Pending / Sent"
-        />
-      </Link>
-
-      <Link href="/tickets" className="block hover:scale-[1.02] transition-transform">
-        <StatCard
-          title="My Tickets"
-          value={data.my_tickets_open}
-          icon={<TicketIcon size={20} />}
-          color="red"
-          subtitle="Open / In progress"
-        />
-      </Link>
-
-      <Link href="/approvals?tab=pending" className="block hover:scale-[1.02] transition-transform">
-        <StatCard
-          title="My Approvals"
-          value={data.my_approvals_pending}
-          icon={<ShieldCheck size={20} />}
-          color="yellow"
-          subtitle="Awaiting review"
-        />
-      </Link>
     </div>
   );
 }
