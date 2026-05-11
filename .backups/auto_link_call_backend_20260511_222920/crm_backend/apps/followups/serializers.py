@@ -62,7 +62,7 @@ class FollowupDetailSerializer(serializers.ModelSerializer):
             'reminder_sent', 'created_at', 'updated_at',
         ]
         read_only_fields = [
-            'id', 'lead', 'assigned_to',
+            'id', 'lead', 'assigned_to', 'call',
             'created_at', 'updated_at',
         ]
 
@@ -76,22 +76,7 @@ class FollowupDetailSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         lead_id = validated_data.pop('lead_id', None)
         request = self.context.get('request')
-        user    = request.user if request else None
-        assigned_to = user
-
-        # Auto-link active call (and inherit its lead if none provided)
-        call_obj = validated_data.get('call')
-        if user and not call_obj:
-            try:
-                from apps.calls.services import get_active_call_for_user
-                active_call = get_active_call_for_user(user)
-                if active_call:
-                    validated_data['call'] = active_call
-                    if not lead_id and active_call.lead_id:
-                        lead_id = str(active_call.lead_id)
-            except Exception:
-                pass
-
+        assigned_to = request.user if request else None
         return Followup.objects.create(
             lead_id=lead_id,
             assigned_to=assigned_to,

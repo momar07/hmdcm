@@ -71,14 +71,6 @@ class ApprovalRequest(models.Model):
                  related_name="approval_requests",
                  db_index=True,
                )
-    call     = models.ForeignKey(
-                 "calls.Call",
-                 on_delete=models.SET_NULL,
-                 null=True, blank=True,
-                 related_name="approval_requests",
-                 db_index=True,
-                 help_text="Auto-linked when the approval is requested during a live call",
-               )
 
     # ── Review ────────────────────────────────────────────────
     review_comment = models.TextField(blank=True)

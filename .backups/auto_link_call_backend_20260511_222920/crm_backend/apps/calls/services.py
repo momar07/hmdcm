@@ -288,17 +288,3 @@ def get_pending_completions(agent=None):
         if role not in ('supervisor', 'admin'):
             qs = qs.filter(agent=agent)
     return qs
-
-def get_active_call_for_user(user):
-    """Return the user's currently-active call, or None.
-
-    An active call = status='answered' AND ended_at IS NULL,
-    belonging to this agent, most recent first.
-    """
-    if not user or not getattr(user, "is_authenticated", False):
-        return None
-    from .models import Call
-    return (Call.objects
-            .filter(agent=user, status="answered", ended_at__isnull=True)
-            .order_by("-started_at")
-            .first())
