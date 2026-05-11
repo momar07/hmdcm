@@ -82,22 +82,22 @@ function AgentDashboardView({ data }: { data: AgentDashboard }) {
       <Link href="/tasks" className="block hover:scale-[1.02] transition-transform">
         <StatCard
           title="My Tasks"
-          value={data.my_tasks}
+          value={data.my_tasks_pending}
           icon={<CheckSquare size={20} />}
           color="blue"
           subtitle={
-            data.my_tasks > 0
-              ? `${data.my_tasks} overdue`
+            data.my_tasks_overdue > 0
+              ? `${data.my_tasks_overdue} overdue`
               : 'All on track'
           }
-          trend={data.my_tasks > 0 ? 'down' : 'neutral'}
+          trend={data.my_tasks_overdue > 0 ? 'down' : 'neutral'}
         />
       </Link>
 
       <Link href="/sales/quotations" className="block hover:scale-[1.02] transition-transform">
         <StatCard
           title="My Quotations"
-          value={data.my_quotations}
+          value={data.my_quotations_pending}
           icon={<FileText size={20} />}
           color="purple"
           subtitle="Draft / Pending / Sent"
@@ -107,7 +107,7 @@ function AgentDashboardView({ data }: { data: AgentDashboard }) {
       <Link href="/tickets" className="block hover:scale-[1.02] transition-transform">
         <StatCard
           title="My Tickets"
-          value={data.my_tickets}
+          value={data.my_tickets_open}
           icon={<TicketIcon size={20} />}
           color="red"
           subtitle="Open / In progress"
@@ -117,7 +117,7 @@ function AgentDashboardView({ data }: { data: AgentDashboard }) {
       <Link href="/approvals?tab=pending" className="block hover:scale-[1.02] transition-transform">
         <StatCard
           title="My Approvals"
-          value={data.my_approvals}
+          value={data.my_approvals_pending}
           icon={<ShieldCheck size={20} />}
           color="yellow"
           subtitle="Awaiting review"
