@@ -413,13 +413,7 @@ export default function LeadDetailPage() {
   const notesCount      = (events as any[]).filter(e => e.event_type === 'note_added').length;
   const approvalsCount  = (events as any[]).filter(e => ['approval_requested','approval_approved','approval_rejected'].includes(e.event_type)).length;
   const tasksCount      = (events as any[]).filter(e => ['task_created','task_completed'].includes(e.event_type)).length;
-  const currentStageId = (lead as any).stage_detail?.id ?? (lead as any).stage ?? null;
-  const currentStageIdx = currentStageId
-    ? stageList.findIndex((s: any) => String(s.id) === String(currentStageId))
-    : -1;
-  // Debug — remove later
-  // eslint-disable-next-line no-console
-  console.debug('[Lead Stage]', { currentStageId, currentStageIdx, stageIds: stageList.map((s:any)=>s.id) });
+  const currentStageIdx = stageList.findIndex((s: any) => s.id === lead.stage);
 
   // ── Render ──
   return (
