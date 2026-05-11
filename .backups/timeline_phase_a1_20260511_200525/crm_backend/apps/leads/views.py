@@ -144,37 +144,6 @@ class LeadViewSet(viewsets.ModelViewSet):
               .order_by('-created_at')[:100])
         return Response(LeadEventSerializer(qs, many=True).data)
 
-    @action(detail=True, methods=['post'], url_path='add-note')
-    def add_note(self, request, pk=None):
-        """POST /api/leads/{id}/add-note/  body: {note: "text"}
-
-        Creates a LeadEvent with event_type='note_added'.
-        """
-        from .models import LeadEvent
-        from .serializers import LeadEventSerializer
-
-        note_text = (request.data.get('note') or '').strip()
-        if not note_text:
-            return Response(
-                {'detail': 'note is required.'},
-                status=http_status.HTTP_400_BAD_REQUEST,
-            )
-        try:
-            lead = Lead.objects.get(pk=pk)
-        except Lead.DoesNotExist:
-            raise NotFound('Lead not found.')
-
-        event = LeadEvent.objects.create(
-            lead=lead,
-            event_type='note_added',
-            actor=request.user,
-            note=note_text,
-        )
-        return Response(
-            LeadEventSerializer(event).data,
-            status=http_status.HTTP_201_CREATED,
-        )
-
     @action(detail=True, methods=['patch'], url_path='followup-date')
     def set_followup_date(self, request, pk=None):
         date_val = request.data.get('followup_date')

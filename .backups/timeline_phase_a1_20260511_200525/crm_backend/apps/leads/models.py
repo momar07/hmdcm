@@ -181,35 +181,18 @@ class Lead(BaseModel):
 class LeadEvent(BaseModel):
     """Audit trail — كل تغيير على الـ Lead يتسجّل هنا"""
     EVENT_CHOICES = [
-        # Core lifecycle
-        ('created',              'Created'),
-        ('stage_changed',        'Stage Changed'),
-        ('status_changed',       'Status Changed'),
-        ('assigned',             'Assigned'),
-        ('followup_set',         'Follow-up Scheduled'),
-        ('won',                  'Won'),
-        ('lost',                 'Lost'),
-        # Notes (manual)
-        ('note',                 'Note Added'),
-        ('note_added',           'Note Added'),
-        # Calls
-        ('call_offered',         'Call Offered'),
-        ('call_answered',        'Call Answered'),
-        ('call_rejected',        'Call Rejected'),
-        ('call_no_answer',       'Call No Answer'),
-        # Quotations
-        ('quotation_created',    'Quotation Created'),
-        ('quotation_sent',       'Quotation Sent'),
-        ('quotation_approved',   'Quotation Approved'),
-        ('quotation_rejected',   'Quotation Rejected'),
-        ('quotation_accepted',   'Quotation Accepted'),
-        # Approvals
-        ('approval_requested',   'Approval Requested'),
-        ('approval_approved',    'Approval Approved'),
-        ('approval_rejected',    'Approval Rejected'),
-        # Tasks
-        ('task_created',         'Task Created'),
-        ('task_completed',       'Task Completed'),
+        ('created',        'Created'),
+        ('stage_changed',  'Stage Changed'),
+        ('status_changed', 'Status Changed'),
+        ('assigned',       'Assigned'),
+        ('followup_set',   'Follow-up Scheduled'),
+        ('won',            'Won'),
+        ('lost',           'Lost'),
+        ('note',           'Note Added'),
+        ('call_offered',   'Call Offered'),
+        ('call_answered',  'Call Answered'),
+        ('call_rejected',  'Call Rejected'),
+        ('call_no_answer', 'Call No Answer'),
     ]
 
     lead       = models.ForeignKey('Lead', on_delete=models.CASCADE,
