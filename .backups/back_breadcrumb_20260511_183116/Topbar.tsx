@@ -5,7 +5,6 @@ import { Bell, PhoneCall, CheckSquare } from 'lucide-react';
 import { useAuthStore, useAgentStatusStore, useNotificationsStore } from '@/store';
 import { AgentStatusDropdown }     from './AgentStatusDropdown';
 import { NotificationsPanel }      from './NotificationsPanel';
-import { BackBreadcrumb }          from './BackBreadcrumb';
 import { NewApprovalModal }        from '@/components/approvals/NewApprovalModal';
 import { subscribeAppSocket }      from './AppSocketProvider';
 import type { AgentStatus }        from '@/types';
@@ -103,13 +102,9 @@ export function Topbar() {
     <header className="h-16 bg-white border-b border-gray-200 flex items-center
                        justify-between px-6 shrink-0">
       {/* Left */}
-      <div className="flex items-center gap-4 text-gray-600 min-w-0 flex-1">
-        <div className="flex items-center gap-2 shrink-0">
-          <PhoneCall size={18} className="text-blue-600" />
-          <span className="text-sm font-semibold hidden lg:inline">Call Center CRM</span>
-        </div>
-        <div className="h-6 w-px bg-gray-200 shrink-0 hidden lg:block" />
-        <BackBreadcrumb />
+      <div className="flex items-center gap-2 text-gray-600">
+        <PhoneCall size={18} className="text-blue-600" />
+        <span className="text-sm font-semibold">Call Center CRM</span>
       </div>
 
       {/* Right */}
