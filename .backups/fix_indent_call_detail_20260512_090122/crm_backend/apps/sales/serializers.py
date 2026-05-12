@@ -126,7 +126,7 @@ class QuotationSerializer(serializers.ModelSerializer):
     lead_title    = serializers.SerializerMethodField()
     is_expired    = serializers.SerializerMethodField()
 
-    def get_call_detail(self, obj):
+        def get_call_detail(self, obj):
         request = self.context.get('request')
         user = getattr(request, 'user', None) if request else None
         return build_call_detail(getattr(obj, 'call', None), user)
