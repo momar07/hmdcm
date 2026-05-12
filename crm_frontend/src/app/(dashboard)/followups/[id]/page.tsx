@@ -8,6 +8,7 @@ import { followupsApi }               from '@/lib/api/followups';
 import { PageHeader }                 from '@/components/ui/PageHeader';
 import { Button }                     from '@/components/ui/Button';
 import { StatusBadge }                from '@/components/ui/StatusBadge';
+import { LinkedCallCard } from '@/components/calls/LinkedCallCard';
 
 export default function FollowupDetailPage() {
   const { id }  = useParams<{ id: string }>();
@@ -134,6 +135,16 @@ export default function FollowupDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Linked call card (Phase 3) */}
+      {(followup as any).call_detail && (
+        <div className="mt-4">
+          <LinkedCallCard
+            call={(followup as any).call_detail}
+            creationReason={(followup as any).creation_reason}
+          />
+        </div>
+      )}
     </div>
   );
 }

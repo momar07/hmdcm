@@ -17,6 +17,7 @@ import { StatusBadge }        from '@/components/ui/StatusBadge';
 import { Modal }              from '@/components/ui/Modal';
 import { useSipStore }        from '@/store/sipStore';
 import type { Followup }      from '@/types';
+import { LinkedCallCard } from '@/components/calls/LinkedCallCard';
 
 // helpers
 const TYPE_ICON: Record<string, React.ReactNode> = {
@@ -235,6 +236,7 @@ function FollowupCard({
   const callTimer          = useSipStore(s => s.callTimer);
   const lastEndCause       = useSipStore(s => s.lastEndCause);
   const isThisCard         = callingId === f.id;
+  const [showLinkedCall, setShowLinkedCall] = useState(false);
 
   const endCauseBanner = (isThisCard && lastEndCause) ? (() => {
     const c = lastEndCause.toLowerCase();
@@ -361,6 +363,24 @@ function FollowupCard({
               Cancel
             </Button>
           </div>
+        </div>
+      )}
+      {/* Linked call (Phase 3) */}
+      {(f as any).call_detail && (
+        <div className="pt-1 border-t border-gray-100">
+          <button
+            onClick={() => setShowLinkedCall(v => !v)}
+            className="w-full flex items-center justify-center gap-1.5 text-xs text-purple-700 hover:text-purple-900 hover:bg-purple-50 rounded-md py-1.5 transition"
+          >
+            <Phone size={11} />
+            {showLinkedCall ? 'Hide linked call' : 'View linked call'}
+          </button>
+          {showLinkedCall && (
+            <LinkedCallCard
+              call={(f as any).call_detail}
+              creationReason={(f as any).creation_reason}
+            />
+          )}
         </div>
       )}
     </div>
