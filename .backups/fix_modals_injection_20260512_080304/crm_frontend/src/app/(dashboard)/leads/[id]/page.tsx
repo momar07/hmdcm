@@ -1362,28 +1362,6 @@ function RecordingsTab({ calls }: { calls: any[] }) {
           <RecordingRow key={rec.id} call={call} recording={rec} />
         ))
       )}
-
-      {/* New Approval modal (Phase B) */}
-      <NewApprovalModal
-        open={approvalModal}
-        onClose={() => setApprovalModal(false)}
-        onCreated={() => qc.invalidateQueries({ queryKey: ['lead-events', id] })}
-        defaultLeadId={id}
-        defaultLeadName={lead ? getLeadDisplayName(lead) : undefined}
-      />
-
-      {/* New Follow-up modal (Phase B) */}
-      <NewFollowupModal
-        open={followupModal}
-        onClose={() => setFollowupModal(false)}
-        onCreated={() => {
-          qc.invalidateQueries({ queryKey: ['lead-followups', id] });
-          qc.invalidateQueries({ queryKey: ['lead-events', id] });
-        }}
-        defaultLeadId={id}
-        defaultLeadName={lead ? getLeadDisplayName(lead) : undefined}
-      />
-
     </div>
   );
 }
@@ -1485,7 +1463,29 @@ function RecordingRow({ call, recording }: { call: any; recording: any }) {
       <div className="mt-2 text-[10px] text-gray-400 font-mono truncate">
         {recording.filename}
       </div>
-</div>
+
+      {/* New Approval modal (Phase B) */}
+      <NewApprovalModal
+        open={approvalModal}
+        onClose={() => setApprovalModal(false)}
+        onCreated={() => qc.invalidateQueries({ queryKey: ['lead-events', id] })}
+        defaultLeadId={id}
+        defaultLeadName={lead ? getLeadDisplayName(lead) : undefined}
+      />
+
+      {/* New Follow-up modal (Phase B) */}
+      <NewFollowupModal
+        open={followupModal}
+        onClose={() => setFollowupModal(false)}
+        onCreated={() => {
+          qc.invalidateQueries({ queryKey: ['lead-followups', id] });
+          qc.invalidateQueries({ queryKey: ['lead-events', id] });
+        }}
+        defaultLeadId={id}
+        defaultLeadName={lead ? getLeadDisplayName(lead) : undefined}
+      />
+
+    </div>
   );
 }
 
