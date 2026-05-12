@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.utils    import timezone
+from apps.calls.services import build_call_detail
 from .models import (
     Ticket, TicketNote, TicketAttachment,
     TicketHistory, Tag, SLAPolicy,

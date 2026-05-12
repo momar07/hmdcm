@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Followup
+from apps.calls.services import build_call_detail
 
 User = get_user_model()
 

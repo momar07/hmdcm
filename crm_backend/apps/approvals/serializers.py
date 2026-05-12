@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models        import ApprovalRequest
+from apps.calls.services import build_call_detail
 
 
 class ApprovalListSerializer(serializers.ModelSerializer):
