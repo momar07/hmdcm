@@ -171,28 +171,11 @@ class TicketCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         tags = validated_data.pop("tags", [])
-        user = self.context["request"].user
-        validated_data["created_by"] = user
+        validated_data["created_by"] = self.context["request"].user
 
         # Auto-assign agent if not provided
         if not validated_data.get("agent"):
-            validated_data["agent"] = user
-
-        # auto-link active call (auto_link_call patch)
-        # If the client didn't supply a call, attach the agent's current
-        # in-progress call (and inherit its lead if needed).
-        if not validated_data.get("call"):
-            try:
-                from apps.calls.services import get_active_call_for_user
-                active_call = get_active_call_for_user(user)
-                if active_call:
-                    validated_data["call"] = active_call
-                    if not validated_data.get("asterisk_call_id") and active_call.uniqueid:
-                        validated_data["asterisk_call_id"] = active_call.uniqueid
-                    if not validated_data.get("lead") and active_call.lead_id:
-                        validated_data["lead"] = active_call.lead
-            except Exception:
-                pass
+            validated_data["agent"] = self.context["request"].user
 
         # Snapshot lead info
         lead = validated_data.get("lead")
