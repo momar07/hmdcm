@@ -1,6 +1,5 @@
 from .services import log_action
 from apps.common.utils import get_client_ip
-from apps.common.threadlocal import set_current_user, clear_current_user
 
 LOGGED_METHODS = {'POST', 'PUT', 'PATCH', 'DELETE'}
 
@@ -14,13 +13,7 @@ class AuditLogMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Store current user in thread-local for signals/services to access
-        user = getattr(request, 'user', None)
-        set_current_user(user if (user and user.is_authenticated) else None)
-        try:
-            response = self.get_response(request)
-        finally:
-            clear_current_user()
+        response = self.get_response(request)
 
         if (request.method in LOGGED_METHODS
                 and request.path.startswith('/api/')
