@@ -92,38 +92,20 @@ export function ApprovalCard({ approval, canReview, onUpdated }: Props) {
       )}
 
       {/* Meta */}
-      <div className="flex flex-wrap gap-2 text-xs">
-        <span className="flex items-center gap-1 text-gray-500">
+      <div className="flex flex-wrap gap-3 text-xs text-gray-500">
+        <span className="flex items-center gap-1">
           <User className="h-3 w-3" />
           {approval.requested_by_name}
         </span>
         {approval.lead_name && (
-          <a
-            href={approval.lead ? `/leads/${approval.lead}` : '#'}
-            onClick={e => e.stopPropagation()}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full
-                       bg-purple-50 text-purple-700 font-semibold border border-purple-200
-                       hover:bg-purple-100 transition-colors"
-            title="Linked Lead">
-            <User className="h-3 w-3" />
-            {approval.lead_name}
-            {approval.lead_phone && (
-              <span className="text-purple-500 font-normal">· {approval.lead_phone}</span>
-            )}
-          </a>
-        )}
-        {approval.ticket_number && (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full
-                           bg-blue-50 text-blue-700 font-semibold border border-blue-200">
-            <Ticket className="h-3 w-3" />
-            #{approval.ticket_number}
+          <span className="flex items-center gap-1">
+            👤 {approval.lead_name}
           </span>
         )}
-        {approval.call && (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full
-                           bg-emerald-50 text-emerald-700 font-semibold border border-emerald-200"
-                title="Created during this call">
-            📞 During call
+        {approval.ticket_number && (
+          <span className="flex items-center gap-1">
+            <Ticket className="h-3 w-3" />
+            #{approval.ticket_number}
           </span>
         )}
       </div>

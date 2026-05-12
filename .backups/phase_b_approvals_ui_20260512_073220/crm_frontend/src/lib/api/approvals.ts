@@ -15,10 +15,8 @@ export interface ApprovalRequest {
   reviewed_at:       string | null;
   lead:              string | null;
   lead_name:         string | null;
-  lead_phone:        string | null;
   ticket:            string | null;
   ticket_number:     number | null;
-  call:              string | null;
   created_at:        string;
   updated_at:        string;
 }
