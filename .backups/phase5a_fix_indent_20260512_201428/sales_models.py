@@ -337,7 +337,7 @@ class QuotationLog(models.Model):
     detail     = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # ── Link to the call during which this log entry was created ─
+        # ── Link to the call during which this log entry was created ─
     log_call = models.ForeignKey(
         "calls.Call",
         on_delete=models.SET_NULL,
@@ -346,7 +346,7 @@ class QuotationLog(models.Model):
         help_text="The call active when this log entry was created (if any)",
     )
 
-    class Meta:
+class Meta:
         db_table = "sales_quotation_logs"
         ordering = ["created_at"]
 

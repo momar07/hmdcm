@@ -438,15 +438,6 @@ class TicketHistory(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
-    # ── Link to the call during which this history entry was created ─
-    history_call = models.ForeignKey(
-        "calls.Call",
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="ticket_history_entries",
-        help_text="The call active when this change occurred (if any)",
-    )
-
     class Meta:
         db_table = "tickets_history"
         ordering = ["-created_at"]
@@ -457,47 +448,3 @@ class TicketHistory(models.Model):
 
     def __str__(self):
         return f"#{self.ticket.ticket_number} | {self.field}: {self.old_value} → {self.new_value}"
-
-
-class TicketCallLink(models.Model):
-    """Many-to-many link between Ticket and Call with audit metadata."""
-
-    LINK_REASON_CHOICES = [
-        ("originating",      "Originating Call"),
-        ("auto_during_call", "Auto-linked During Call"),
-        ("manual",           "Manually Linked"),
-    ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    ticket = models.ForeignKey(
-        Ticket, on_delete=models.CASCADE, related_name="call_links",
-    )
-    call = models.ForeignKey(
-        "calls.Call", on_delete=models.CASCADE, related_name="ticket_links",
-    )
-    reason = models.CharField(max_length=20, choices=LINK_REASON_CHOICES, default="auto_during_call")
-    action_summary = models.TextField(blank=True, default="",
-        help_text="Short summary of what happened (e.g. 'Status: open → in_progress')")
-    linked_at = models.DateTimeField(auto_now_add=True)
-    linked_by = models.ForeignKey(
-        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="ticket_call_links_created",
-    )
-    unlinked_at = models.DateTimeField(null=True, blank=True)
-    unlinked_by = models.ForeignKey(
-        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="ticket_call_links_unlinked",
-    )
-
-    class Meta:
-        db_table = "tickets_ticket_call_link"
-        unique_together = [("ticket", "call")]
-        ordering = ["-linked_at"]
-        indexes = [
-            models.Index(fields=["ticket", "unlinked_at"]),
-            models.Index(fields=["call"]),
-        ]
-
-    def __str__(self):
-        return f"TicketCallLink({self.ticket_id} ↔ {self.call_id})"
-

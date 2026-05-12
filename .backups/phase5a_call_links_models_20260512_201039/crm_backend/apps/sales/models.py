@@ -337,61 +337,9 @@ class QuotationLog(models.Model):
     detail     = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # ── Link to the call during which this log entry was created ─
-    log_call = models.ForeignKey(
-        "calls.Call",
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name="quotation_log_entries",
-        help_text="The call active when this log entry was created (if any)",
-    )
-
     class Meta:
         db_table = "sales_quotation_logs"
         ordering = ["created_at"]
 
     def __str__(self):
         return f"[{self.quotation.ref_number}] {self.action}"
-
-
-class QuotationCallLink(models.Model):
-    """Many-to-many link between Quotation and Call with audit metadata."""
-
-    LINK_REASON_CHOICES = [
-        ("originating",      "Originating Call"),
-        ("auto_during_call", "Auto-linked During Call"),
-        ("manual",           "Manually Linked"),
-    ]
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    quotation = models.ForeignKey(
-        Quotation, on_delete=models.CASCADE, related_name="call_links",
-    )
-    call = models.ForeignKey(
-        "calls.Call", on_delete=models.CASCADE, related_name="quotation_links",
-    )
-    reason = models.CharField(max_length=20, choices=LINK_REASON_CHOICES, default="auto_during_call")
-    action_summary = models.TextField(blank=True, default="")
-    linked_at = models.DateTimeField(auto_now_add=True)
-    linked_by = models.ForeignKey(
-        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="quotation_call_links_created",
-    )
-    unlinked_at = models.DateTimeField(null=True, blank=True)
-    unlinked_by = models.ForeignKey(
-        "users.User", on_delete=models.SET_NULL, null=True, blank=True,
-        related_name="quotation_call_links_unlinked",
-    )
-
-    class Meta:
-        db_table = "sales_quotation_call_link"
-        unique_together = [("quotation", "call")]
-        ordering = ["-linked_at"]
-        indexes = [
-            models.Index(fields=["quotation", "unlinked_at"]),
-            models.Index(fields=["call"]),
-        ]
-
-    def __str__(self):
-        return f"QuotationCallLink({self.quotation_id} ↔ {self.call_id})"
-

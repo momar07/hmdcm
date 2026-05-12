@@ -438,7 +438,7 @@ class TicketHistory(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
-    # ── Link to the call during which this history entry was created ─
+        # ── Link to the call during which this history entry was created ─
     history_call = models.ForeignKey(
         "calls.Call",
         on_delete=models.SET_NULL,
@@ -447,7 +447,7 @@ class TicketHistory(models.Model):
         help_text="The call active when this change occurred (if any)",
     )
 
-    class Meta:
+class Meta:
         db_table = "tickets_history"
         ordering = ["-created_at"]
         indexes  = [
