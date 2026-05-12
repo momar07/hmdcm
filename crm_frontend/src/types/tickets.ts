@@ -1,3 +1,4 @@
+import type { CallDetail } from './calls';
 // ═══════════════════════════════════════════════════════════════
 // ENUMS
 // ═══════════════════════════════════════════════════════════════
@@ -122,6 +123,8 @@ export interface TicketListItem {
   created_at            : string
   updated_at            : string
   resolved_at           : string | null
+  call_detail?: CallDetail | null;
+  creation_reason?: string;
 }
 
 // ═══════════════════════════════════════════════════════════════

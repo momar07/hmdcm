@@ -1,3 +1,4 @@
+import type { CallDetail } from '@/types/calls';
 import api from './axios';
 
 export interface ApprovalRequest {
@@ -21,6 +22,8 @@ export interface ApprovalRequest {
   call:              string | null;
   created_at:        string;
   updated_at:        string;
+  call_detail?: CallDetail | null;
+  creation_reason?: string;
 }
 
 export interface ApprovalCreatePayload {

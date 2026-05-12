@@ -2,6 +2,7 @@
 import React from "react";
 import { User, Phone, Calendar, Clock, Tag as TagIcon, Layers } from "lucide-react";
 import type { TicketDetail } from "@/types/tickets";
+import { LinkedCallCard } from '@/components/calls/LinkedCallCard';
 
 interface Props { ticket: TicketDetail; }
 
@@ -25,6 +26,12 @@ export function TicketInfoPanel({ ticket }: Props) {
   return (
     <aside className="w-72 shrink-0 bg-white border-l border-gray-200 overflow-y-auto">
       <div className="p-5 space-y-5">
+
+        <LinkedCallCard
+          call={(ticket as any).call_detail}
+          creationReason={(ticket as any).creation_reason}
+        />
+
 
         {/* Customer */}
         <section>

@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { CheckCircle, XCircle, Clock, User, Ticket, DollarSign } from "lucide-react";
 import { approvalsApi, type ApprovalRequest } from "@/lib/api/approvals";
 import toast from "react-hot-toast";
+import { LinkedCallCard } from '@/components/calls/LinkedCallCard';
 
 const TYPE_LABELS: Record<string, string> = {
   refund:    "💰 Refund",
@@ -190,6 +191,10 @@ export function ApprovalCard({ approval, canReview, onUpdated }: Props) {
           )}
         </div>
       )}
-    </div>
+          <LinkedCallCard
+        call={(approval as any).call_detail}
+        creationReason={(approval as any).creation_reason}
+      />
+      </div>
   );
 }

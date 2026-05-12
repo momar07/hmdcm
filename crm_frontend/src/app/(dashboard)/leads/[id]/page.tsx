@@ -53,6 +53,7 @@ import { getLeadDisplayName } from '@/lib/leads';
 import { session } from '@/lib/auth/session';
 import { NewApprovalModal } from '@/components/approvals/NewApprovalModal';
 import { NewFollowupModal } from '@/components/followups/NewFollowupModal';
+import { LinkedCallCard } from '@/components/calls/LinkedCallCard';
 
 // ── Helpers ───────────────────────────────────────────────────
 const EVENT_LABELS: Record<string, { label: string; color: string; icon: string }> = {

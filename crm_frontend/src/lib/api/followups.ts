@@ -1,3 +1,4 @@
+import type { CallDetail } from '@/types/calls';
 import api from './axios';
 import type { Followup, PaginatedResponse } from '@/types';
 
