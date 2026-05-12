@@ -253,6 +253,7 @@ class TicketUpdateSerializer(serializers.ModelSerializer):
 # ═══════════════════════════════════════════════════════════════════
 
 class TicketDetailSerializer(serializers.ModelSerializer):
+    call_detail = serializers.SerializerMethodField()
     tags             = TagSerializer(many=True, read_only=True)
     notes            = TicketNoteSerializer(many=True, read_only=True)
     attachments      = TicketAttachmentSerializer(many=True, read_only=True)
@@ -266,6 +267,11 @@ class TicketDetailSerializer(serializers.ModelSerializer):
     is_overdue        = serializers.BooleanField(read_only=True)
     response_overdue  = serializers.BooleanField(read_only=True)
     sla_remaining_mins = serializers.SerializerMethodField()
+
+    def get_call_detail(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        return build_call_detail(getattr(obj, 'call', None), user)
 
     class Meta:
         model  = Ticket
@@ -290,6 +296,8 @@ class TicketDetailSerializer(serializers.ModelSerializer):
             "resolved_at", "closed_at",
             "created_at", "updated_at",
             "tags", "notes", "attachments", "history",
+        
+            'call_detail', 'creation_reason',
         ]
         read_only_fields = [
             "id", "ticket_number",
