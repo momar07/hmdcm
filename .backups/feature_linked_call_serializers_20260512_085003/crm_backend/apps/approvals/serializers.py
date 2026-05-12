@@ -3,7 +3,6 @@ from .models        import ApprovalRequest
 
 
 class ApprovalListSerializer(serializers.ModelSerializer):
-    call_detail = serializers.SerializerMethodField()
     requested_by_name = serializers.CharField(
         source="requested_by.get_full_name", read_only=True)
     reviewed_by_name  = serializers.CharField(
@@ -12,11 +11,6 @@ class ApprovalListSerializer(serializers.ModelSerializer):
     lead_phone        = serializers.SerializerMethodField()
     ticket_number     = serializers.IntegerField(
         source="ticket.ticket_number",       read_only=True)
-
-        def get_call_detail(self, obj):
-        request = self.context.get('request')
-        user = getattr(request, 'user', None) if request else None
-        return build_call_detail(getattr(obj, 'call', None), user)
 
     class Meta:
         model  = ApprovalRequest
@@ -30,8 +24,6 @@ class ApprovalListSerializer(serializers.ModelSerializer):
             "call",
             "review_comment", "reviewed_at",
             "created_at",   "updated_at",
-        
-            'call_detail', 'creation_reason',
         ]
         read_only_fields = [
             "id", "status",
@@ -55,7 +47,7 @@ class ApprovalCreateSerializer(serializers.ModelSerializer):
         fields = [
             "approval_type", "title", "description",
             "amount", "ticket", "lead", "call",
-         'creation_reason',]
+        ]
 
     def create(self, validated_data):
         request = self.context["request"]
@@ -65,7 +57,7 @@ class ApprovalCreateSerializer(serializers.ModelSerializer):
         # Auto-link the agent's active call if the client didn't supply one.
         if not validated_data.get("call"):
             try:
-                from apps.calls.services import get_active_call_for_user, build_call_detail
+                from apps.calls.services import get_active_call_for_user
                 active_call = get_active_call_for_user(user)
                 if active_call:
                     validated_data["call"] = active_call

@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from apps.calls.services import build_call_detail, get_active_call_for_user
 from django.utils   import timezone
 from .models import (
     SalesSettings, TermsTemplate,
@@ -117,7 +116,6 @@ class QuotationLogSerializer(serializers.ModelSerializer):
 
 
 class QuotationSerializer(serializers.ModelSerializer):
-    call_detail = serializers.SerializerMethodField()
     items         = QuotationItemSerializer(many=True, read_only=True)
     fields_data   = QuotationFieldSerializer(many=True, read_only=True, source="fields")
     logs          = QuotationLogSerializer(many=True, read_only=True)
@@ -125,11 +123,6 @@ class QuotationSerializer(serializers.ModelSerializer):
     lead_name     = serializers.SerializerMethodField()
     lead_title    = serializers.SerializerMethodField()
     is_expired    = serializers.SerializerMethodField()
-
-        def get_call_detail(self, obj):
-        request = self.context.get('request')
-        user = getattr(request, 'user', None) if request else None
-        return build_call_detail(getattr(obj, 'call', None), user)
 
     class Meta:
         model  = Quotation
@@ -146,8 +139,6 @@ class QuotationSerializer(serializers.ModelSerializer):
             "items", "fields_data", "logs",
             "is_expired",
             "created_at", "updated_at",
-        
-            'call', 'call_detail', 'creation_reason',
         ]
         read_only_fields = [
             "id", "ref_number", "version", "parent",

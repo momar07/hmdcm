@@ -112,7 +112,6 @@ class TicketHistorySerializer(serializers.ModelSerializer):
 # ═══════════════════════════════════════════════════════════════════
 
 class TicketListSerializer(serializers.ModelSerializer):
-    call_detail = serializers.SerializerMethodField()
     tags            = TagSerializer(many=True, read_only=True)
     agent_name      = serializers.CharField(source="agent.get_full_name",  read_only=True)
     created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
@@ -121,11 +120,6 @@ class TicketListSerializer(serializers.ModelSerializer):
 
     # Remaining SLA time in minutes
     sla_remaining_mins = serializers.SerializerMethodField()
-
-        def get_call_detail(self, obj):
-        request = self.context.get('request')
-        user = getattr(request, 'user', None) if request else None
-        return build_call_detail(getattr(obj, 'call', None), user)
 
     class Meta:
         model  = Ticket
@@ -144,8 +138,6 @@ class TicketListSerializer(serializers.ModelSerializer):
             "note_count", "attachment_count",
             "tags",
             "created_at", "updated_at", "resolved_at",
-        
-            'call_detail', 'creation_reason',
         ]
 
     def get_sla_remaining_mins(self, obj) -> int | None:
@@ -175,7 +167,7 @@ class TicketCreateSerializer(serializers.ModelSerializer):
             "phone_number", "asterisk_call_id", "call", "queue", "direction",
             "sla_policy", "meta",
             "tag_ids",
-         'creation_reason',]
+        ]
 
     def create(self, validated_data):
         tags = validated_data.pop("tags", [])
@@ -191,7 +183,7 @@ class TicketCreateSerializer(serializers.ModelSerializer):
         # in-progress call (and inherit its lead if needed).
         if not validated_data.get("call"):
             try:
-                from apps.calls.services import get_active_call_for_user, build_call_detail
+                from apps.calls.services import get_active_call_for_user
                 active_call = get_active_call_for_user(user)
                 if active_call:
                     validated_data["call"] = active_call

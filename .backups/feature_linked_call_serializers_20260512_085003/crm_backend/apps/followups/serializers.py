@@ -6,16 +6,10 @@ User = get_user_model()
 
 
 class FollowupListSerializer(serializers.ModelSerializer):
-    call_detail = serializers.SerializerMethodField()
     assigned_to_name = serializers.SerializerMethodField()
     lead_title       = serializers.SerializerMethodField()
     lead_name        = serializers.SerializerMethodField()
     lead_phone       = serializers.SerializerMethodField()
-
-        def get_call_detail(self, obj):
-        request = self.context.get('request')
-        user = getattr(request, 'user', None) if request else None
-        return build_call_detail(getattr(obj, 'call', None), user)
 
     class Meta:
         model = Followup
@@ -26,9 +20,7 @@ class FollowupListSerializer(serializers.ModelSerializer):
             'title', 'description', 'followup_type',
             'scheduled_at', 'completed_at', 'status',
             'reminder_sent', 'created_at', 'updated_at',
-        
-        'call_detail', 'creation_reason',
-    ]
+        ]
 
     def get_assigned_to_name(self, obj):
         u = obj.assigned_to
@@ -56,15 +48,9 @@ class FollowupListSerializer(serializers.ModelSerializer):
 
 
 class FollowupDetailSerializer(serializers.ModelSerializer):
-    call_detail = serializers.SerializerMethodField()
     assigned_to_name = serializers.SerializerMethodField()
     lead_title = serializers.SerializerMethodField()
     lead_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
-
-        def get_call_detail(self, obj):
-        request = self.context.get('request')
-        user = getattr(request, 'user', None) if request else None
-        return build_call_detail(getattr(obj, 'call', None), user)
 
     class Meta:
         model = Followup
@@ -74,9 +60,7 @@ class FollowupDetailSerializer(serializers.ModelSerializer):
             'title', 'description', 'followup_type',
             'scheduled_at', 'completed_at', 'status',
             'reminder_sent', 'created_at', 'updated_at',
-        
-        'call_detail', 'creation_reason',
-    ]
+        ]
         read_only_fields = [
             'id', 'lead', 'assigned_to',
             'created_at', 'updated_at',
@@ -99,7 +83,7 @@ class FollowupDetailSerializer(serializers.ModelSerializer):
         call_obj = validated_data.get('call')
         if user and not call_obj:
             try:
-                from apps.calls.services import get_active_call_for_user, build_call_detail
+                from apps.calls.services import get_active_call_for_user
                 active_call = get_active_call_for_user(user)
                 if active_call:
                     validated_data['call'] = active_call
