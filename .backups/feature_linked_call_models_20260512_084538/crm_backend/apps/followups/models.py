@@ -38,12 +38,6 @@ class Followup(BaseModel):
     status       = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending')
     reminder_sent= models.BooleanField(default=False)
 
-    # ── Creation context ─────────────────────────────────────
-    creation_reason = models.TextField(
-        blank=True,
-        help_text="Why this followup was scheduled (auto-filled from call note if linked)",
-    )
-
     class Meta:
         db_table = 'followups'
         ordering = ['scheduled_at']

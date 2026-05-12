@@ -226,12 +226,6 @@ class Ticket(models.Model):
     resolved_at = models.DateTimeField(null=True, blank=True)
     closed_at   = models.DateTimeField(null=True, blank=True)
 
-    # ── Creation context ─────────────────────────────────────
-    creation_reason = models.TextField(
-        blank=True,
-        help_text="Why this ticket was opened (auto-filled from call note if linked)",
-    )
-
     class Meta:
         db_table = "tickets_ticket"
         ordering = ["-updated_at"]

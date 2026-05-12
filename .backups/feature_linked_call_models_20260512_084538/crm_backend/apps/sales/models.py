@@ -208,19 +208,6 @@ class Quotation(BaseModel):
     terms_body     = models.TextField(blank=True, help_text="Rendered terms after placeholder substitution")
     internal_note  = models.TextField(blank=True)
 
-    # ── Linked call (auto-link if created during a call) ─────
-    call           = models.ForeignKey(
-                       "calls.Call",
-                       on_delete=models.SET_NULL,
-                       null=True, blank=True,
-                       related_name="quotations",
-                       help_text="Call this quotation was generated from",
-                     )
-    creation_reason = models.TextField(
-                       blank=True,
-                       help_text="Why this quotation was created (e.g. customer request during call)",
-                     )
-
     # ── Approval link ────────────────────────────────────────
     approval       = models.OneToOneField(
                        "approvals.ApprovalRequest",

@@ -88,12 +88,6 @@ class ApprovalRequest(models.Model):
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    # ── Creation context ─────────────────────────────────────
-    creation_reason = models.TextField(
-        blank=True,
-        help_text="Why this approval was requested (auto-filled from call note if linked)",
-    )
-
     class Meta:
         db_table = "approvals_request"
         ordering = ["-created_at"]
