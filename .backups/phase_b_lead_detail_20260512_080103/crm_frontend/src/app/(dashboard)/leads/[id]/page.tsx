@@ -51,8 +51,6 @@ import { PriorityBadge, StatusBadge as TicketStatusBadge } from '@/components/ti
 import type { LeadEvent } from '@/types';
 import { getLeadDisplayName } from '@/lib/leads';
 import { session } from '@/lib/auth/session';
-import { NewApprovalModal } from '@/components/approvals/NewApprovalModal';
-import { NewFollowupModal } from '@/components/followups/NewFollowupModal';
 
 // ── Helpers ───────────────────────────────────────────────────
 const EVENT_LABELS: Record<string, { label: string; color: string; icon: string }> = {
@@ -150,8 +148,6 @@ export default function LeadDetailPage() {
   const [newFollowupDate, setNewFollowupDate] = useState('');
   const [ticketModal, setTicketModal] = useState(false);
   const [noteModal,   setNoteModal]   = useState(false);
-  const [approvalModal, setApprovalModal] = useState(false);
-  const [followupModal, setFollowupModal] = useState(false);
   const [noteText,    setNoteText]    = useState('');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
@@ -592,10 +588,12 @@ export default function LeadDetailPage() {
                   <MessageSquare size={14} className="text-gray-400"/>
                   Notes ({notesCount})
                 </h3>
-                <Button variant="primary" size="sm" icon={<Plus size={12}/>}
-                  onClick={() => setNoteModal(true)}>
-                  Add Note
-                </Button>
+                <button
+                  onClick={() => setNoteModal(true)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg
+                             bg-gray-900 hover:bg-gray-800 text-white text-xs font-semibold transition-colors">
+                  <Plus size={14}/> Add Note
+                </button>
               </div>
               {eventsLoading && notesCount === 0 && (
                 <div className="flex justify-center py-10"><Spinner size="sm"/></div>
@@ -638,15 +636,11 @@ export default function LeadDetailPage() {
           {/* APPROVALS TAB */}
           {tab === 'approvals' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+              <div className="px-5 py-3 border-b border-gray-100">
                 <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                   <ShieldCheck size={14} className="text-gray-400"/>
                   Approvals ({approvalsCount})
                 </h3>
-                <Button variant="primary" size="sm" icon={<Plus size={12}/>}
-                  onClick={() => setApprovalModal(true)}>
-                  New
-                </Button>
               </div>
               {approvalsCount === 0 && (
                 <div className="px-5 py-12 text-center">
@@ -849,12 +843,8 @@ export default function LeadDetailPage() {
           {/* FOLLOW-UPS TAB */}
           {tab === 'followups' && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+              <div className="px-5 py-3 border-b border-gray-100">
                 <h3 className="text-sm font-semibold text-gray-700">Follow-ups ({followupCount})</h3>
-                <Button variant="primary" size="sm" icon={<Plus size={12}/>}
-                  onClick={() => setFollowupModal(true)}>
-                  New
-                </Button>
               </div>
               {followupsLoading && <div className="flex justify-center py-10"><Spinner/></div>}
               {!followupsLoading && !followupsData?.results?.length && (
@@ -1463,28 +1453,6 @@ function RecordingRow({ call, recording }: { call: any; recording: any }) {
       <div className="mt-2 text-[10px] text-gray-400 font-mono truncate">
         {recording.filename}
       </div>
-
-      {/* New Approval modal (Phase B) */}
-      <NewApprovalModal
-        open={approvalModal}
-        onClose={() => setApprovalModal(false)}
-        onCreated={() => qc.invalidateQueries({ queryKey: ['lead-events', id] })}
-        defaultLeadId={id}
-        defaultLeadName={lead ? getLeadDisplayName(lead) : undefined}
-      />
-
-      {/* New Follow-up modal (Phase B) */}
-      <NewFollowupModal
-        open={followupModal}
-        onClose={() => setFollowupModal(false)}
-        onCreated={() => {
-          qc.invalidateQueries({ queryKey: ['lead-followups', id] });
-          qc.invalidateQueries({ queryKey: ['lead-events', id] });
-        }}
-        defaultLeadId={id}
-        defaultLeadName={lead ? getLeadDisplayName(lead) : undefined}
-      />
-
     </div>
   );
 }
