@@ -144,16 +144,11 @@ export default function QuotationsPage() {
                 return (
                   <tr key={q.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <a href={`/sales/quotations/${q.id}`}
-                          className="font-medium text-blue-600 hover:underline">
-                          {q.ref_number}
-                          {q.version > 1 && <span className="ml-1 text-xs text-gray-400">v{q.version}</span>}
-                        </a>
-                        {(q as any).call_detail && (
-                          <span title="Linked to call" className="text-purple-500 text-xs" aria-label="linked-call">📞</span>
-                        )}
-                      </div>
+                      <a href={`/sales/quotations/${q.id}`}
+                        className="font-medium text-blue-600 hover:underline">
+                        {q.ref_number}
+                        {q.version > 1 && <span className="ml-1 text-xs text-gray-400">v{q.version}</span>}
+                      </a>
                     </td>
                     <td className="px-4 py-3 text-gray-500">
                       {q.quotation_type === 'price_quote' ? '📄 Quote' : '📋 Contract'}

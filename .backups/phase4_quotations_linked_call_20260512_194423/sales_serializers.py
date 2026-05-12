@@ -187,20 +187,6 @@ class QuotationCreateSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        # Auto-link to the active call (if any) when not explicitly provided
-        if not validated_data.get('call'):
-            request = self.context.get('request')
-            user = getattr(request, 'user', None) if request else None
-            if user is not None:
-                active_call = get_active_call_for_user(user)
-                if active_call is not None:
-                    validated_data['call'] = active_call
-                    if not validated_data.get('creation_reason'):
-                        completion = getattr(active_call, 'completion', None)
-                        note = getattr(completion, 'note', '') if completion else ''
-                        if note:
-                            validated_data['creation_reason'] = note
-
         items_data  = validated_data.pop("items", [])
         fields_data = validated_data.pop("fields_data", [])
         quotation   = Quotation.objects.create(**validated_data)

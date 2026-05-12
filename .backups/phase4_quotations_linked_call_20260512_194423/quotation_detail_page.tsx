@@ -7,7 +7,6 @@ import { useAuthStore } from '@/store/authStore';
 import type { Quotation } from '@/types';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { LinkedCallCard } from '@/components/calls/LinkedCallCard';
 
 const STATUS_COLOR: Record<string, string> = {
   draft:            'text-gray-600 bg-gray-100',
@@ -112,10 +111,6 @@ export default function QuotationDetailPage() {
           )}
         </div>
       </div>
-
-      {qa.call_detail && (
-        <LinkedCallCard call={qa.call_detail} reason={qa.creation_reason} />
-      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {[
